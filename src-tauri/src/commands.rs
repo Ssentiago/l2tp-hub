@@ -71,8 +71,12 @@ pub fn save_connection(
     let keychain_key = format!("password_{}", id);
     let shared_secret_key = format!("shared_{}", id);
 
-    keychain::set_password(&keychain_key, &input.password)?;
-    keychain::set_password(&shared_secret_key, &input.shared_secret)?;
+    if !input.password.is_empty() {
+        keychain::set_password(&keychain_key, &input.password)?;
+    }
+    if !input.shared_secret.is_empty() {
+        keychain::set_password(&shared_secret_key, &input.shared_secret)?;
+    }
 
     let conn = Connection {
         id: id.clone(),

@@ -34,7 +34,7 @@ pub fn create_vpn_service(
     let split_flag = if !send_all_traffic { " -SplitTunneling $True" } else { "" };
 
     let script = format!(
-        r#"Add-VpnConnection -Name '{name}' -ServerAddress '{server}' -TunnelType L2tp -L2tpPsk '{secret}' -AuthenticationMethod MSChapv2{split} -RememberCredential $True -Force"#,
+        r#"Add-VpnConnection -Name '{name}' -ServerAddress '{server}' -TunnelType L2tp -L2tpPsk '{secret}' -AuthenticationMethod MSChapv2{split} -Force"#,
         name = name,
         server = server,
         secret = shared_secret,
