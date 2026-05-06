@@ -28,10 +28,17 @@ pub fn set_password(key: &str, password: &str) -> Result<(), String> {
 }
 
 pub fn get_password(key: &str) -> Result<String, String> {
-    let entry = Entry::new_with_target("local", SERVICE, key)
-        .map_err(|e| e.to_string())?;
+    log(&format!("keychain::get_password key={}", key));
+    let entry = Entry::new(SERVICE, key)
+        .map_err(|e| {
+            log(&format!("Entry::new failed: {}", e));
+            e.to_string()
+        })?;
     entry.get_password()
-        .map_err(|_| format!("Keychain: key '{}' not found", key))
+        .map_err(|e| {
+            log(&format!("get_password failed key={} err={}", key, e));
+            format!("Keychain: key '{}' not found: {}", key, e)
+        })
 }
 
 pub fn delete_password(key: &str) -> Result<(), String> {
