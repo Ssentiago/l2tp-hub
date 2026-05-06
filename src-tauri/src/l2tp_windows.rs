@@ -117,21 +117,19 @@ pub enum VpnStatus {
 
 pub fn get_vpn_status(name: &str) -> VpnStatus {
     log(&format!("[get_vpn_status] name: {}", name));
-    // rasdial без аргументов — список активных соединений, без PowerShell
-    let output = Command::new("rasdial")
-        .creation_flags(CREATE_NO_WINDOW)
-        .output();
-
-    match output {
-        Ok(o) => {
-            let stdout = String::from_utf8_lossy(&o.stdout).to_lowercase();
-            log(&format!("[get_vpn_status] active connections: {}", stdout));
-            if stdout.contains(&name.to_lowercase()) {
-                log("[get_vpn_status] status: Connected");
-                VpnStatus::Connected
-            } else {
-                log("[get_vpn_status] status: Disconnected");
-                VpnStatus::Disconnected
+    let script = format!(
+        "(Get-VpnConnection -Name '{}' -ErrorAction SilentlyContinue).ConnectionStatus",
+        name
+    );
+    match powershell(&script) {
+        Ok(out) => {
+            let status = out.trim().to_lowercase();
+            log(&format!("[get_vpn_status] raw status: '{}'", status));
+            match status.as_str() {
+                "connected" => VpnStatus::Connected,
+                "connecting" => VpnStatus::Connecting,
+                "disconnected" | "" => VpnStatus::Disconnected,
+                _ => VpnStatus::Unknown,
             }
         }
         Err(e) => {
