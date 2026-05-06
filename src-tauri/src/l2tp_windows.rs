@@ -34,9 +34,11 @@ pub fn create_vpn_service(
     let split_flag = if !send_all_traffic { " -SplitTunneling $True" } else { "" };
 
     let script = format!(
-        r#"Add-VpnConnection -Name '{name}' -ServerAddress '{server}' -TunnelType L2tp -L2tpPsk '{secret}' -AuthenticationMethod MSChapv2{split} -Force"#,
+        r#"$cred = New-Object System.Management.Automation.PSCredential('{username}', (ConvertTo-SecureString '{password}' -AsPlainText -Force)); Add-VpnConnection -Name '{name}' -ServerAddress '{server}' -TunnelType L2tp -L2tpPsk '{secret}' -AuthenticationMethod MSChapv2 -RememberCredential -Credential $cred{split} -Force"#,
         name = name,
         server = server,
+        username = username,
+        password = password,
         secret = shared_secret,
         split = split_flag,
     );
