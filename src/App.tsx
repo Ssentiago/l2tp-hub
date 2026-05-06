@@ -1,25 +1,28 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
     AppBar, Toolbar, Typography, Button, Box, CircularProgress,
-    CssBaseline, ThemeProvider, createTheme, Chip
+    CssBaseline, ThemeProvider, createTheme, Chip,
+    IconButton,
+    Tooltip
 } from '@mui/material'
 import { Add, Lock, ArrowBack } from '@mui/icons-material'
 import { api } from './api'
 import { ConnectionList } from './components/ConnectionList'
 import { ConnectionForm } from './components/ConnectionForm'
 import { SudoModal } from './components/SudoModal'
-import type { Connection, ConnectionWithStatus, FilterState, SortDir, SortField } from './types'
-
-type View = 'list' | 'form'
+import type { Connection, ConnectionWithStatus, FilterState, SortDir, SortField, Label } from './types'
+import { Settings } from '@mui/icons-material'
+import { SettingsPage } from './SettingsPage'
+type View = 'list' | 'form' | 'settings' | 'about'
+import { Info } from '@mui/icons-material'
+import { About } from './About'
+import {getVersion} from "@tauri-apps/api/app";
 
 const DEFAULT_FILTER: FilterState = {
     search: '',
-    company: '',
-    branch: '',
-    group: '',
-    tags: [],
     status: 'all',
     priority: null,
+    labels: {},
 }
 
 const theme = createTheme({
@@ -33,6 +36,7 @@ const theme = createTheme({
 
 export default function App() {
     const [connections, setConnections] = useState<ConnectionWithStatus[]>([])
+    const [labels, setLabels] = useState<Label[]>([])
     const [view, setView] = useState<View>('list')
     const [editingConn, setEditingConn] = useState<Connection | null>(null)
     const [sudoReady, setSudoReady] = useState(false)
@@ -41,6 +45,7 @@ export default function App() {
     const [sortField, setSortField] = useState<SortField>('name')
     const [sortDir, setSortDir] = useState<SortDir>('asc')
     const [loading, setLoading] = useState(true)
+    const [appVersion, setAppVersion] = useState('...')
 
     const loadConnections = useCallback(async () => {
         const conns = await api.getConnections()
@@ -54,10 +59,18 @@ export default function App() {
         setLoading(false)
     }, [])
 
+    const loadLabels = useCallback(async () => {
+        const l = await api.getLabels()
+        setLabels(l)
+    }, [])
+
     useEffect(() => {
+        getVersion().then(setAppVersion)
+
         loadConnections()
+        loadLabels()
         api.checkSudoSession().then(setSudoReady)
-    }, [loadConnections])
+    }, [loadConnections, loadLabels])
 
     useEffect(() => {
         const interval = setInterval(async () => {
@@ -108,25 +121,23 @@ export default function App() {
 
     const filtered = connections
         .filter((c) => {
-            if (filter.search && !`${c.name} ${c.company} ${c.branch} ${c.server}`.toLowerCase().includes(filter.search.toLowerCase())) return false
-            if (filter.company && c.company !== filter.company) return false
-            if (filter.branch && c.branch !== filter.branch) return false
-            if (filter.group && c.group !== filter.group) return false
+            if (filter.search) {
+                const labelValues = Object.values(c.labels).join(' ')
+                if (!`${c.name} ${c.server} ${labelValues}`.toLowerCase().includes(filter.search.toLowerCase())) return false
+            }
             if (filter.status !== 'all' && c.status !== filter.status) return false
             if (filter.priority !== null && c.priority !== filter.priority) return false
-            if (filter.tags.length > 0 && !filter.tags.every((t) => c.tags.includes(t))) return false
+            for (const [id, value] of Object.entries(filter.labels)) {
+                if (value && c.labels[id] !== value) return false
+            }
             return true
         })
         .sort((a, b) => {
             const dir = sortDir === 'asc' ? 1 : -1
             if (sortField === 'priority') return (a.priority - b.priority) * dir
-            return a[sortField as keyof Connection]?.toString().localeCompare(b[sortField as keyof Connection]?.toString() ?? '') * dir
+            if (sortField === 'status') return a.status.localeCompare(b.status) * dir
+            return (a.labels['company'] ?? a.name).localeCompare(b.labels['company'] ?? b.name) * dir
         })
-
-    const companies = [...new Set(connections.map(c => c.company).filter(Boolean))]
-    const branches = [...new Set(connections.map(c => c.branch).filter(Boolean))]
-    const groups = [...new Set(connections.map(c => c.group).filter(Boolean))]
-    const allTags = [...new Set(connections.flatMap(c => c.tags))]
 
     return (
         <ThemeProvider theme={theme}>
@@ -157,13 +168,25 @@ export default function App() {
                     )}
 
                     {view === 'list' ? (
-                        <Button
-                            variant="contained"
-                            startIcon={<Add />}
-                            onClick={() => { setEditingConn(null); setView('form') }}
-                        >
-                            Добавить
-                        </Button>
+                        <>
+                            <Button
+                                variant="contained"
+                                startIcon={<Add />}
+                                onClick={() => { setEditingConn(null); setView('form') }}
+                            >
+                                Добавить
+                            </Button>
+                            <Tooltip title="Настройки">
+                                <IconButton color="inherit" onClick={() => setView('settings')} sx={{ mr: 1 }}>
+                                    <Settings />
+                                </IconButton>
+                            </Tooltip>
+                            <Tooltip title="О приложении">
+                                <IconButton color="inherit" onClick={() => setView('about')} sx={{ mr: 1 }}>
+                                    <Info />
+                                </IconButton>
+                            </Tooltip>
+</>
                     ) : (
                         <Button
                             variant="outlined"
@@ -184,6 +207,7 @@ export default function App() {
                 ) : view === 'list' ? (
                     <ConnectionList
                         connections={filtered}
+                        labels={labels}
                         loading={loading}
                         filter={filter}
                         onFilterChange={setFilter}
@@ -193,18 +217,19 @@ export default function App() {
                             if (field === sortField) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
                             else { setSortField(field); setSortDir('asc') }
                         }}
-                        companies={companies}
-                        branches={branches}
-                        groups={groups}
-                        allTags={allTags}
                         onConnect={handleConnect}
                         onDisconnect={handleDisconnect}
                         onEdit={handleEdit}
                         onDelete={handleDelete}
                     />
-                ) : (
+                ) : view === 'about' ? (
+                    <About version={appVersion} onBack={() => setView('list')} />
+            ) :  view === 'settings' ? (
+                    <SettingsPage labels={labels} onLabelsChange={loadLabels} />
+            ) : (
                     <ConnectionForm
                         initial={editingConn}
+                        labels={labels}
                         onSave={handleFormSave}
                         onCancel={() => setView('list')}
                     />

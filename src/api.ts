@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
-import type { Connection, SaveConnectionInput, VpnStatus } from './types'
+import type { Connection, SaveConnectionInput, VpnStatus, Label } from './types'
 
 export const api = {
     getConnections: () =>
@@ -25,4 +25,13 @@ export const api = {
 
     checkSudoSession: () =>
         invoke<boolean>('check_sudo_session'),
+
+    getLabels: () =>
+        invoke<Label[]>('get_labels'),
+
+    saveLabel: (id: string, name: string) =>
+        invoke<Label>('save_label', { id, name }),
+
+    deleteLabel: (id: string) =>
+        invoke<void>('delete_label', { id }),
 }

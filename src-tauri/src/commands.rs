@@ -1,5 +1,6 @@
 use tauri::State;
 use uuid::Uuid;
+use std::collections::HashMap;
 
 use crate::keychain;
 use crate::l2tp;
@@ -32,19 +33,15 @@ pub fn get_connections(app_handle: tauri::AppHandle) -> Vec<Connection> {
 #[derive(serde::Deserialize)]
 pub struct SaveConnectionInput {
     pub id: Option<String>,
-    pub name: String,
     pub server: String,
     pub username: String,
     pub password: String,
     pub shared_secret: String,
-    pub company: String,
-    pub branch: String,
-    pub tags: Vec<String>,
-    pub description: String,
-    pub group: String,
-    pub priority: u8,
     pub send_all_traffic: bool,
+    pub priority: u8,
+    pub labels: HashMap<String, String>,
 }
+
 
 fn log(msg: &str) {
     use std::fs::OpenOptions;
@@ -62,9 +59,8 @@ pub fn save_connection(
     app_handle: tauri::AppHandle,
     input: SaveConnectionInput,
 ) -> Result<Connection, String> {
-    log(&format!("[save_connection] called, id={:?}, name={}, password_len={}, shared_len={}",
+    log(&format!("[save_connection] called, id={:?}, password_len={}, shared_len={}",
                  input.id,
-                 input.name,
                  input.password.len(),
                  input.shared_secret.len(),
     ));
@@ -90,14 +86,10 @@ pub fn save_connection(
         username: input.username,
         keychain_key,
         shared_secret_key,
-        company: input.company,
-        branch: input.branch,
-        tags: input.tags,
-        description: input.description,
-        group: input.group,
-        priority: input.priority,
         send_all_traffic: input.send_all_traffic,
+        priority: input.priority,
         service_hash: None,
+        labels: input.labels,
     };
 
     if let Some(idx) = store.connections.iter().position(|c| c.id == id) {
@@ -281,4 +273,39 @@ pub fn authenticate_sudo(_password: String) -> Result<(), String> {
 #[cfg(target_os = "windows")]
 pub fn check_sudo_session() -> bool {
     true
+}
+
+#[tauri::command]
+pub fn get_labels(app_handle: tauri::AppHandle) -> Vec<store::Label> {
+    store::load(app_handle.config()).labels
+}
+
+#[tauri::command]
+pub fn save_label(app_handle: tauri::AppHandle, id: String, name: String) -> Result<store::Label, String> {
+    let mut s = store::load(app_handle.config());
+    let label = if let Some(l) = s.labels.iter_mut().find(|l| l.id == id) {
+        l.name = name;
+        l.clone()
+    } else {
+        let l = store::Label { id: id.clone(), name, built_in: false };
+        s.labels.push(l.clone());
+        l
+    };
+    store::save(&s)?;
+    Ok(label)
+}
+
+#[tauri::command]
+pub fn delete_label(app_handle: tauri::AppHandle, id: String) -> Result<(), String> {
+    let mut s = store::load(app_handle.config());
+    let label = s.labels.iter().find(|l| l.id == id).ok_or("Метка не найдена")?;
+    if label.built_in {
+        return Err("Нельзя удалить встроенную метку".into());
+    }
+    s.labels.retain(|l| l.id != id);
+    // чистим значения из всех соединений
+    for conn in &mut s.connections {
+        conn.labels.remove(&id);
+    }
+    store::save(&s)
 }

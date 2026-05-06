@@ -1,23 +1,23 @@
+import { useState } from 'react'
 import {
-    Box, TextField, Select, MenuItem, FormControl, InputLabel,
-    Table, TableHead, TableBody, TableRow, TableCell, TableSortLabel,
-    Chip, IconButton, Tooltip, Typography, Paper
+    Box, TextField, Table, TableHead, TableBody, TableRow, TableCell,
+    TableSortLabel, Chip, IconButton, Tooltip, Typography, Paper,
+    Card, CardContent, CardActions, ToggleButtonGroup, ToggleButton
 } from '@mui/material'
-import { PlayArrow, Stop, Edit, Delete } from '@mui/icons-material'
-import { ConnectionWithStatus, FilterState, SortDir, SortField, Connection } from '../types'
+import { PlayArrow, Stop, Edit, Delete, ViewList, GridView } from '@mui/icons-material'
+import { ConnectionWithStatus, FilterState, SortDir, SortField, Connection, Label } from '../types'
+
+type ViewMode = 'table' | 'cards'
 
 interface Props {
     connections: ConnectionWithStatus[]
+    labels: Label[]
     loading: boolean
     filter: FilterState
     onFilterChange: (f: FilterState) => void
     sortField: SortField
     sortDir: SortDir
     onSort: (field: SortField) => void
-    companies: string[]
-    branches: string[]
-    groups: string[]
-    allTags: string[]
     onConnect: (id: string) => void
     onDisconnect: (id: string) => void
     onEdit: (c: Connection) => void
@@ -38,146 +38,243 @@ const STATUS_LABEL: Record<string, string> = {
     unknown: 'Неизвестно',
 }
 
-export function ConnectionList({ connections, loading, filter, onFilterChange, ...p }: Props) {
+function LabelChips({ connection, labels }: { connection: Connection; labels: Label[] }) {
+    const entries = Object.entries(connection.labels)
+        .map(([id, value]) => ({
+            key: labels.find(l => l.id === id)?.name ?? id,
+            value,
+        }))
+        .filter(e => e.value)
+
+    const visible = entries.slice(0, 2)
+    const rest = entries.length - visible.length
+
+    return (
+        <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
+            {visible.map(e => (
+                <Box
+                    key={e.key}
+                    sx={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        borderRadius: '999px',
+                        px: 1,
+                        py: '2px',
+                        fontSize: 11,
+                        gap: '4px',
+                    }}
+                >
+                    <span style={{ color: 'var(--mui-palette-text-secondary)' }}>{e.key}</span>
+                    <span style={{ opacity: 0.3 }}>·</span>
+                    <span style={{ color: 'var(--mui-palette-text-primary)', fontWeight: 500 }}>{e.value}</span>
+                </Box>
+            ))}
+            {rest > 0 && (
+                <Chip label={`+${rest}`} size="small" sx={{ fontSize: 11 }} />
+            )}
+        </Box>
+    )
+}
+
+function ConnectButton({ c, onConnect, onDisconnect }: {
+    c: ConnectionWithStatus
+    onConnect: (id: string) => void
+    onDisconnect: (id: string) => void
+}) {
+    if (c.status === 'connected') {
+        return (
+            <Tooltip title="Отключить">
+                <IconButton size="small" color="error" onClick={() => onDisconnect(c.id)}>
+                    <Stop fontSize="small" />
+                </IconButton>
+            </Tooltip>
+        )
+    }
+    return (
+        <Tooltip title="Подключить">
+            <span>
+                <IconButton
+                    size="small"
+                    color="success"
+                    onClick={() => onConnect(c.id)}
+                    disabled={c.status === 'connecting'}
+                >
+                    <PlayArrow fontSize="small" />
+                </IconButton>
+            </span>
+        </Tooltip>
+    )
+}
+
+function getDisplayName(c: Connection): string {
+    return c.labels['company'] || c.name
+}
+
+export function ConnectionList({ connections, labels, loading, filter, onFilterChange, ...p }: Props) {
+    const [viewMode, setViewMode] = useState<ViewMode>('table')
+
     return (
         <Box>
-            {/* Фильтры */}
-            <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
+            <Box sx={{ display: 'flex', gap: 2, mb: 2, alignItems: 'center' }}>
                 <TextField
                     size="small"
-                    placeholder="Поиск (имя, сервер, компания)..."
+                    placeholder="Поиск..."
                     value={filter.search}
                     onChange={e => onFilterChange({ ...filter, search: e.target.value })}
-                    sx={{ flex: 1, minWidth: 200 }}
+                    sx={{ flex: 1 }}
                 />
-                <FormControl size="small" sx={{ minWidth: 160 }}>
-                    <InputLabel>Компания</InputLabel>
-                    <Select
-                        value={filter.company}
-                        label="Компания"
-                        onChange={e => onFilterChange({ ...filter, company: e.target.value })}
-                    >
-                        <MenuItem value="">Все</MenuItem>
-                        {p.companies.map(c => <MenuItem key={c} value={c}>{c}</MenuItem>)}
-                    </Select>
-                </FormControl>
-                <FormControl size="small" sx={{ minWidth: 140 }}>
-                    <InputLabel>Приоритет</InputLabel>
-                    <Select
-                        value={filter.priority ?? ''}
-                        label="Приоритет"
-                        onChange={e => {
-                            const v = e.target.value as string | number
-                            onFilterChange({ ...filter, priority: v === '' ? null : Number(v) })
-                        }}                >
-                        <MenuItem value="">Любой</MenuItem>
-                        {[1, 2, 3, 4, 5].map(n => <MenuItem key={n} value={n}>P{n}</MenuItem>)}
-                    </Select>
-                </FormControl>
+                <ToggleButtonGroup
+                    size="small"
+                    value={viewMode}
+                    exclusive
+                    onChange={(_, v) => v && setViewMode(v)}
+                >
+                    <ToggleButton value="table"><ViewList fontSize="small" /></ToggleButton>
+                    <ToggleButton value="cards"><GridView fontSize="small" /></ToggleButton>
+                </ToggleButtonGroup>
             </Box>
 
-            {/* Таблица */}
-            <Paper variant="outlined">
-                <Table size="small">
-                    <TableHead>
-                        <TableRow>
-                            <TableCell>
-                                <TableSortLabel
-                                    active={p.sortField === 'name'}
-                                    direction={p.sortField === 'name' ? p.sortDir : 'asc'}
-                                    onClick={() => p.onSort('name')}
-                                >
-                                    Подключение
-                                </TableSortLabel>
-                            </TableCell>
-                            <TableCell>
-                                <TableSortLabel
-                                    active={p.sortField === 'status'}
-                                    direction={p.sortField === 'status' ? p.sortDir : 'asc'}
-                                    onClick={() => p.onSort('status')}
-                                >
-                                    Статус
-                                </TableSortLabel>
-                            </TableCell>
-                            <TableCell>
-                                <TableSortLabel
-                                    active={p.sortField === 'priority'}
-                                    direction={p.sortField === 'priority' ? p.sortDir : 'asc'}
-                                    onClick={() => p.onSort('priority')}
-                                >
-                                    P-ty
-                                </TableSortLabel>
-                            </TableCell>
-                            <TableCell>Сервер</TableCell>
-                            <TableCell align="right">Действия</TableCell>
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {connections.length === 0 ? (
+            {viewMode === 'table' ? (
+                <Paper variant="outlined">
+                    <Table size="small">
+                        <TableHead>
                             <TableRow>
-                                <TableCell colSpan={5} align="center" sx={{ py: 4, color: 'text.secondary' }}>
-                                    Нет подключений
+                                <TableCell>
+                                    <TableSortLabel
+                                        active={p.sortField === 'name'}
+                                        direction={p.sortField === 'name' ? p.sortDir : 'asc'}
+                                        onClick={() => p.onSort('name')}
+                                    >
+                                        Подключение
+                                    </TableSortLabel>
                                 </TableCell>
+                                <TableCell>
+                                    <TableSortLabel
+                                        active={p.sortField === 'status'}
+                                        direction={p.sortField === 'status' ? p.sortDir : 'asc'}
+                                        onClick={() => p.onSort('status')}
+                                    >
+                                        Статус
+                                    </TableSortLabel>
+                                </TableCell>
+                                <TableCell>
+                                    <TableSortLabel
+                                        active={p.sortField === 'priority'}
+                                        direction={p.sortField === 'priority' ? p.sortDir : 'asc'}
+                                        onClick={() => p.onSort('priority')}
+                                    >
+                                        P-ty
+                                    </TableSortLabel>
+                                </TableCell>
+                                <TableCell>Метки</TableCell>
+                                <TableCell align="right">Действия</TableCell>
                             </TableRow>
-                        ) : connections.map(c => (
-                            <TableRow key={c.id} hover>
-                                <TableCell>
-                                    <Typography variant="body2" sx={{ fontWeight: 500 }}>{c.company}</Typography>
-                                    <Typography variant="caption" color="text.secondary">{c.branch}</Typography>
-                                </TableCell>
-                                <TableCell>
+                        </TableHead>
+                        <TableBody>
+                            {connections.length === 0 ? (
+                                <TableRow>
+                                    <TableCell colSpan={5} align="center" sx={{ py: 4, color: 'text.secondary' }}>
+                                        Нет подключений
+                                    </TableCell>
+                                </TableRow>
+                            ) : connections.map(c => (
+                                <TableRow key={c.id} hover>
+                                    <TableCell>
+                                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                            {getDisplayName(c)}
+                                        </Typography>
+                                        <Typography variant="caption" color="text.secondary">
+                                            {c.server}
+                                        </Typography>
+                                    </TableCell>
+                                    <TableCell>
+                                        <Chip
+                                            size="small"
+                                            label={STATUS_LABEL[c.status] ?? c.status}
+                                            color={STATUS_COLOR[c.status] ?? 'default'}
+                                            variant={c.status === 'connected' ? 'filled' : 'outlined'}
+                                        />
+                                    </TableCell>
+                                    <TableCell>
+                                        <Typography variant="body2" color="text.secondary">
+                                            P{c.priority}
+                                        </Typography>
+                                    </TableCell>
+                                    <TableCell>
+                                        <LabelChips connection={c} labels={labels} />
+                                    </TableCell>
+                                    <TableCell align="right">
+                                        <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
+                                            <ConnectButton c={c} onConnect={p.onConnect} onDisconnect={p.onDisconnect} />
+                                            <Tooltip title="Редактировать">
+                                                <IconButton size="small" onClick={() => p.onEdit(c)}>
+                                                    <Edit fontSize="small" />
+                                                </IconButton>
+                                            </Tooltip>
+                                            <Tooltip title="Удалить">
+                                                <IconButton size="small" color="error" onClick={() => p.onDelete(c.id)}>
+                                                    <Delete fontSize="small" />
+                                                </IconButton>
+                                            </Tooltip>
+                                        </Box>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </Paper>
+            ) : (
+                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 2 }}>
+                    {connections.length === 0 ? (
+                        <Box sx={{ gridColumn: '1 / -1' }}>
+                            <Typography color="text.secondary" align="center" sx={{ py: 4 }}>
+                                Нет подключений
+                            </Typography>
+                        </Box>
+                    ) : connections.map(c => (
+                        <Card
+                            key={c.id}
+                            variant="outlined"
+                            sx={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                borderColor: c.status === 'connected' ? 'success.main' : undefined,
+                            }}
+                        >
+                            <CardContent sx={{ flex: 1, pb: 1 }}>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                                    <Box>
+                                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                            {getDisplayName(c)}
+                                        </Typography>
+                                        <Typography variant="caption" color="text.secondary">
+                                            {c.server}
+                                        </Typography>
+                                    </Box>
                                     <Chip
                                         size="small"
                                         label={STATUS_LABEL[c.status] ?? c.status}
                                         color={STATUS_COLOR[c.status] ?? 'default'}
                                         variant={c.status === 'connected' ? 'filled' : 'outlined'}
                                     />
-                                </TableCell>
-                                <TableCell>
-                                    <Typography variant="body2" color="text.secondary">P{c.priority}</Typography>
-                                </TableCell>
-                                <TableCell>
-                                    <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>{c.server}</Typography>
-                                </TableCell>
-                                <TableCell align="right">
-                                    <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
-                                        {c.status === 'connected' ? (
-                                            <Tooltip title="Отключить">
-                                                <IconButton size="small" color="error" onClick={() => p.onDisconnect(c.id)}>
-                                                    <Stop fontSize="small" />
-                                                </IconButton>
-                                            </Tooltip>
-                                        ) : (
-                                            <Tooltip title="Подключить">
-                                                <span>
-                                                    <IconButton
-                                                        size="small"
-                                                        color="success"
-                                                        onClick={() => p.onConnect(c.id)}
-                                                        disabled={c.status === 'connecting'}
-                                                    >
-                                                        <PlayArrow fontSize="small" />
-                                                    </IconButton>
-                                                </span>
-                                            </Tooltip>
-                                        )}
-                                        <Tooltip title="Редактировать">
-                                            <IconButton size="small" onClick={() => p.onEdit(c)}>
-                                                <Edit fontSize="small" />
-                                            </IconButton>
-                                        </Tooltip>
-                                        <Tooltip title="Удалить">
-                                            <IconButton size="small" color="error" onClick={() => p.onDelete(c.id)}>
-                                                <Delete fontSize="small" />
-                                            </IconButton>
-                                        </Tooltip>
-                                    </Box>
-                                </TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </Paper>
+                                </Box>
+                                <LabelChips connection={c} labels={labels} />
+                            </CardContent>
+                            <CardActions sx={{ pt: 0, justifyContent: 'flex-end' }}>
+                                <ConnectButton c={c} onConnect={p.onConnect} onDisconnect={p.onDisconnect} />
+                                <IconButton size="small" onClick={() => p.onEdit(c)}>
+                                    <Edit fontSize="small" />
+                                </IconButton>
+                                <IconButton size="small" color="error" onClick={() => p.onDelete(c.id)}>
+                                    <Delete fontSize="small" />
+                                </IconButton>
+                            </CardActions>
+                        </Card>
+                    ))}
+                </Box>
+            )}
         </Box>
     )
 }

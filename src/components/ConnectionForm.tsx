@@ -4,32 +4,30 @@ import {
     FormControlLabel, Switch, Button, Typography, Paper
 } from '@mui/material'
 import { api } from '../api'
-import { Connection, SaveConnectionInput } from '../types'
+import { Connection, SaveConnectionInput, Label } from '../types'
 
 interface Props {
     initial: Connection | null
+    labels: Label[]
     onSave: () => void
     onCancel: () => void
 }
 
-export function ConnectionForm({ initial, onSave, onCancel }: Props) {
+export function ConnectionForm({ initial, labels, onSave, onCancel }: Props) {
     const [form, setForm] = useState<SaveConnectionInput>({
         id: initial?.id,
-        name: initial?.name ?? '',
         server: initial?.server ?? '',
         username: initial?.username ?? '',
         password: '',
         shared_secret: '',
-        company: initial?.company ?? '',
-        branch: initial?.branch ?? '',
-        group: initial?.group ?? '',
-        description: initial?.description ?? '',
         priority: initial?.priority ?? 3,
-        tags: initial?.tags ?? [],
         send_all_traffic: initial?.send_all_traffic ?? false,
+        labels: initial?.labels ?? {},
     })
 
     const f = (field: Partial<SaveConnectionInput>) => setForm(prev => ({ ...prev, ...field }))
+    const setLabel = (id: string, value: string) =>
+        setForm(prev => ({ ...prev, labels: { ...prev.labels, [id]: value } }))
 
     const save = async () => {
         await api.saveConnection(form)
@@ -76,24 +74,23 @@ export function ConnectionForm({ initial, onSave, onCancel }: Props) {
             </Paper>
 
             <Paper variant="outlined" sx={{ p: 3, mb: 2 }}>
-                <Typography variant="overline" color="text.secondary">Категоризация</Typography>
+                <Typography variant="overline" color="text.secondary">Метки</Typography>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
-                    <Box sx={{ display: 'flex', gap: 2 }}>
+                    {labels.map(label => (
                         <TextField
-                            label="Компания"
+                            key={label.id}
+                            label={label.name}
                             size="small"
-                            fullWidth
-                            value={form.company}
-                            onChange={e => f({ company: e.target.value })}
+                            value={form.labels[label.id] ?? ''}
+                            onChange={e => setLabel(label.id, e.target.value)}
                         />
-                        <TextField
-                            label="Филиал"
-                            size="small"
-                            fullWidth
-                            value={form.branch}
-                            onChange={e => f({ branch: e.target.value })}
-                        />
-                    </Box>
+                    ))}
+                </Box>
+            </Paper>
+
+            <Paper variant="outlined" sx={{ p: 3, mb: 2 }}>
+                <Typography variant="overline" color="text.secondary">Параметры</Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
                     <FormControl size="small">
                         <InputLabel>Приоритет</InputLabel>
                         <Select
@@ -106,20 +103,6 @@ export function ConnectionForm({ initial, onSave, onCancel }: Props) {
                             ))}
                         </Select>
                     </FormControl>
-                    <TextField
-                        label="Описание"
-                        size="small"
-                        multiline
-                        rows={2}
-                        value={form.description}
-                        onChange={e => f({ description: e.target.value })}
-                    />
-                </Box>
-            </Paper>
-
-            <Paper variant="outlined" sx={{ p: 3, mb: 3 }}>
-                <Typography variant="overline" color="text.secondary">Параметры</Typography>
-                <Box sx={{ mt: 1 }}>
                     <FormControlLabel
                         control={
                             <Switch

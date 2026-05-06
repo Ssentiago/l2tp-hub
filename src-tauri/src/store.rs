@@ -6,26 +6,45 @@ use tauri::path::BaseDirectory;
 use crate::app_handle_storage::get_app_handle;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Label {
+    pub id: String,
+    pub name: String,      // отображаемое имя ключа
+    pub built_in: bool,    // нельзя удалить
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Connection {
     pub id: String,
     pub name: String,
     pub server: String,
     pub username: String,
     pub keychain_key: String,
-    pub company: String,
-    pub branch: String,
-    pub tags: Vec<String>,
-    pub description: String,
-    pub group: String,
-    pub priority: u8,
     pub shared_secret_key: String,
     pub send_all_traffic: bool,
     pub service_hash: Option<String>,
+    pub priority: u8,
+    // убираем company/branch/group/tags/description
+    pub labels: std::collections::HashMap<String, String>, // label_id → value
 }
 
-#[derive(Debug, Serialize, Deserialize, Default)]
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Store {
     pub connections: Vec<Connection>,
+    pub labels: Vec<Label>,
+}
+
+impl Default for Store {
+    fn default() -> Self {
+        Self {
+            connections: vec![],
+            labels: vec![
+                Label { id: "company".into(), name: "Компания".into(), built_in: true },
+                Label { id: "branch".into(), name: "Филиал".into(), built_in: true },
+                Label { id: "priority".into(), name: "Приоритет".into(), built_in: true },
+            ],
+        }
+    }
 }
 
 // Вспомогательная функция логирования

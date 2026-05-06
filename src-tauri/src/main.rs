@@ -37,6 +37,9 @@ fn main() {
             commands::get_vpn_status,
             commands::authenticate_sudo,
             commands::check_sudo_session,
+            commands::get_labels,
+        commands::save_label,
+        commands::delete_label,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
