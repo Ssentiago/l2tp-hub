@@ -31,10 +31,10 @@ pub fn create_vpn_service(
 ) -> Result<(), String> {
     let _ = delete_vpn_service(name);
 
-    let split_tunneling = if send_all_traffic { "False" } else { "True" };
+    let split_tunneling = if send_all_traffic { "$False" } else { "$True" };
 
     let script = format!(
-        r#"Add-VpnConnection -Name '{name}' -ServerAddress '{server}' -TunnelType L2tp -L2tpPsk '{secret}' -AuthenticationMethod MSChapv2 -SplitTunneling ${split} -RememberCredential $True -Force"#,
+        r#"Add-VpnConnection -Name '{name}' -ServerAddress '{server}' -TunnelType L2tp -L2tpPsk '{secret}' -AuthenticationMethod MSChapv2 -SplitTunneling {split} -RememberCredential $True -Force"#,
         name = name,
         server = server,
         secret = shared_secret,
@@ -55,7 +55,7 @@ pub fn create_vpn_service(
 
 pub fn delete_vpn_service(name: &str) -> Result<(), String> {
     let script = format!(
-        "Remove-VpnConnection -Name '{}' -Force -ErrorAction SilentlyContinue",
+        "Remove-VpnConnection -Name '{}' -Force -ErrorAction SilentlyContinue; exit 0",
         name
     );
     powershell(&script)?;
