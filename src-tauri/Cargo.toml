@@ -19,6 +19,7 @@ uuid = { version = "1", features = ["v4"] }
 once_cell = "1.21.4"
 libc = "0.2.186"
 keyring = { version = "3", features = ["apple-native", "windows-native"] }
+chrono = "0.4.44"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 libc = "0.2"
