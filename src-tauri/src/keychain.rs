@@ -2,12 +2,29 @@ use keyring::Entry;
 
 const SERVICE: &str = "com.senti.l2tp";
 
+fn log(msg: &str) {
+    use std::fs::OpenOptions;
+    use std::io::Write;
+    let mut f = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("C:\\l2tp-hub-debug.log")
+        .unwrap();
+    writeln!(f, "{}", msg).unwrap();
+}
+
 pub fn set_password(key: &str, password: &str) -> Result<(), String> {
-    // target modifier "local" — Local persistence, видна из любого контекста
-    let entry = Entry::new_with_target("local", SERVICE, key)
-        .map_err(|e| e.to_string())?;
+    log(&format!("keychain::set_password key={}", key));
+    let entry = Entry::new(SERVICE, key)
+        .map_err(|e| {
+            log(&format!("Entry::new failed: {}", e));
+            e.to_string()
+        })?;
     entry.set_password(password)
-        .map_err(|e| e.to_string())
+        .map_err(|e| {
+            log(&format!("set_password failed: {}", e));
+            e.to_string()
+        })
 }
 
 pub fn get_password(key: &str) -> Result<String, String> {
