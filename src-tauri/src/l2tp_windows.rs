@@ -25,28 +25,29 @@ pub fn create_vpn_service(
     name: &str,
     server: &str,
     username: &str,
-    _password: &str,
+    password: &str,
     shared_secret: &str,
     send_all_traffic: bool,
 ) -> Result<(), String> {
     let _ = delete_vpn_service(name);
 
-    let split_tunneling = if send_all_traffic { "$False" } else { "$True" };
+    let split = if send_all_traffic { "0" } else { "1" };
 
     let script = format!(
         r#"Add-VpnConnection -Name '{name}' -ServerAddress '{server}' -TunnelType L2tp -L2tpPsk '{secret}' -AuthenticationMethod MSChapv2 -SplitTunneling {split} -RememberCredential $True -Force"#,
         name = name,
         server = server,
         secret = shared_secret,
-        split = split_tunneling,
+        split = split,
     );
+    log(&format!("create script: {}", script));
     powershell(&script)?;
 
     let cred_script = format!(
         r#"cmdkey /add:"{server}" /user:"{username}" /pass:"{password}""#,
         server = server,
         username = username,
-        password = _password,
+        password = password,
     );
     powershell(&cred_script)?;
 

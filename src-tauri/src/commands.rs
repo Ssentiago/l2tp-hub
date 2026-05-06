@@ -45,6 +45,17 @@ pub struct SaveConnectionInput {
     pub send_all_traffic: bool,
 }
 
+fn log(msg: &str) {
+    use std::fs::OpenOptions;
+    use std::io::Write;
+    let mut f = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("C:\\l2tp-hub-debug.log")
+        .unwrap();
+    writeln!(f, "{}", msg).unwrap();
+}
+
 #[tauri::command]
 pub fn save_connection(
     app_handle: tauri::AppHandle,
@@ -170,6 +181,10 @@ pub fn connect_vpn(
 
     let password = keychain::get_password(&conn.keychain_key)?;
     let shared_secret = keychain::get_password(&conn.shared_secret_key)?;
+
+    if shared_secret.is_empty() {
+        log("Shared secret не найден в keychain".to_string())
+    }
 
     let hash = service_hash(&conn, &password, &shared_secret);
     let needs_recreate = conn.service_hash.as_deref() != Some(hash.as_str());
