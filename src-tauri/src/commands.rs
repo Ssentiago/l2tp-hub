@@ -183,7 +183,7 @@ pub fn connect_vpn(
     let shared_secret = keychain::get_password(&conn.shared_secret_key)?;
 
     if shared_secret.is_empty() {
-        log("Shared secret не найден в keychain".to_string())
+        log("Shared secret не найден в keychain")
     }
 
     let hash = service_hash(&conn, &password, &shared_secret);
