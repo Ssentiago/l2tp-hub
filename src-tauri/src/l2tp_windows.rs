@@ -73,18 +73,6 @@ fn log(msg: &str) {
     writeln!(f, "{}", msg).unwrap();
 }
 
-fn log(msg: &str) {
-    use std::fs::OpenOptions;
-    use std::io::Write;
-    if let Ok(mut f) = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open("C:\\l2tp-hub-debug.log")
-    {
-        let _ = writeln!(f, "{}", msg);
-    }
-}
-
 pub fn connect_vpn(name: &str) -> Result<(), String> {
     log(&format!("connect_vpn: {}", name));
 
