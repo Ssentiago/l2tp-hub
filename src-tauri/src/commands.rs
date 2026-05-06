@@ -229,7 +229,7 @@ pub fn connect_vpn(
     }
 
     log(&format!("[connect_vpn] calling l2tp::connect_vpn for {}", conn.name));
-    l2tp::connect_vpn(&conn.name)
+    l2tp::connect_vpn(&conn.name, &conn.username, &password)
 }
 
 #[tauri::command]

@@ -84,11 +84,11 @@ fn log(msg: &str) {
     writeln!(f, "{}", msg).unwrap();
 }
 
-pub fn connect_vpn(name: &str) -> Result<(), String> {
+pub fn connect_vpn(name: &str, username: &str, password: &str) -> Result<(), String> {
     log(&format!("[connect_vpn] name: {}", name));
 
     let output = Command::new("rasdial")
-        .args([name])
+        .args([name, username, password])
         .creation_flags(CREATE_NO_WINDOW)
         .output()
         .map_err(|e| {
