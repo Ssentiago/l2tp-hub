@@ -64,8 +64,20 @@ pub fn delete_vpn_service(name: &str) -> Result<(), String> {
 }
 
 pub fn connect_vpn(name: &str) -> Result<(), String> {
-    let script = format!("rasdial '{}'", name);
-    powershell(&script)?;
+    let output = Command::new("rasdial")
+        .args([name])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    eprintln!("rasdial stdout: {}", stdout);
+    eprintln!("rasdial stderr: {}", stderr);
+    eprintln!("rasdial status: {}", output.status);
+
+    if !output.status.success() {
+        return Err(format!("rasdial failed: {}\n{}", stdout, stderr));
+    }
     Ok(())
 }
 
