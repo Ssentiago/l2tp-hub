@@ -61,6 +61,10 @@ pub fn save_connection(
     app_handle: tauri::AppHandle,
     input: SaveConnectionInput,
 ) -> Result<Connection, String> {
+    log(&format!("save_connection called, password_len={}, shared_len={}",
+                 input.password.len(),
+                 input.shared_secret.len(),
+    ));
     let mut store = store::load(app_handle.config());
 
     let id = input.id.clone().unwrap_or_else(|| Uuid::new_v4().to_string());
