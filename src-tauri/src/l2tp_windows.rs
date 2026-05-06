@@ -38,16 +38,25 @@ pub fn create_vpn_service(
     let split_flag = if !send_all_traffic { " -SplitTunneling $True" } else { "" };
 
     let script = format!(
-        r#"$cred = New-Object System.Management.Automation.PSCredential('{username}', (ConvertTo-SecureString '{password}' -AsPlainText -Force)); Add-VpnConnection -Name '{name}' -ServerAddress '{server}' -TunnelType L2tp -L2tpPsk '{secret}' -AuthenticationMethod MSChapv2 -RememberCredential -Credential $cred{split} -Force"#,
+        r#"Add-VpnConnection -Name '{name}' -ServerAddress '{server}' -TunnelType L2tp -L2tpPsk '{secret}' -AuthenticationMethod MSChapv2 -RememberCredential -Force"#,
         name = name,
         server = server,
-        username = username,
-        password = password,
         secret = shared_secret,
-        split = split_flag,
     );
     log(&format!("[create_vpn_service] create script: {}", script));
     powershell(&script)?;
+
+    let cred_script = format!(
+        r#"cmdkey /add:"{name}" /user:"{username}" /pass:"{password}""#,
+        name = name,
+        username = username,
+        password = password,
+    );
+
+    log(&format!("[create_vpn_service] cred script: {}", cred_script));
+    powershell(&cred_script)?;
+
+
 
     log("[create_vpn_service] success");
     Ok(())
