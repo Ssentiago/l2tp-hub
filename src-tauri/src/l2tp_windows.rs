@@ -3,40 +3,20 @@ use std::os::windows::process::CommandExt;
 
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
-fn log(msg: &str) {
-    use std::fs::OpenOptions;
-    use std::io::Write;
-    use chrono::Local;
-
-    if let Ok(mut f) = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open("C:\\l2tp-hub-debug.log") {
-        let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S");
-        let _ = writeln!(f, "[{}] {}", timestamp, msg);
-    }
-}
-
 fn powershell(script: &str) -> Result<String, String> {
-    log(&format!("[powershell] Entering with script: {}", script));
-
+    log(&format!("[powershell] running: {}", script));
     let output = Command::new("powershell")
         .args(["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", script])
         .creation_flags(CREATE_NO_WINDOW)
         .output()
         .map_err(|e| {
-            let err_msg = format!("[powershell] CRITICAL execution error: {}", e);
-            log(&err_msg);
+            log(&format!("[powershell] command error: {}", e));
             e.to_string()
         })?;
 
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-
-    log(&format!(
-        "[powershell] Finished. Status: {}\nSTDOUT: {}\nSTDERR: {}",
-        output.status, stdout.trim(), stderr.trim()
-    ));
+    log(&format!("[powershell] stdout: {}\nstderr: {}\nstatus: {}", stdout, stderr, output.status));
 
     if !output.status.success() {
         return Err(format!("powershell failed: {}", stderr));
@@ -52,12 +32,7 @@ pub fn create_vpn_service(
     shared_secret: &str,
     send_all_traffic: bool,
 ) -> Result<(), String> {
-    log(&format!(
-        "[create_vpn_service] Start for: {}, server: {}, user: {}, split_tunnel: {}",
-        name, server, username, !send_all_traffic
-    ));
-
-    log(&format!("[create_vpn_service] Attempting to clear existing service: {}", name));
+    log(&format!("[create_vpn_service] name: {}, server: {}", name, server));
     let _ = delete_vpn_service(name);
 
     let split_flag = if !send_all_traffic { " -SplitTunneling $True" } else { "" };
@@ -71,64 +46,63 @@ pub fn create_vpn_service(
         secret = shared_secret,
         split = split_flag,
     );
-
-    log("[create_vpn_service] Running Add-VpnConnection script");
+    log(&format!("[create_vpn_service] create script: {}", script));
     powershell(&script)?;
-    log("[create_vpn_service] Successfully created service");
 
+    log("[create_vpn_service] success");
     Ok(())
 }
 
 pub fn delete_vpn_service(name: &str) -> Result<(), String> {
-    log(&format!("[delete_vpn_service] Called for: {}", name));
+    log(&format!("[delete_vpn_service] name: {}", name));
     let script = format!(
         "Remove-VpnConnection -Name '{}' -Force -ErrorAction SilentlyContinue; exit 0",
         name
     );
-
     powershell(&script)?;
-    log(&format!("[delete_vpn_service] Cleanup finished for: {}", name));
+    log("[delete_vpn_service] finished");
     Ok(())
 }
 
+fn log(msg: &str) {
+    use std::fs::OpenOptions;
+    use std::io::Write;
+    let mut f = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("C:\\l2tp-hub-debug.log")
+        .unwrap();
+    writeln!(f, "{}", msg).unwrap();
+}
+
 pub fn connect_vpn(name: &str) -> Result<(), String> {
-    log(&format!("[connect_vpn] Attempting to connect: {}", name));
+    log(&format!("[connect_vpn] name: {}", name));
 
     let output = Command::new("rasdial")
         .args([name])
         .creation_flags(CREATE_NO_WINDOW)
         .output()
         .map_err(|e| {
-            let err_msg = format!("[connect_vpn] rasdial process error: {}", e);
-            log(&err_msg);
+            log(&format!("[connect_vpn] rasdial error: {}", e));
             e.to_string()
         })?;
 
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-
-    log(&format!(
-        "[connect_vpn] rasdial finished. Status: {}\nSTDOUT: {}\nSTDERR: {}",
-        output.status, stdout.trim(), stderr.trim()
-    ));
+    log(&format!("[connect_vpn] stdout: {}\nstderr: {}\nstatus: {}", stdout, stderr, output.status));
 
     if !output.status.success() {
-        log(&format!("[connect_vpn] Connection FAILED for: {}", name));
         return Err(format!("rasdial failed: {}\n{}", stdout, stderr));
     }
-
-    log(&format!("[connect_vpn] Connection SUCCESSFUL for: {}", name));
+    log("[connect_vpn] success");
     Ok(())
 }
 
 pub fn disconnect_vpn(name: &str) -> Result<(), String> {
-    log(&format!("[disconnect_vpn] Requesting disconnect for: {}", name));
+    log(&format!("[disconnect_vpn] name: {}", name));
     let script = format!("rasdial '{}' /disconnect", name);
-
-    match powershell(&script) {
-        Ok(_) => log(&format!("[disconnect_vpn] Disconnect command sent for: {}", name)),
-        Err(e) => log(&format!("[disconnect_vpn] Disconnect command error: {}", e)),
-    }
+    let _ = powershell(&script);
+    log("[disconnect_vpn] finished");
     Ok(())
 }
 
@@ -142,8 +116,8 @@ pub enum VpnStatus {
 }
 
 pub fn get_vpn_status(name: &str) -> VpnStatus {
-    log(&format!("[get_vpn_status] Checking status for: {}", name));
-
+    log(&format!("[get_vpn_status] name: {}", name));
+    // rasdial без аргументов — список активных соединений, без PowerShell
     let output = Command::new("rasdial")
         .creation_flags(CREATE_NO_WINDOW)
         .output();
@@ -151,37 +125,36 @@ pub fn get_vpn_status(name: &str) -> VpnStatus {
     match output {
         Ok(o) => {
             let stdout = String::from_utf8_lossy(&o.stdout).to_lowercase();
-            let is_connected = stdout.contains(&name.to_lowercase());
-            log(&format!("[get_vpn_status] Active connections found: {}. Target present: {}", stdout.trim(), is_connected));
-
-            if is_connected {
+            log(&format!("[get_vpn_status] active connections: {}", stdout));
+            if stdout.contains(&name.to_lowercase()) {
+                log("[get_vpn_status] status: Connected");
                 VpnStatus::Connected
             } else {
+                log("[get_vpn_status] status: Disconnected");
                 VpnStatus::Disconnected
             }
         }
         Err(e) => {
-            log(&format!("[get_vpn_status] ERROR: {}", e));
+            log(&format!("[get_vpn_status] error: {}", e));
             VpnStatus::Unknown
-        },
+        }
     }
 }
 
 pub fn list_vpn_services() -> Vec<String> {
-    log("[list_vpn_services] Fetching list of VPN connections");
+    log("[list_vpn_services] calling PowerShell...");
     let script = "(Get-VpnConnection -ErrorAction SilentlyContinue).Name";
-
     match powershell(script) {
         Ok(out) => {
-            let services: Vec<String> = out.lines()
+            let list: Vec<String> = out.lines()
                 .map(|l| l.trim().to_string())
                 .filter(|l| !l.is_empty())
                 .collect();
-            log(&format!("[list_vpn_services] Found services: {:?}", services));
-            services
+            log(&format!("[list_vpn_services] found: {:?}", list));
+            list
         },
         Err(e) => {
-            log(&format!("[list_vpn_services] ERROR: {}", e));
+            log(&format!("[list_vpn_services] error: {}", e));
             vec![]
         },
     }
