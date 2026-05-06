@@ -14,9 +14,19 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
       - run: bun install
 
-      # Сборка с релизом — только при теге
       - uses: tauri-apps/tauri-action@v0
         if: startsWith(github.ref, 'refs/tags/')
         env:
@@ -27,7 +37,6 @@ jobs:
           releaseDraft: false
           prerelease: false
 
-      # Сборка без релиза — при workflow_dispatch
       - uses: tauri-apps/tauri-action@v0
         if: github.event_name == 'workflow_dispatch'
         env:
