@@ -4,6 +4,7 @@ use std::os::windows::process::CommandExt;
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 fn powershell(script: &str) -> Result<String, String> {
+    log(&format!("running: {}", script));
     let output = Command::new("powershell")
         .args(["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", script])
         .creation_flags(CREATE_NO_WINDOW)
@@ -12,9 +13,7 @@ fn powershell(script: &str) -> Result<String, String> {
 
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-
-    eprintln!("ps stdout: {}", stdout);
-    eprintln!("ps stderr: {}", stderr);
+    log(&format!("stdout: {}\nstderr: {}\nstatus: {}", stdout, stderr, output.status));
 
     if !output.status.success() {
         return Err(format!("powershell failed: {}", stderr));
@@ -63,24 +62,50 @@ pub fn delete_vpn_service(name: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn log(msg: &str) {
+    use std::fs::OpenOptions;
+    use std::io::Write;
+    let mut f = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("C:\\l2tp-hub-debug.log")
+        .unwrap();
+    writeln!(f, "{}", msg).unwrap();
+}
+
+fn log(msg: &str) {
+    use std::fs::OpenOptions;
+    use std::io::Write;
+    if let Ok(mut f) = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("C:\\l2tp-hub-debug.log")
+    {
+        let _ = writeln!(f, "{}", msg);
+    }
+}
+
 pub fn connect_vpn(name: &str) -> Result<(), String> {
+    log(&format!("connect_vpn: {}", name));
+
     let output = Command::new("rasdial")
         .args([name])
+        .creation_flags(CREATE_NO_WINDOW)
         .output()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| {
+            log(&format!("rasdial error: {}", e));
+            e.to_string()
+        })?;
 
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    eprintln!("rasdial stdout: {}", stdout);
-    eprintln!("rasdial stderr: {}", stderr);
-    eprintln!("rasdial status: {}", output.status);
+    log(&format!("stdout: {}\nstderr: {}\nstatus: {}", stdout, stderr, output.status));
 
     if !output.status.success() {
         return Err(format!("rasdial failed: {}\n{}", stdout, stderr));
     }
     Ok(())
 }
-
 pub fn disconnect_vpn(name: &str) -> Result<(), String> {
     let script = format!("rasdial '{}' /disconnect", name);
     let _ = powershell(&script);
