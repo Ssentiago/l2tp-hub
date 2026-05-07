@@ -1,12 +1,19 @@
-use std::process::Command;
 use std::os::windows::process::CommandExt;
+use std::process::Command;
 
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 fn powershell(script: &str) -> Result<String, String> {
     log(&format!("[powershell] running: {}", script));
     let output = Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", script])
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-WindowStyle",
+            "Hidden",
+            "-Command",
+            script,
+        ])
         .creation_flags(CREATE_NO_WINDOW)
         .output()
         .map_err(|e| {
@@ -16,7 +23,10 @@ fn powershell(script: &str) -> Result<String, String> {
 
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    log(&format!("[powershell] stdout: {}\nstderr: {}\nstatus: {}", stdout, stderr, output.status));
+    log(&format!(
+        "[powershell] stdout: {}\nstderr: {}\nstatus: {}",
+        stdout, stderr, output.status
+    ));
 
     if !output.status.success() {
         return Err(format!("powershell failed: {}", stderr));
@@ -32,10 +42,17 @@ pub fn create_vpn_service(
     shared_secret: &str,
     send_all_traffic: bool,
 ) -> Result<(), String> {
-    log(&format!("[create_vpn_service] name: {}, server: {}", name, server));
+    log(&format!(
+        "[create_vpn_service] name: {}, server: {}",
+        name, server
+    ));
     let _ = delete_vpn_service(name);
 
-    let split_flag = if !send_all_traffic { " -SplitTunneling $True" } else { "" };
+    let split_flag = if !send_all_traffic {
+        " -SplitTunneling $True"
+    } else {
+        ""
+    };
 
     let script = format!(
         r#"Add-VpnConnection -Name '{name}' -ServerAddress '{server}' -TunnelType L2tp -L2tpPsk '{secret}' -AuthenticationMethod MSChapv2 -RememberCredential -Force"#,
@@ -53,10 +70,11 @@ pub fn create_vpn_service(
         password = password,
     );
 
-    log(&format!("[create_vpn_service] cred script: {}", cred_script));
+    log(&format!(
+        "[create_vpn_service] cred script: {}",
+        cred_script
+    ));
     powershell(&cred_script)?;
-
-
 
     log("[create_vpn_service] success");
     Ok(())
@@ -81,7 +99,7 @@ fn log(msg: &str) {
     let path = "C:\\l2tp-hub-debug.log";
 
     #[cfg(not(target_os = "windows"))]
-    let path = "/tmp/l2tp-hub-debug.log";  // на Mac при dev-запуске
+    let path = "/tmp/l2tp-hub-debug.log"; // на Mac при dev-запуске
 
     let mut f = OpenOptions::new()
         .create(true)
@@ -105,7 +123,10 @@ pub fn connect_vpn(name: &str, username: &str, password: &str) -> Result<(), Str
 
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    log(&format!("[connect_vpn] stdout: {}\nstderr: {}\nstatus: {}", stdout, stderr, output.status));
+    log(&format!(
+        "[connect_vpn] stdout: {}\nstderr: {}\nstatus: {}",
+        stdout, stderr, output.status
+    ));
 
     if !output.status.success() {
         return Err(format!("rasdial failed: {}\n{}", stdout, stderr));
@@ -160,16 +181,17 @@ pub fn list_vpn_services() -> Vec<String> {
     let script = "(Get-VpnConnection -ErrorAction SilentlyContinue).Name";
     match powershell(script) {
         Ok(out) => {
-            let list: Vec<String> = out.lines()
+            let list: Vec<String> = out
+                .lines()
                 .map(|l| l.trim().to_string())
                 .filter(|l| !l.is_empty())
                 .collect();
             log(&format!("[list_vpn_services] found: {:?}", list));
             list
-        },
+        }
         Err(e) => {
             log(&format!("[list_vpn_services] error: {}", e));
             vec![]
-        },
+        }
     }
 }

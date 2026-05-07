@@ -1,11 +1,11 @@
+use std::collections::HashMap;
 use tauri::State;
 use uuid::Uuid;
-use std::collections::HashMap;
 
+use crate::export_import;
 use crate::keychain;
 use crate::l2tp;
 use crate::store::{self, Connection};
-use crate::export_import;
 
 #[cfg(target_os = "macos")]
 use crate::sudo::SudoSession;
@@ -32,7 +32,11 @@ fn log(msg: &str) {
     let path = "C:\\l2tp-hub-debug.log";
     #[cfg(not(target_os = "windows"))]
     let path = "/tmp/l2tp-hub-debug.log";
-    let mut f = OpenOptions::new().create(true).append(true).open(path).unwrap();
+    let mut f = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .unwrap();
     writeln!(f, "{}", msg).unwrap();
 }
 
@@ -67,7 +71,10 @@ pub async fn save_connection(
     tokio::task::spawn_blocking(move || {
         let mut store = store::load(app_handle.config());
 
-        let id = input.id.clone().unwrap_or_else(|| Uuid::new_v4().to_string());
+        let id = input
+            .id
+            .clone()
+            .unwrap_or_else(|| Uuid::new_v4().to_string());
         let keychain_key = format!("password_{}", id);
         let shared_secret_key = format!("shared_{}", id);
 
@@ -101,8 +108,8 @@ pub async fn save_connection(
         log("[save_connection] success");
         Ok(conn)
     })
-        .await
-        .map_err(|e| e.to_string())?
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -124,17 +131,17 @@ pub async fn delete_connection(
         store.connections.retain(|c| c.id != id);
         store::save(&store)
     })
-        .await
-        .map_err(|e| e.to_string())?
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
 #[cfg(target_os = "windows")]
-pub async fn delete_connection(
-    app_handle: tauri::AppHandle,
-    id: String,
-) -> Result<(), String> {
-    log(&format!("[delete_connection] (windows) called for id={}", id));
+pub async fn delete_connection(app_handle: tauri::AppHandle, id: String) -> Result<(), String> {
+    log(&format!(
+        "[delete_connection] (windows) called for id={}",
+        id
+    ));
     tokio::task::spawn_blocking(move || {
         let mut store = store::load(app_handle.config());
         if let Some(conn) = store.connections.iter().find(|c| c.id == id) {
@@ -145,8 +152,8 @@ pub async fn delete_connection(
         store.connections.retain(|c| c.id != id);
         store::save(&store)
     })
-        .await
-        .map_err(|e| e.to_string())?
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 // ─── VPN CONTROL ─────────────────────────────────────────────────────────────
@@ -162,8 +169,12 @@ pub async fn connect_vpn(
     let sudo = sudo.inner().clone();
     tokio::task::spawn_blocking(move || {
         let mut store = store::load(app_handle.config());
-        let conn = store.connections.iter().find(|c| c.id == id)
-            .ok_or("Подключение не найдено")?.clone();
+        let conn = store
+            .connections
+            .iter()
+            .find(|c| c.id == id)
+            .ok_or("Подключение не найдено")?
+            .clone();
 
         let password = keychain::get_password(&conn.keychain_key)?;
         let shared_secret = keychain::get_password(&conn.shared_secret_key)?;
@@ -191,21 +202,22 @@ pub async fn connect_vpn(
 
         l2tp::connect_vpn(&conn.name)
     })
-        .await
-        .map_err(|e| e.to_string())?
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
 #[cfg(target_os = "windows")]
-pub async fn connect_vpn(
-    app_handle: tauri::AppHandle,
-    id: String,
-) -> Result<(), String> {
+pub async fn connect_vpn(app_handle: tauri::AppHandle, id: String) -> Result<(), String> {
     log(&format!("[connect_vpn] (windows) called for id={}", id));
     tokio::task::spawn_blocking(move || {
         let mut store = store::load(app_handle.config());
-        let conn = store.connections.iter().find(|c| c.id == id)
-            .ok_or("Подключение не найдено")?.clone();
+        let conn = store
+            .connections
+            .iter()
+            .find(|c| c.id == id)
+            .ok_or("Подключение не найдено")?
+            .clone();
 
         let password = keychain::get_password(&conn.keychain_key)?;
         let shared_secret = keychain::get_password(&conn.shared_secret_key)?;
@@ -231,8 +243,8 @@ pub async fn connect_vpn(
 
         l2tp::connect_vpn(&conn.name, &conn.username, &password)
     })
-        .await
-        .map_err(|e| e.to_string())?
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -240,13 +252,16 @@ pub async fn disconnect_vpn(id: String, app_handle: tauri::AppHandle) -> Result<
     log(&format!("[disconnect_vpn] called for id={}", id));
     tokio::task::spawn_blocking(move || {
         let store = store::load(app_handle.config());
-        let conn = store.connections.iter().find(|c| c.id == id)
+        let conn = store
+            .connections
+            .iter()
+            .find(|c| c.id == id)
             .ok_or("Подключение не найдено")?
             .clone();
         l2tp::disconnect_vpn(&conn.name)
     })
-        .await
-        .map_err(|e| e.to_string())?
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -258,15 +273,18 @@ pub async fn get_vpn_status(id: String, app_handle: tauri::AppHandle) -> l2tp::V
             None => l2tp::VpnStatus::Unknown,
         }
     })
-        .await
-        .unwrap_or(l2tp::VpnStatus::Unknown)
+    .await
+    .unwrap_or(l2tp::VpnStatus::Unknown)
 }
 
 // ─── SUDO (только macOS) ─────────────────────────────────────────────────────
 
 #[tauri::command]
 #[cfg(target_os = "macos")]
-pub async fn authenticate_sudo(password: String, sudo: State<'_, SudoSession>) -> Result<(), String> {
+pub async fn authenticate_sudo(
+    password: String,
+    sudo: State<'_, SudoSession>,
+) -> Result<(), String> {
     log("[authenticate_sudo] called");
     let sudo = sudo.inner().clone();
     tokio::task::spawn_blocking(move || sudo.authenticate(&password))
@@ -302,29 +320,41 @@ pub async fn get_labels(app_handle: tauri::AppHandle) -> Vec<store::Label> {
 }
 
 #[tauri::command]
-pub async fn save_label(app_handle: tauri::AppHandle, id: String, name: String) -> Result<store::Label, String> {
+pub async fn save_label(
+    app_handle: tauri::AppHandle,
+    id: String,
+    name: String,
+) -> Result<store::Label, String> {
     tokio::task::spawn_blocking(move || {
         let mut s = store::load(app_handle.config());
         let label = if let Some(l) = s.labels.iter_mut().find(|l| l.id == id) {
             l.name = name;
             l.clone()
         } else {
-            let l = store::Label { id: id.clone(), name, built_in: false };
+            let l = store::Label {
+                id: id.clone(),
+                name,
+                built_in: false,
+            };
             s.labels.push(l.clone());
             l
         };
         store::save(&s)?;
         Ok(label)
     })
-        .await
-        .map_err(|e| e.to_string())?
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
 pub async fn delete_label(app_handle: tauri::AppHandle, id: String) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
         let mut s = store::load(app_handle.config());
-        let label = s.labels.iter().find(|l| l.id == id).ok_or("Метка не найдена")?;
+        let label = s
+            .labels
+            .iter()
+            .find(|l| l.id == id)
+            .ok_or("Метка не найдена")?;
         if label.built_in {
             return Err("Нельзя удалить встроенную метку".into());
         }
@@ -334,8 +364,8 @@ pub async fn delete_label(app_handle: tauri::AppHandle, id: String) -> Result<()
         }
         store::save(&s)
     })
-        .await
-        .map_err(|e| e.to_string())?
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -361,8 +391,8 @@ pub async fn export_config_dialog(
             export_import::export_config(&store, &password)
         }
     })
-        .await
-        .map_err(|e| e.to_string())??;
+    .await
+    .map_err(|e| e.to_string())??;
 
     let path = tokio::task::spawn_blocking({
         let app_handle = app_handle.clone();
@@ -375,8 +405,8 @@ pub async fn export_config_dialog(
                 .blocking_save_file()
         }
     })
-        .await
-        .map_err(|e| e.to_string())?;
+    .await
+    .map_err(|e| e.to_string())?;
 
     match path {
         Some(p) => {
@@ -408,8 +438,8 @@ pub async fn import_config_dialog(
                 .blocking_pick_file()
         }
     })
-        .await
-        .map_err(|e| e.to_string())?;
+    .await
+    .map_err(|e| e.to_string())?;
 
     match path {
         Some(p) => {
@@ -423,7 +453,11 @@ pub async fn import_config_dialog(
                 let mut store = store::load(app_handle.config());
 
                 for imported_conn in connections {
-                    if let Some(idx) = store.connections.iter().position(|c| c.id == imported_conn.id) {
+                    if let Some(idx) = store
+                        .connections
+                        .iter()
+                        .position(|c| c.id == imported_conn.id)
+                    {
                         store.connections[idx] = imported_conn;
                     } else {
                         store.connections.push(imported_conn);
@@ -431,7 +465,9 @@ pub async fn import_config_dialog(
                 }
 
                 for imported_label in labels {
-                    if imported_label.built_in { continue; }
+                    if imported_label.built_in {
+                        continue;
+                    }
                     if let Some(idx) = store.labels.iter().position(|l| l.id == imported_label.id) {
                         store.labels[idx] = imported_label;
                     } else {
@@ -441,8 +477,8 @@ pub async fn import_config_dialog(
 
                 store::save(&store)
             })
-                .await
-                .map_err(|e| e.to_string())??;
+            .await
+            .map_err(|e| e.to_string())??;
 
             log("[import_config_dialog] done");
             Ok(true)
@@ -450,7 +486,6 @@ pub async fn import_config_dialog(
         None => Ok(false),
     }
 }
-
 
 #[tauri::command]
 pub async fn reset_all(app_handle: tauri::AppHandle) -> Result<(), String> {
@@ -465,6 +500,6 @@ pub async fn reset_all(app_handle: tauri::AppHandle) -> Result<(), String> {
         // записываем чистый стор
         store::save(&store::Store::default())
     })
-        .await
-        .map_err(|e| e.to_string())?
+    .await
+    .map_err(|e| e.to_string())?
 }

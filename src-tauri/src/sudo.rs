@@ -26,7 +26,9 @@ impl SudoSession {
                 use std::io::Write;
                 if let Some(stdin) = child.stdin.as_mut() {
                     let input = format!("{}\n", password);
-                    stdin.write_all(input.as_bytes()).map_err(|e| e.to_string())?;
+                    stdin
+                        .write_all(input.as_bytes())
+                        .map_err(|e| e.to_string())?;
                 }
                 child.wait().map_err(|e| e.to_string())
             })?;
@@ -45,7 +47,11 @@ impl SudoSession {
     }
 
     pub fn run_sudo(&self, args: &[&str]) -> Result<String, String> {
-        let pw = self.password.lock().unwrap().clone()
+        let pw = self
+            .password
+            .lock()
+            .unwrap()
+            .clone()
             .ok_or("sudo не авторизован")?;
 
         let output = Command::new("sudo")
@@ -60,7 +66,9 @@ impl SudoSession {
                 use std::io::Write;
                 if let Some(stdin) = child.stdin.as_mut() {
                     let input = format!("{}\n", pw);
-                    stdin.write_all(input.as_bytes()).map_err(|e| e.to_string())?;
+                    stdin
+                        .write_all(input.as_bytes())
+                        .map_err(|e| e.to_string())?;
                 }
                 child.wait_with_output().map_err(|e| e.to_string())
             })?;

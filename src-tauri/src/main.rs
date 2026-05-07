@@ -5,17 +5,17 @@ use tauri::Manager;
 
 mod commands;
 mod keychain;
+
 #[cfg(target_os = "macos")]
 pub mod l2tp;
 
+mod app_handle_storage;
+pub mod export_import;
 #[cfg(target_os = "windows")]
 #[path = "l2tp_windows.rs"]
 pub mod l2tp;
 mod store;
 mod sudo;
-mod app_handle_storage;
-pub mod export_import;
-
 
 #[cfg(target_os = "macos")]
 fn check_macos_version() -> Result<(), String> {
@@ -48,10 +48,10 @@ fn main() {
     #[cfg(target_os = "macos")]
     if let Err(msg) = check_macos_version() {
         let _ = std::process::Command::new("osascript")
-            .args(["-e", &format!(
-                "display alert \"L2TP Hub\" message \"{}\" as critical",
-                msg
-            )])
+            .args([
+                "-e",
+                &format!("display alert \"L2TP Hub\" message \"{}\" as critical", msg),
+            ])
             .status();
         std::process::exit(1);
     }
@@ -79,15 +79,14 @@ fn main() {
             commands::check_sudo_session,
             commands::get_labels,
             commands::open_url,
-        commands::save_label,
-        commands::delete_label,
-commands::import_config_dialog,
-commands::export_config_dialog,
-commands::reset_all,
+            commands::save_label,
+            commands::delete_label,
+            commands::import_config_dialog,
+            commands::export_config_dialog,
+            commands::reset_all,
         ])
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

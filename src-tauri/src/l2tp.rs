@@ -1,5 +1,5 @@
-use std::process::Command;
 use crate::sudo::SudoSession;
+use std::process::Command;
 
 fn macosvpn_bin() -> &'static str {
     "/usr/local/bin/macosvpn"
@@ -17,11 +17,16 @@ pub fn create_vpn_service(
     let mut args: Vec<String> = vec![
         macosvpn_bin().to_string(),
         "create".to_string(),
-        "--l2tp".to_string(), name.to_string(),
-        "--endpoint".to_string(), server.to_string(),
-        "--username".to_string(), username.to_string(),
-        "--password".to_string(), password.to_string(),
-        "--sharedsecret".to_string(), shared_secret.to_string(),
+        "--l2tp".to_string(),
+        name.to_string(),
+        "--endpoint".to_string(),
+        server.to_string(),
+        "--username".to_string(),
+        username.to_string(),
+        "--password".to_string(),
+        password.to_string(),
+        "--sharedsecret".to_string(),
+        shared_secret.to_string(),
         "--force".to_string(),
     ];
 
@@ -70,9 +75,7 @@ end tell"#,
     Ok(())
 }
 pub fn disconnect_vpn(name: &str) -> Result<(), String> {
-    let _ = Command::new("scutil")
-        .args(["--nc", "stop", name])
-        .output();
+    let _ = Command::new("scutil").args(["--nc", "stop", name]).output();
     Ok(())
 }
 

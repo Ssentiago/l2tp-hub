@@ -1,15 +1,15 @@
+use crate::app_handle_storage::get_app_handle;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
-use tauri::Manager;
 use tauri::path::BaseDirectory;
-use crate::app_handle_storage::get_app_handle;
+use tauri::Manager;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Label {
     pub id: String,
-    pub name: String,      // отображаемое имя ключа
-    pub built_in: bool,    // нельзя удалить
+    pub name: String,   // отображаемое имя ключа
+    pub built_in: bool, // нельзя удалить
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -27,7 +27,6 @@ pub struct Connection {
     pub labels: std::collections::HashMap<String, String>, // label_id → value
 }
 
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Store {
     pub connections: Vec<Connection>,
@@ -39,8 +38,16 @@ impl Default for Store {
         Self {
             connections: vec![],
             labels: vec![
-                Label { id: "company".into(), name: "Компания".into(), built_in: true },
-                Label { id: "branch".into(), name: "Филиал".into(), built_in: true },
+                Label {
+                    id: "company".into(),
+                    name: "Компания".into(),
+                    built_in: true,
+                },
+                Label {
+                    id: "branch".into(),
+                    name: "Филиал".into(),
+                    built_in: true,
+                },
             ],
         }
     }
@@ -54,7 +61,7 @@ fn log(msg: &str) {
     let path = "C:\\l2tp-hub-debug.log";
 
     #[cfg(not(target_os = "windows"))]
-    let path = "/tmp/l2tp-hub-debug.log";  // на Mac при dev-запуске
+    let path = "/tmp/l2tp-hub-debug.log"; // на Mac при dev-запуске
 
     let mut f = OpenOptions::new()
         .create(true)
@@ -68,7 +75,9 @@ fn store_path() -> PathBuf {
     log("[store_path] Resolving application handle");
     let app = get_app_handle();
 
-    let path = app.path().resolve("connections.json", BaseDirectory::AppData)
+    let path = app
+        .path()
+        .resolve("connections.json", BaseDirectory::AppData)
         .expect("Не удалось вычислить путь");
 
     log(&format!("[store_path] Resolved path: {:?}", path));
@@ -87,18 +96,24 @@ pub fn load(_config: &tauri::Config) -> Store {
     log("[load] Reading file content");
     match fs::read_to_string(&path) {
         Ok(data) => {
-            log(&format!("[load] File read successfully ({} bytes)", data.len()));
+            log(&format!(
+                "[load] File read successfully ({} bytes)",
+                data.len()
+            ));
             match serde_json::from_str::<Store>(&data) {
                 Ok(store) => {
-                    log(&format!("[load] JSON parsed successfully. Connections count: {}", store.connections.len()));
+                    log(&format!(
+                        "[load] JSON parsed successfully. Connections count: {}",
+                        store.connections.len()
+                    ));
                     store
-                },
+                }
                 Err(e) => {
                     log(&format!("[load] ERROR: Failed to parse JSON: {}", e));
                     Store::default()
                 }
             }
-        },
+        }
         Err(e) => {
             log(&format!("[load] ERROR: Failed to read file: {}", e));
             Store::default()
@@ -107,7 +122,10 @@ pub fn load(_config: &tauri::Config) -> Store {
 }
 
 pub fn save(store: &Store) -> Result<(), String> {
-    log(&format!("[save] Starting save process. Connections to save: {}", store.connections.len()));
+    log(&format!(
+        "[save] Starting save process. Connections to save: {}",
+        store.connections.len()
+    ));
     let path = store_path();
 
     if let Some(parent) = path.parent() {
