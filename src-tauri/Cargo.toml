@@ -21,5 +21,14 @@ libc = "0.2.186"
 keyring = { version = "3", features = ["apple-native", "windows-native"] }
 chrono = "0.4"
 open = "5.3.4"
+rand = "0.8.6"
+sha2 = "0.10.9"
+tauri-plugin-dialog = "2.7.1"
+tauri-plugin-fs = "2.5.1"
+tokio = "1.52.2"
 [target.'cfg(target_os = "macos")'.dependencies]
 libc = "0.2"
+aes-gcm = "0.10"
+sha2 = "0.10"
+rand = "0.8"
+tokio = { version = "1", features = ["full"] }

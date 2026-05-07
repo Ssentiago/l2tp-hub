@@ -41,7 +41,6 @@ impl Default for Store {
             labels: vec![
                 Label { id: "company".into(), name: "Компания".into(), built_in: true },
                 Label { id: "branch".into(), name: "Филиал".into(), built_in: true },
-                Label { id: "priority".into(), name: "Приоритет".into(), built_in: true },
             ],
         }
     }

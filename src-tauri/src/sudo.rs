@@ -1,19 +1,20 @@
 use std::process::Command;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
+#[derive(Clone)]
 pub struct SudoSession {
-    pub password: Mutex<Option<String>>,
+    pub password: Arc<Mutex<Option<String>>>,
 }
 
 impl SudoSession {
     pub fn new() -> Self {
         Self {
-            password: Mutex::new(None),
+            password: Arc::new(Mutex::new(None)),
         }
     }
 
+    // остальное без изменений
     pub fn authenticate(&self, password: &str) -> Result<(), String> {
-        // Проверяем пароль — пробуем запустить sudo -S true
         let output = Command::new("sudo")
             .args(["-S", "true"])
             .stdin(std::process::Stdio::piped())
@@ -43,7 +44,6 @@ impl SudoSession {
         self.password.lock().unwrap().is_some()
     }
 
-    /// Выполняет команду с sudo, используя сохранённый пароль
     pub fn run_sudo(&self, args: &[&str]) -> Result<String, String> {
         let pw = self.password.lock().unwrap().clone()
             .ok_or("sudo не авторизован")?;

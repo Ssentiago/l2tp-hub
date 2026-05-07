@@ -14,6 +14,7 @@ pub mod l2tp;
 mod store;
 mod sudo;
 mod app_handle_storage;
+pub mod export_import;
 
 fn main() {
     tauri::Builder::default()
@@ -41,7 +42,12 @@ fn main() {
             commands::open_url,
         commands::save_label,
         commands::delete_label,
+commands::import_config_dialog,
+commands::export_config_dialog,
+commands::reset_all,
         ])
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
