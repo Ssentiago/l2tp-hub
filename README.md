@@ -1,37 +1,37 @@
 # L2TP Hub
 
-Менеджер L2TP/IPSec VPN-подключений для macOS и Windows. Создан для IT-специалистов которые работают с большим количеством клиентских сетей.
+A manager for L2TP/IPSec VPN connections on macOS and Windows. Built for IT professionals who work with many client networks.
 
-## Возможности
+## Features
 
-- Быстрое подключение и отключение от VPN одним кликом
-- Метки для категоризации подключений (компания, филиал и др.)
-- Фильтрация и сортировка по статусу, приоритету, меткам
-- Табличный и карточный вид
-- Экспорт и импорт конфигурации с AES-256-GCM шифрованием
-- Пароли хранятся в системном хранилище ключей (Keychain / Windows Credential Manager)
+- One-click connect and disconnect
+- Labels for categorizing connections (company, branch, etc.)
+- Filter and sort by status, priority, and labels
+- Table and card views
+- Config export/import with AES-256-GCM encryption
+- Passwords stored in the system keychain (Keychain / Windows Credential Manager)
 
-## Требования
+## Requirements
 
-- macOS 13–15 (macOS 26 Tahoe не поддерживается — L2TP удалён из системы)
+- macOS 13–15 (macOS 26 Tahoe is not supported — L2TP was removed from the OS)
 - Windows 10/11
 - macOS: [macosvpn](https://github.com/halo/macosvpn) — `brew install macosvpn`
 
-## Сборка
+## Build
 
-```bash
+\```bash
 bun install
 bun run tauri build
-```
+\```
 
-## Разработка
+## Development
 
-```bash
+\```bash
 bun run tauri dev
-```
+\```
 
-## Стек
+## Stack
 
-- [Tauri 2](https://tauri.app/) — фреймворк
-- React + TypeScript + MUI — интерфейс
-- Rust — бэкенд, системные вызовы, шифрование
+- [Tauri 2](https://tauri.app/) — framework
+- React + TypeScript + MUI — UI
+- Rust — backend, system calls, encryption
