@@ -209,12 +209,12 @@ export function ConnectionList({ connections, labels, loading, filter, onFilterC
                                         <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
                                             <ConnectButton c={c} onConnect={p.onConnect} onDisconnect={p.onDisconnect} />
                                             <Tooltip title="Редактировать">
-                                                <IconButton size="small" onClick={() => p.onEdit(c)}>
+                                                <IconButton size="small" onClick={() => p.onEdit(c)} disabled={["connected", "connecting"].includes(c.status)}>
                                                     <Edit fontSize="small" />
                                                 </IconButton>
                                             </Tooltip>
                                             <Tooltip title="Удалить">
-                                                <IconButton size="small" color="error" onClick={() => p.onDelete(c.id)}>
+                                                <IconButton size="small" color="error" onClick={() => p.onDelete(c.id)} disabled={["connected", "connecting"].includes(c.status)}>
                                                     <Delete fontSize="small" />
                                                 </IconButton>
                                             </Tooltip>
@@ -264,10 +264,10 @@ export function ConnectionList({ connections, labels, loading, filter, onFilterC
                             </CardContent>
                             <CardActions sx={{ pt: 0, justifyContent: 'flex-end' }}>
                                 <ConnectButton c={c} onConnect={p.onConnect} onDisconnect={p.onDisconnect} />
-                                <IconButton size="small" onClick={() => p.onEdit(c)}>
+                                <IconButton size="small" onClick={() => p.onEdit(c)} disabled={["connected", "connecting"].includes(c.status)}>
                                     <Edit fontSize="small" />
                                 </IconButton>
-                                <IconButton size="small" color="error" onClick={() => p.onDelete(c.id)}>
+                                <IconButton size="small" color="error" onClick={() => p.onDelete(c.id)} disabled={["connected", "connecting"].includes(c.status)}>
                                     <Delete fontSize="small" />
                                 </IconButton>
                             </CardActions>

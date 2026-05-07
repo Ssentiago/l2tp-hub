@@ -32,8 +32,19 @@ const theme = createTheme({
         background: { default: '#121212', paper: '#1e1e1e' },
     },
     shape: { borderRadius: 8 },
+    components: {
+        MuiCssBaseline: {
+            styleOverrides: {
+                '*': {
+                    userSelect: 'none',
+                },
+                'p, span, h1, h2, h3, h4, h5, h6, label, li, td, th, div': {
+                    cursor: 'default',
+                },
+            },
+        },
+    },
 })
-
 export default function App() {
     const [connections, setConnections] = useState<ConnectionWithStatus[]>([])
     const [labels, setLabels] = useState<Label[]>([])

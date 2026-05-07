@@ -51,7 +51,7 @@ export function ConnectionForm({ initial, labels, onSave, onCancel }: Props) {
                         onChange={e => f({ server: e.target.value })}
                     />
                     <TextField
-                        label="Username"
+                        label="Имя пользователя"
                         size="small"
                         value={form.username}
                         onChange={e => f({ username: e.target.value })}
@@ -64,7 +64,7 @@ export function ConnectionForm({ initial, labels, onSave, onCancel }: Props) {
                         onChange={e => f({ password: e.target.value })}
                     />
                     <TextField
-                        label="Shared Secret"
+                        label="Общий ключ"
                         type="password"
                         size="small"
                         value={form.shared_secret}
