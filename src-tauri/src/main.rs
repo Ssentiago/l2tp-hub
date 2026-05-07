@@ -38,6 +38,7 @@ fn main() {
             commands::authenticate_sudo,
             commands::check_sudo_session,
             commands::get_labels,
+            commands::open_url,
         commands::save_label,
         commands::delete_label,
         ])

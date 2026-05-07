@@ -46,14 +46,20 @@ pub struct SaveConnectionInput {
 fn log(msg: &str) {
     use std::fs::OpenOptions;
     use std::io::Write;
+
+    #[cfg(target_os = "windows")]
+    let path = "C:\\l2tp-hub-debug.log";
+
+    #[cfg(not(target_os = "windows"))]
+    let path = "/tmp/l2tp-hub-debug.log";  // на Mac при dev-запуске
+
     let mut f = OpenOptions::new()
         .create(true)
         .append(true)
-        .open("C:\\l2tp-hub-debug.log")
+        .open(path)
         .unwrap();
     writeln!(f, "{}", msg).unwrap();
 }
-
 #[tauri::command]
 pub fn save_connection(
     app_handle: tauri::AppHandle,
@@ -308,4 +314,9 @@ pub fn delete_label(app_handle: tauri::AppHandle, id: String) -> Result<(), Stri
         conn.labels.remove(&id);
     }
     store::save(&s)
+}
+
+#[tauri::command]
+pub fn open_url(url: String) -> Result<(), String> {
+    open::that(url).map_err(|e| e.to_string())
 }

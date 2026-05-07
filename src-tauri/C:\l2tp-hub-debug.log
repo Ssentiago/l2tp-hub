@@ -2832,3 +2832,683 @@
 [2026-05-06 23:49:42] [load] Reading file content
 [2026-05-06 23:49:42] [load] File read successfully (841 bytes)
 [2026-05-06 23:49:42] [load] JSON parsed successfully. Connections count: 1
+[get_connections] called
+[2026-05-07 09:15:21] [load] Starting to load store
+[2026-05-07 09:15:21] [store_path] Resolving application handle
+[2026-05-07 09:15:21] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:21] [load] Reading file content
+[2026-05-07 09:15:21] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:21] [load] JSON parsed successfully. Connections count: 1
+[2026-05-07 09:15:21] [load] Starting to load store
+[2026-05-07 09:15:21] [store_path] Resolving application handle
+[2026-05-07 09:15:21] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:21] [load] Reading file content
+[2026-05-07 09:15:21] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:21] [load] JSON parsed successfully. Connections count: 1
+[get_connections] called
+[2026-05-07 09:15:21] [load] Starting to load store
+[2026-05-07 09:15:21] [store_path] Resolving application handle
+[2026-05-07 09:15:21] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:21] [load] Reading file content
+[2026-05-07 09:15:21] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:21] [load] JSON parsed successfully. Connections count: 1
+[2026-05-07 09:15:21] [load] Starting to load store
+[2026-05-07 09:15:21] [store_path] Resolving application handle
+[2026-05-07 09:15:21] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:21] [load] Reading file content
+[2026-05-07 09:15:21] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:21] [load] JSON parsed successfully. Connections count: 1
+[get_vpn_status] called for id=2cca99d2-957f-49a9-95c3-7e8dec9b791b
+[2026-05-07 09:15:21] [load] Starting to load store
+[2026-05-07 09:15:21] [store_path] Resolving application handle
+[2026-05-07 09:15:21] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:21] [load] Reading file content
+[2026-05-07 09:15:21] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:21] [load] JSON parsed successfully. Connections count: 1
+[get_vpn_status] called for id=2cca99d2-957f-49a9-95c3-7e8dec9b791b
+[2026-05-07 09:15:21] [load] Starting to load store
+[2026-05-07 09:15:21] [store_path] Resolving application handle
+[2026-05-07 09:15:21] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:21] [load] Reading file content
+[2026-05-07 09:15:21] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:21] [load] JSON parsed successfully. Connections count: 1
+[get_connections] called
+[2026-05-07 09:15:26] [load] Starting to load store
+[2026-05-07 09:15:26] [store_path] Resolving application handle
+[2026-05-07 09:15:26] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:26] [load] Reading file content
+[2026-05-07 09:15:26] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:26] [load] JSON parsed successfully. Connections count: 1
+[2026-05-07 09:15:26] [load] Starting to load store
+[2026-05-07 09:15:26] [store_path] Resolving application handle
+[2026-05-07 09:15:26] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:26] [load] Reading file content
+[2026-05-07 09:15:26] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:26] [load] JSON parsed successfully. Connections count: 1
+[get_connections] called
+[2026-05-07 09:15:26] [load] Starting to load store
+[2026-05-07 09:15:26] [store_path] Resolving application handle
+[2026-05-07 09:15:26] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:26] [load] Reading file content
+[2026-05-07 09:15:26] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:26] [load] JSON parsed successfully. Connections count: 1
+[2026-05-07 09:15:26] [load] Starting to load store
+[2026-05-07 09:15:26] [store_path] Resolving application handle
+[2026-05-07 09:15:26] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:26] [load] Reading file content
+[2026-05-07 09:15:26] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:26] [load] JSON parsed successfully. Connections count: 1
+[get_vpn_status] called for id=2cca99d2-957f-49a9-95c3-7e8dec9b791b
+[2026-05-07 09:15:26] [load] Starting to load store
+[2026-05-07 09:15:26] [store_path] Resolving application handle
+[2026-05-07 09:15:26] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:26] [load] Reading file content
+[2026-05-07 09:15:26] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:26] [load] JSON parsed successfully. Connections count: 1
+[get_vpn_status] called for id=2cca99d2-957f-49a9-95c3-7e8dec9b791b
+[2026-05-07 09:15:26] [load] Starting to load store
+[2026-05-07 09:15:26] [store_path] Resolving application handle
+[2026-05-07 09:15:26] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:26] [load] Reading file content
+[2026-05-07 09:15:26] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:26] [load] JSON parsed successfully. Connections count: 1
+[get_connections] called
+[2026-05-07 09:15:30] [load] Starting to load store
+[2026-05-07 09:15:30] [store_path] Resolving application handle
+[2026-05-07 09:15:30] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:30] [load] Reading file content
+[2026-05-07 09:15:30] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:30] [load] JSON parsed successfully. Connections count: 1
+[2026-05-07 09:15:30] [load] Starting to load store
+[2026-05-07 09:15:30] [store_path] Resolving application handle
+[2026-05-07 09:15:30] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:30] [load] Reading file content
+[2026-05-07 09:15:30] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:30] [load] JSON parsed successfully. Connections count: 1
+[get_connections] called
+[2026-05-07 09:15:30] [load] Starting to load store
+[2026-05-07 09:15:30] [store_path] Resolving application handle
+[2026-05-07 09:15:30] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:30] [load] Reading file content
+[2026-05-07 09:15:30] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:30] [load] JSON parsed successfully. Connections count: 1
+[2026-05-07 09:15:30] [load] Starting to load store
+[2026-05-07 09:15:30] [store_path] Resolving application handle
+[2026-05-07 09:15:30] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:30] [load] Reading file content
+[2026-05-07 09:15:30] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:30] [load] JSON parsed successfully. Connections count: 1
+[get_vpn_status] called for id=2cca99d2-957f-49a9-95c3-7e8dec9b791b
+[2026-05-07 09:15:30] [load] Starting to load store
+[2026-05-07 09:15:30] [store_path] Resolving application handle
+[2026-05-07 09:15:30] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:30] [load] Reading file content
+[2026-05-07 09:15:30] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:30] [load] JSON parsed successfully. Connections count: 1
+[get_vpn_status] called for id=2cca99d2-957f-49a9-95c3-7e8dec9b791b
+[2026-05-07 09:15:30] [load] Starting to load store
+[2026-05-07 09:15:30] [store_path] Resolving application handle
+[2026-05-07 09:15:30] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:30] [load] Reading file content
+[2026-05-07 09:15:30] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:30] [load] JSON parsed successfully. Connections count: 1
+[get_connections] called
+[2026-05-07 09:15:34] [load] Starting to load store
+[2026-05-07 09:15:34] [store_path] Resolving application handle
+[2026-05-07 09:15:34] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:34] [load] Reading file content
+[2026-05-07 09:15:34] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:34] [load] JSON parsed successfully. Connections count: 1
+[2026-05-07 09:15:34] [load] Starting to load store
+[2026-05-07 09:15:34] [store_path] Resolving application handle
+[2026-05-07 09:15:34] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:34] [load] Reading file content
+[2026-05-07 09:15:34] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:34] [load] JSON parsed successfully. Connections count: 1
+[get_connections] called
+[2026-05-07 09:15:34] [load] Starting to load store
+[2026-05-07 09:15:34] [store_path] Resolving application handle
+[2026-05-07 09:15:34] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:34] [load] Reading file content
+[2026-05-07 09:15:34] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:34] [load] JSON parsed successfully. Connections count: 1
+[2026-05-07 09:15:34] [load] Starting to load store
+[2026-05-07 09:15:34] [store_path] Resolving application handle
+[2026-05-07 09:15:34] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:34] [load] Reading file content
+[2026-05-07 09:15:34] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:34] [load] JSON parsed successfully. Connections count: 1
+[get_vpn_status] called for id=2cca99d2-957f-49a9-95c3-7e8dec9b791b
+[2026-05-07 09:15:34] [load] Starting to load store
+[2026-05-07 09:15:34] [store_path] Resolving application handle
+[2026-05-07 09:15:34] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:34] [load] Reading file content
+[2026-05-07 09:15:34] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:34] [load] JSON parsed successfully. Connections count: 1
+[get_vpn_status] called for id=2cca99d2-957f-49a9-95c3-7e8dec9b791b
+[2026-05-07 09:15:34] [load] Starting to load store
+[2026-05-07 09:15:34] [store_path] Resolving application handle
+[2026-05-07 09:15:34] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:34] [load] Reading file content
+[2026-05-07 09:15:34] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:34] [load] JSON parsed successfully. Connections count: 1
+[get_connections] called
+[2026-05-07 09:15:38] [load] Starting to load store
+[2026-05-07 09:15:38] [store_path] Resolving application handle
+[2026-05-07 09:15:38] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:38] [load] Reading file content
+[2026-05-07 09:15:38] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:38] [load] JSON parsed successfully. Connections count: 1
+[2026-05-07 09:15:38] [load] Starting to load store
+[2026-05-07 09:15:38] [store_path] Resolving application handle
+[2026-05-07 09:15:38] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:38] [load] Reading file content
+[2026-05-07 09:15:38] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:38] [load] JSON parsed successfully. Connections count: 1
+[get_connections] called
+[2026-05-07 09:15:38] [load] Starting to load store
+[2026-05-07 09:15:38] [store_path] Resolving application handle
+[2026-05-07 09:15:38] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:38] [load] Reading file content
+[2026-05-07 09:15:38] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:38] [load] JSON parsed successfully. Connections count: 1
+[2026-05-07 09:15:38] [load] Starting to load store
+[2026-05-07 09:15:38] [store_path] Resolving application handle
+[2026-05-07 09:15:38] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:38] [load] Reading file content
+[2026-05-07 09:15:38] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:38] [load] JSON parsed successfully. Connections count: 1
+[get_vpn_status] called for id=2cca99d2-957f-49a9-95c3-7e8dec9b791b
+[2026-05-07 09:15:38] [load] Starting to load store
+[2026-05-07 09:15:38] [store_path] Resolving application handle
+[2026-05-07 09:15:38] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:38] [load] Reading file content
+[2026-05-07 09:15:38] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:38] [load] JSON parsed successfully. Connections count: 1
+[get_vpn_status] called for id=2cca99d2-957f-49a9-95c3-7e8dec9b791b
+[2026-05-07 09:15:38] [load] Starting to load store
+[2026-05-07 09:15:38] [store_path] Resolving application handle
+[2026-05-07 09:15:38] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:38] [load] Reading file content
+[2026-05-07 09:15:38] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:38] [load] JSON parsed successfully. Connections count: 1
+[get_connections] called
+[2026-05-07 09:15:42] [load] Starting to load store
+[2026-05-07 09:15:42] [store_path] Resolving application handle
+[2026-05-07 09:15:42] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:42] [load] Reading file content
+[2026-05-07 09:15:42] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:42] [load] JSON parsed successfully. Connections count: 1
+[2026-05-07 09:15:42] [load] Starting to load store
+[2026-05-07 09:15:42] [store_path] Resolving application handle
+[2026-05-07 09:15:42] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:42] [load] Reading file content
+[2026-05-07 09:15:42] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:42] [load] JSON parsed successfully. Connections count: 1
+[get_connections] called
+[2026-05-07 09:15:42] [load] Starting to load store
+[2026-05-07 09:15:42] [store_path] Resolving application handle
+[2026-05-07 09:15:42] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:42] [load] Reading file content
+[2026-05-07 09:15:42] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:42] [load] JSON parsed successfully. Connections count: 1
+[2026-05-07 09:15:42] [load] Starting to load store
+[2026-05-07 09:15:42] [store_path] Resolving application handle
+[2026-05-07 09:15:42] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:42] [load] Reading file content
+[2026-05-07 09:15:42] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:42] [load] JSON parsed successfully. Connections count: 1
+[get_vpn_status] called for id=2cca99d2-957f-49a9-95c3-7e8dec9b791b
+[2026-05-07 09:15:42] [load] Starting to load store
+[2026-05-07 09:15:42] [store_path] Resolving application handle
+[2026-05-07 09:15:42] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:42] [load] Reading file content
+[2026-05-07 09:15:42] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:42] [load] JSON parsed successfully. Connections count: 1
+[get_vpn_status] called for id=2cca99d2-957f-49a9-95c3-7e8dec9b791b
+[2026-05-07 09:15:42] [load] Starting to load store
+[2026-05-07 09:15:42] [store_path] Resolving application handle
+[2026-05-07 09:15:42] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:42] [load] Reading file content
+[2026-05-07 09:15:42] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:42] [load] JSON parsed successfully. Connections count: 1
+[get_connections] called
+[2026-05-07 09:15:46] [load] Starting to load store
+[2026-05-07 09:15:46] [store_path] Resolving application handle
+[2026-05-07 09:15:46] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:46] [load] Reading file content
+[2026-05-07 09:15:46] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:46] [load] JSON parsed successfully. Connections count: 1
+[2026-05-07 09:15:46] [load] Starting to load store
+[2026-05-07 09:15:46] [store_path] Resolving application handle
+[2026-05-07 09:15:46] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:46] [load] Reading file content
+[2026-05-07 09:15:46] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:46] [load] JSON parsed successfully. Connections count: 1
+[get_connections] called
+[2026-05-07 09:15:46] [load] Starting to load store
+[2026-05-07 09:15:46] [store_path] Resolving application handle
+[2026-05-07 09:15:46] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:46] [load] Reading file content
+[2026-05-07 09:15:46] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:46] [load] JSON parsed successfully. Connections count: 1
+[2026-05-07 09:15:46] [load] Starting to load store
+[2026-05-07 09:15:46] [store_path] Resolving application handle
+[2026-05-07 09:15:46] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:46] [load] Reading file content
+[2026-05-07 09:15:46] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:46] [load] JSON parsed successfully. Connections count: 1
+[get_vpn_status] called for id=2cca99d2-957f-49a9-95c3-7e8dec9b791b
+[2026-05-07 09:15:46] [load] Starting to load store
+[2026-05-07 09:15:46] [store_path] Resolving application handle
+[2026-05-07 09:15:46] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:46] [load] Reading file content
+[2026-05-07 09:15:46] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:46] [load] JSON parsed successfully. Connections count: 1
+[get_vpn_status] called for id=2cca99d2-957f-49a9-95c3-7e8dec9b791b
+[2026-05-07 09:15:46] [load] Starting to load store
+[2026-05-07 09:15:46] [store_path] Resolving application handle
+[2026-05-07 09:15:46] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:46] [load] Reading file content
+[2026-05-07 09:15:46] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:46] [load] JSON parsed successfully. Connections count: 1
+[get_connections] called
+[2026-05-07 09:15:51] [load] Starting to load store
+[2026-05-07 09:15:51] [store_path] Resolving application handle
+[2026-05-07 09:15:51] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:51] [load] Reading file content
+[2026-05-07 09:15:51] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:51] [load] JSON parsed successfully. Connections count: 1
+[2026-05-07 09:15:51] [load] Starting to load store
+[2026-05-07 09:15:51] [store_path] Resolving application handle
+[2026-05-07 09:15:51] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:51] [load] Reading file content
+[2026-05-07 09:15:51] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:51] [load] JSON parsed successfully. Connections count: 1
+[get_connections] called
+[2026-05-07 09:15:51] [load] Starting to load store
+[2026-05-07 09:15:51] [store_path] Resolving application handle
+[2026-05-07 09:15:51] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:51] [load] Reading file content
+[2026-05-07 09:15:51] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:51] [load] JSON parsed successfully. Connections count: 1
+[2026-05-07 09:15:51] [load] Starting to load store
+[2026-05-07 09:15:51] [store_path] Resolving application handle
+[2026-05-07 09:15:51] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:51] [load] Reading file content
+[2026-05-07 09:15:51] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:51] [load] JSON parsed successfully. Connections count: 1
+[get_vpn_status] called for id=2cca99d2-957f-49a9-95c3-7e8dec9b791b
+[2026-05-07 09:15:52] [load] Starting to load store
+[2026-05-07 09:15:52] [store_path] Resolving application handle
+[2026-05-07 09:15:52] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:52] [load] Reading file content
+[2026-05-07 09:15:52] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:52] [load] JSON parsed successfully. Connections count: 1
+[get_vpn_status] called for id=2cca99d2-957f-49a9-95c3-7e8dec9b791b
+[2026-05-07 09:15:52] [load] Starting to load store
+[2026-05-07 09:15:52] [store_path] Resolving application handle
+[2026-05-07 09:15:52] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:15:52] [load] Reading file content
+[2026-05-07 09:15:52] [load] File read successfully (841 bytes)
+[2026-05-07 09:15:52] [load] JSON parsed successfully. Connections count: 1
+[get_connections] called
+[2026-05-07 09:16:05] [load] Starting to load store
+[2026-05-07 09:16:05] [store_path] Resolving application handle
+[2026-05-07 09:16:05] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:16:05] [load] Reading file content
+[2026-05-07 09:16:05] [load] File read successfully (841 bytes)
+[2026-05-07 09:16:05] [load] JSON parsed successfully. Connections count: 1
+[2026-05-07 09:16:05] [load] Starting to load store
+[2026-05-07 09:16:05] [store_path] Resolving application handle
+[2026-05-07 09:16:05] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:16:05] [load] Reading file content
+[2026-05-07 09:16:05] [load] File read successfully (841 bytes)
+[2026-05-07 09:16:05] [load] JSON parsed successfully. Connections count: 1
+[get_connections] called
+[2026-05-07 09:16:05] [load] Starting to load store
+[2026-05-07 09:16:05] [store_path] Resolving application handle
+[2026-05-07 09:16:05] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:16:05] [load] Reading file content
+[2026-05-07 09:16:05] [load] File read successfully (841 bytes)
+[2026-05-07 09:16:05] [load] JSON parsed successfully. Connections count: 1
+[2026-05-07 09:16:05] [load] Starting to load store
+[2026-05-07 09:16:05] [store_path] Resolving application handle
+[2026-05-07 09:16:05] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:16:05] [load] Reading file content
+[2026-05-07 09:16:05] [load] File read successfully (841 bytes)
+[2026-05-07 09:16:05] [load] JSON parsed successfully. Connections count: 1
+[get_vpn_status] called for id=2cca99d2-957f-49a9-95c3-7e8dec9b791b
+[2026-05-07 09:16:05] [load] Starting to load store
+[2026-05-07 09:16:05] [store_path] Resolving application handle
+[2026-05-07 09:16:05] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:16:05] [load] Reading file content
+[2026-05-07 09:16:05] [load] File read successfully (841 bytes)
+[2026-05-07 09:16:05] [load] JSON parsed successfully. Connections count: 1
+[get_vpn_status] called for id=2cca99d2-957f-49a9-95c3-7e8dec9b791b
+[2026-05-07 09:16:05] [load] Starting to load store
+[2026-05-07 09:16:05] [store_path] Resolving application handle
+[2026-05-07 09:16:05] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:16:05] [load] Reading file content
+[2026-05-07 09:16:05] [load] File read successfully (841 bytes)
+[2026-05-07 09:16:05] [load] JSON parsed successfully. Connections count: 1
+[get_connections] called
+[2026-05-07 09:16:09] [load] Starting to load store
+[2026-05-07 09:16:09] [store_path] Resolving application handle
+[2026-05-07 09:16:09] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:16:09] [load] Reading file content
+[2026-05-07 09:16:09] [load] File read successfully (841 bytes)
+[2026-05-07 09:16:09] [load] JSON parsed successfully. Connections count: 1
+[2026-05-07 09:16:09] [load] Starting to load store
+[2026-05-07 09:16:09] [store_path] Resolving application handle
+[2026-05-07 09:16:09] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:16:09] [load] Reading file content
+[2026-05-07 09:16:09] [load] File read successfully (841 bytes)
+[2026-05-07 09:16:09] [load] JSON parsed successfully. Connections count: 1
+[get_connections] called
+[2026-05-07 09:16:09] [load] Starting to load store
+[2026-05-07 09:16:09] [store_path] Resolving application handle
+[2026-05-07 09:16:09] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:16:09] [load] Reading file content
+[2026-05-07 09:16:09] [load] File read successfully (841 bytes)
+[2026-05-07 09:16:09] [load] JSON parsed successfully. Connections count: 1
+[2026-05-07 09:16:09] [load] Starting to load store
+[2026-05-07 09:16:09] [store_path] Resolving application handle
+[2026-05-07 09:16:09] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:16:09] [load] Reading file content
+[2026-05-07 09:16:09] [load] File read successfully (841 bytes)
+[2026-05-07 09:16:09] [load] JSON parsed successfully. Connections count: 1
+[get_vpn_status] called for id=2cca99d2-957f-49a9-95c3-7e8dec9b791b
+[2026-05-07 09:16:09] [load] Starting to load store
+[2026-05-07 09:16:09] [store_path] Resolving application handle
+[2026-05-07 09:16:09] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:16:09] [load] Reading file content
+[2026-05-07 09:16:09] [load] File read successfully (841 bytes)
+[2026-05-07 09:16:09] [load] JSON parsed successfully. Connections count: 1
+[get_vpn_status] called for id=2cca99d2-957f-49a9-95c3-7e8dec9b791b
+[2026-05-07 09:16:09] [load] Starting to load store
+[2026-05-07 09:16:09] [store_path] Resolving application handle
+[2026-05-07 09:16:09] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:16:09] [load] Reading file content
+[2026-05-07 09:16:09] [load] File read successfully (841 bytes)
+[2026-05-07 09:16:09] [load] JSON parsed successfully. Connections count: 1
+[get_connections] called
+[2026-05-07 09:16:15] [load] Starting to load store
+[2026-05-07 09:16:15] [store_path] Resolving application handle
+[2026-05-07 09:16:15] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:16:15] [load] Reading file content
+[2026-05-07 09:16:15] [load] File read successfully (841 bytes)
+[2026-05-07 09:16:15] [load] JSON parsed successfully. Connections count: 1
+[2026-05-07 09:16:15] [load] Starting to load store
+[2026-05-07 09:16:15] [store_path] Resolving application handle
+[2026-05-07 09:16:15] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:16:15] [load] Reading file content
+[2026-05-07 09:16:15] [load] File read successfully (841 bytes)
+[2026-05-07 09:16:15] [load] JSON parsed successfully. Connections count: 1
+[get_connections] called
+[2026-05-07 09:16:15] [load] Starting to load store
+[2026-05-07 09:16:15] [store_path] Resolving application handle
+[2026-05-07 09:16:15] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:16:15] [load] Reading file content
+[2026-05-07 09:16:15] [load] File read successfully (841 bytes)
+[2026-05-07 09:16:15] [load] JSON parsed successfully. Connections count: 1
+[2026-05-07 09:16:15] [load] Starting to load store
+[2026-05-07 09:16:15] [store_path] Resolving application handle
+[2026-05-07 09:16:15] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:16:15] [load] Reading file content
+[2026-05-07 09:16:15] [load] File read successfully (841 bytes)
+[2026-05-07 09:16:15] [load] JSON parsed successfully. Connections count: 1
+[get_vpn_status] called for id=2cca99d2-957f-49a9-95c3-7e8dec9b791b
+[2026-05-07 09:16:15] [load] Starting to load store
+[2026-05-07 09:16:15] [store_path] Resolving application handle
+[2026-05-07 09:16:15] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:16:15] [load] Reading file content
+[2026-05-07 09:16:15] [load] File read successfully (841 bytes)
+[2026-05-07 09:16:15] [load] JSON parsed successfully. Connections count: 1
+[get_vpn_status] called for id=2cca99d2-957f-49a9-95c3-7e8dec9b791b
+[2026-05-07 09:16:15] [load] Starting to load store
+[2026-05-07 09:16:15] [store_path] Resolving application handle
+[2026-05-07 09:16:15] [store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[2026-05-07 09:16:15] [load] Reading file content
+[2026-05-07 09:16:15] [load] File read successfully (841 bytes)
+[2026-05-07 09:16:15] [load] JSON parsed successfully. Connections count: 1
+[get_connections] called
+[load] Starting to load store
+[store_path] Resolving application handle
+[store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[load] Reading file content
+[load] File read successfully (841 bytes)
+[load] JSON parsed successfully. Connections count: 1
+[load] Starting to load store
+[store_path] Resolving application handle
+[store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[load] Reading file content
+[load] File read successfully (841 bytes)
+[load] JSON parsed successfully. Connections count: 1
+[get_connections] called
+[load] Starting to load store
+[store_path] Resolving application handle
+[store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[load] Reading file content
+[load] File read successfully (841 bytes)
+[load] JSON parsed successfully. Connections count: 1
+[load] Starting to load store
+[store_path] Resolving application handle
+[store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[load] Reading file content
+[load] File read successfully (841 bytes)
+[load] JSON parsed successfully. Connections count: 1
+[get_vpn_status] called for id=2cca99d2-957f-49a9-95c3-7e8dec9b791b
+[load] Starting to load store
+[store_path] Resolving application handle
+[store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[load] Reading file content
+[load] File read successfully (841 bytes)
+[load] JSON parsed successfully. Connections count: 1
+[get_vpn_status] called for id=2cca99d2-957f-49a9-95c3-7e8dec9b791b
+[load] Starting to load store
+[store_path] Resolving application handle
+[store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[load] Reading file content
+[load] File read successfully (841 bytes)
+[load] JSON parsed successfully. Connections count: 1
+[get_connections] called
+[load] Starting to load store
+[store_path] Resolving application handle
+[store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[load] Reading file content
+[load] File read successfully (841 bytes)
+[load] JSON parsed successfully. Connections count: 1
+[load] Starting to load store
+[store_path] Resolving application handle
+[store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[load] Reading file content
+[load] File read successfully (841 bytes)
+[load] JSON parsed successfully. Connections count: 1
+[get_connections] called
+[load] Starting to load store
+[store_path] Resolving application handle
+[store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[load] Reading file content
+[load] File read successfully (841 bytes)
+[load] JSON parsed successfully. Connections count: 1
+[load] Starting to load store
+[store_path] Resolving application handle
+[store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[load] Reading file content
+[load] File read successfully (841 bytes)
+[load] JSON parsed successfully. Connections count: 1
+[get_vpn_status] called for id=2cca99d2-957f-49a9-95c3-7e8dec9b791b
+[load] Starting to load store
+[store_path] Resolving application handle
+[store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[load] Reading file content
+[load] File read successfully (841 bytes)
+[load] JSON parsed successfully. Connections count: 1
+[get_vpn_status] called for id=2cca99d2-957f-49a9-95c3-7e8dec9b791b
+[load] Starting to load store
+[store_path] Resolving application handle
+[store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[load] Reading file content
+[load] File read successfully (841 bytes)
+[load] JSON parsed successfully. Connections count: 1
+[get_connections] called
+[load] Starting to load store
+[store_path] Resolving application handle
+[store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[load] Reading file content
+[load] File read successfully (841 bytes)
+[load] JSON parsed successfully. Connections count: 1
+[load] Starting to load store
+[store_path] Resolving application handle
+[store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[load] Reading file content
+[load] File read successfully (841 bytes)
+[load] JSON parsed successfully. Connections count: 1
+[get_connections] called
+[load] Starting to load store
+[store_path] Resolving application handle
+[store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[load] Reading file content
+[load] File read successfully (841 bytes)
+[load] JSON parsed successfully. Connections count: 1
+[load] Starting to load store
+[store_path] Resolving application handle
+[store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[load] Reading file content
+[load] File read successfully (841 bytes)
+[load] JSON parsed successfully. Connections count: 1
+[get_vpn_status] called for id=2cca99d2-957f-49a9-95c3-7e8dec9b791b
+[load] Starting to load store
+[store_path] Resolving application handle
+[store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[load] Reading file content
+[load] File read successfully (841 bytes)
+[load] JSON parsed successfully. Connections count: 1
+[get_vpn_status] called for id=2cca99d2-957f-49a9-95c3-7e8dec9b791b
+[load] Starting to load store
+[store_path] Resolving application handle
+[store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[load] Reading file content
+[load] File read successfully (841 bytes)
+[load] JSON parsed successfully. Connections count: 1
+[get_connections] called
+[load] Starting to load store
+[store_path] Resolving application handle
+[store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[load] Reading file content
+[load] File read successfully (841 bytes)
+[load] JSON parsed successfully. Connections count: 1
+[load] Starting to load store
+[store_path] Resolving application handle
+[store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[load] Reading file content
+[load] File read successfully (841 bytes)
+[load] JSON parsed successfully. Connections count: 1
+[get_connections] called
+[load] Starting to load store
+[store_path] Resolving application handle
+[store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[load] Reading file content
+[load] File read successfully (841 bytes)
+[load] JSON parsed successfully. Connections count: 1
+[load] Starting to load store
+[store_path] Resolving application handle
+[store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[load] Reading file content
+[load] File read successfully (841 bytes)
+[load] JSON parsed successfully. Connections count: 1
+[get_vpn_status] called for id=2cca99d2-957f-49a9-95c3-7e8dec9b791b
+[load] Starting to load store
+[store_path] Resolving application handle
+[store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[load] Reading file content
+[load] File read successfully (841 bytes)
+[load] JSON parsed successfully. Connections count: 1
+[get_vpn_status] called for id=2cca99d2-957f-49a9-95c3-7e8dec9b791b
+[load] Starting to load store
+[store_path] Resolving application handle
+[store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[load] Reading file content
+[load] File read successfully (841 bytes)
+[load] JSON parsed successfully. Connections count: 1
+[get_connections] called
+[load] Starting to load store
+[store_path] Resolving application handle
+[store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[load] Reading file content
+[load] File read successfully (841 bytes)
+[load] JSON parsed successfully. Connections count: 1
+[load] Starting to load store
+[store_path] Resolving application handle
+[store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[load] Reading file content
+[load] File read successfully (841 bytes)
+[load] JSON parsed successfully. Connections count: 1
+[get_connections] called
+[load] Starting to load store
+[store_path] Resolving application handle
+[store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[load] Reading file content
+[load] File read successfully (841 bytes)
+[load] JSON parsed successfully. Connections count: 1
+[load] Starting to load store
+[store_path] Resolving application handle
+[store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[load] Reading file content
+[load] File read successfully (841 bytes)
+[load] JSON parsed successfully. Connections count: 1
+[get_vpn_status] called for id=2cca99d2-957f-49a9-95c3-7e8dec9b791b
+[load] Starting to load store
+[store_path] Resolving application handle
+[store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[load] Reading file content
+[load] File read successfully (841 bytes)
+[load] JSON parsed successfully. Connections count: 1
+[get_vpn_status] called for id=2cca99d2-957f-49a9-95c3-7e8dec9b791b
+[load] Starting to load store
+[store_path] Resolving application handle
+[store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[load] Reading file content
+[load] File read successfully (841 bytes)
+[load] JSON parsed successfully. Connections count: 1
+[get_connections] called
+[load] Starting to load store
+[store_path] Resolving application handle
+[store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[load] Reading file content
+[load] File read successfully (841 bytes)
+[load] JSON parsed successfully. Connections count: 1
+[load] Starting to load store
+[store_path] Resolving application handle
+[store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[load] Reading file content
+[load] File read successfully (841 bytes)
+[load] JSON parsed successfully. Connections count: 1
+[get_connections] called
+[load] Starting to load store
+[store_path] Resolving application handle
+[store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[load] Reading file content
+[load] File read successfully (841 bytes)
+[load] JSON parsed successfully. Connections count: 1
+[load] Starting to load store
+[store_path] Resolving application handle
+[store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[load] Reading file content
+[load] File read successfully (841 bytes)
+[load] JSON parsed successfully. Connections count: 1
+[get_vpn_status] called for id=2cca99d2-957f-49a9-95c3-7e8dec9b791b
+[load] Starting to load store
+[store_path] Resolving application handle
+[store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[load] Reading file content
+[load] File read successfully (841 bytes)
+[load] JSON parsed successfully. Connections count: 1
+[get_vpn_status] called for id=2cca99d2-957f-49a9-95c3-7e8dec9b791b
+[load] Starting to load store
+[store_path] Resolving application handle
+[store_path] Resolved path: "/Users/itego/Library/Application Support/com.sentiago.l2tp-hub/connections.json"
+[load] Reading file content
+[load] File read successfully (841 bytes)
+[load] JSON parsed successfully. Connections count: 1

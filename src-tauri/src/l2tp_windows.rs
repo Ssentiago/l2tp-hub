@@ -76,10 +76,17 @@ pub fn delete_vpn_service(name: &str) -> Result<(), String> {
 fn log(msg: &str) {
     use std::fs::OpenOptions;
     use std::io::Write;
+
+    #[cfg(target_os = "windows")]
+    let path = "C:\\l2tp-hub-debug.log";
+
+    #[cfg(not(target_os = "windows"))]
+    let path = "/tmp/l2tp-hub-debug.log";  // на Mac при dev-запуске
+
     let mut f = OpenOptions::new()
         .create(true)
         .append(true)
-        .open("C:\\l2tp-hub-debug.log")
+        .open(path)
         .unwrap();
     writeln!(f, "{}", msg).unwrap();
 }

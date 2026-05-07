@@ -5,17 +5,21 @@ const SERVICE: &str = "com.senti.l2tp";
 fn log(msg: &str) {
     use std::fs::OpenOptions;
     use std::io::Write;
-    use chrono::Local;
 
-    // Безопасное открытие файла логирования
-    if let Ok(mut f) = OpenOptions::new()
+    #[cfg(target_os = "windows")]
+    let path = "C:\\l2tp-hub-debug.log";
+
+    #[cfg(not(target_os = "windows"))]
+    let path = "/tmp/l2tp-hub-debug.log";  // на Mac при dev-запуске
+
+    let mut f = OpenOptions::new()
         .create(true)
         .append(true)
-        .open("C:\\l2tp-hub-debug.log") {
-        let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S");
-        let _ = writeln!(f, "[{}] {}", timestamp, msg);
-    }
+        .open(path)
+        .unwrap();
+    writeln!(f, "{}", msg).unwrap();
 }
+
 
 pub fn set_password(key: &str, password: &str) -> Result<(), String> {
     log(&format!("[set_password] Called for key: '{}'. Password length: {}", key, password.len()));

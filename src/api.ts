@@ -34,4 +34,8 @@ export const api = {
 
     deleteLabel: (id: string) =>
         invoke<void>('delete_label', { id }),
+
+    openUrl: (url: string) => {
+        invoke<void>("open_url", {url})
+    }
 }

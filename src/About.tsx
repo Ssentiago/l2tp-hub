@@ -5,6 +5,7 @@ import { ArrowBack } from '@mui/icons-material'
 import TelegramIcon from '@mui/icons-material/Telegram'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import CodeIcon from '@mui/icons-material/Code'
+import {api} from "./api.ts";
 
 interface Props {
     version: string
@@ -57,8 +58,7 @@ export function About({ version, onBack }: Props) {
                         variant="outlined"
                         size="small"
                         startIcon={<TelegramIcon />}
-                        href="https://t.me/Sentiago"
-                        target="_blank"
+                        onClick={() => api.openUrl("https://t.me/Sentiago")}
                         sx={{ flex: 1, textTransform: 'none' }}
                     >
                         @Sentiago
@@ -67,8 +67,7 @@ export function About({ version, onBack }: Props) {
                         variant="outlined"
                         size="small"
                         endIcon={<OpenInNewIcon sx={{ fontSize: 16 }} />}
-                        href="https://itego.pro"
-                        target="_blank"
+                        onClick={() => api.openUrl("https://itego.pro")}
                         sx={{ flex: 1, textTransform: 'none' }}
                     >
                         itego.pro
