@@ -80,8 +80,10 @@ export default function App() {
 
         loadConnections()
         loadLabels()
-        api.checkSudoSession().then(setSudoReady)
-    }, [loadConnections, loadLabels])
+        api.checkSudoSession().then((ready) => {
+            setSudoReady(ready)
+            if (!ready) setShowSudoModal(true)
+        })    }, [loadConnections, loadLabels])
 
     useEffect(() => {
         const interval = setInterval(async () => {
@@ -166,17 +168,6 @@ export default function App() {
                     <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: 700, letterSpacing: 1 }}>
                         L2TP Hub
                     </Typography>
-
-                    {!sudoReady && (
-                        <Chip
-                            icon={<Lock fontSize="small" />}
-                            label="sudo не активен"
-                            color="warning"
-                            variant="outlined"
-                            onClick={() => setShowSudoModal(true)}
-                            sx={{ mr: 2, cursor: 'pointer' }}
-                        />
-                    )}
 
                     {view === 'list' ? (
                         <>
