@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
     AppBar, Toolbar, Typography, Button, Box, CircularProgress,
-    CssBaseline, ThemeProvider, createTheme, Chip,
+    CssBaseline, ThemeProvider, createTheme,
     IconButton,
     Tooltip
 } from '@mui/material'
