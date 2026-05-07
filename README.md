@@ -19,16 +19,16 @@ A manager for L2TP/IPSec VPN connections on macOS and Windows. Built for IT prof
 
 ## Build
 
-\```bash
+```bash
 bun install
 bun run tauri build
-\```
+```
 
 ## Development
 
-\```bash
+```bash
 bun run tauri dev
-\```
+```
 
 ## Stack
 
