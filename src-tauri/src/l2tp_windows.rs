@@ -1,3 +1,4 @@
+use crate::log;
 use std::os::windows::process::CommandExt;
 use std::process::Command;
 
