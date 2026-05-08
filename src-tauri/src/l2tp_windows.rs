@@ -18,7 +18,7 @@ fn powershell(script: &str) -> Result<String, String> {
         .creation_flags(CREATE_NO_WINDOW)
         .output()
         .map_err(|e| {
-            log!(&format!("[powershell] command error: {}", e));
+            log!("[powershell] command error: {}", e);
             e.to_string()
         })?;
 
@@ -117,7 +117,7 @@ pub fn connect_vpn(name: &str, username: &str, password: &str) -> Result<(), Str
 }
 
 pub fn disconnect_vpn(name: &str) -> Result<(), String> {
-    log!(&format!("[disconnect_vpn] name: {}", name));
+    log!("[disconnect_vpn] name: {}", name);
     let script = format!("rasdial '{}' /disconnect", name);
     let _ = powershell(&script);
     log!("[disconnect_vpn] finished");
