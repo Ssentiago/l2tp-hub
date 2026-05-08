@@ -30,7 +30,7 @@ export function ConnectionForm({ initial, labels, onSave, onCancel }: Props) {
     password: "",
     shared_secret: "",
     priority: initial?.priority ?? 3,
-    send_all_traffic: initial?.send_all_traffic ?? false,
+    send_all_traffic: true,
     labels: initial?.labels ?? {},
   });
 
@@ -131,22 +131,6 @@ export function ConnectionForm({ initial, labels, onSave, onCancel }: Props) {
               ))}
             </Select>
           </FormControl>
-          <FormControlLabel
-            control={
-              <Switch
-                checked={form.send_all_traffic}
-                onChange={(e) => f({ send_all_traffic: e.target.checked })}
-              />
-            }
-            label={
-              <Box>
-                <Typography variant="body2">Весь трафик через VPN</Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Выключено — только трафик к сети клиента (рекомендуется)
-                </Typography>{" "}
-              </Box>
-            }
-          />
         </Box>
       </Paper>
 
