@@ -1,3 +1,4 @@
+use crate::log;
 use aes_gcm::{
     aead::{Aead, KeyInit, OsRng},
     Aes256Gcm, Nonce,
@@ -11,22 +12,6 @@ use crate::store::{Connection, Label, Store};
 
 const MAGIC: &[u8] = b"L2TPHUB1"; // 8 байт маркер формата
 
-fn log(msg: &str) {
-    use std::fs::OpenOptions;
-    use std::io::Write;
-    #[cfg(not(target_os = "windows"))]
-    let path = "/tmp/l2tp-hub-debug.log";
-    #[cfg(target_os = "windows")]
-    let path = "C:\\l2tp-hub-debug.log";
-    let mut f = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(path)
-        .unwrap();
-    writeln!(f, "{}", msg).unwrap();
-}
-
-// Полный дамп — connection + plaintext-пароли
 #[derive(Debug, Serialize, Deserialize)]
 struct ConnectionExport {
     id: String,
@@ -54,7 +39,7 @@ fn derive_key(password: &str) -> [u8; 32] {
 
 /// Экспорт: возвращает бинарные данные для записи в файл
 pub fn export_config(store: &Store, password: &str) -> Result<Vec<u8>, String> {
-    log("[export_config] Starting export");
+    log!("[export_config] Starting export");
 
     // Собираем plaintext данные включая пароли из keychain
     let mut connections_export = Vec::new();
@@ -82,10 +67,7 @@ pub fn export_config(store: &Store, password: &str) -> Result<Vec<u8>, String> {
 
     let json = serde_json::to_vec(&payload).map_err(|e| format!("Serialization error: {}", e))?;
 
-    log(&format!(
-        "[export_config] Payload JSON size: {} bytes",
-        json.len()
-    ));
+    log!("[export_config] Payload JSON size: {} bytes", json.len());
 
     // Шифруем AES-256-GCM
     let key = derive_key(password);
@@ -106,16 +88,16 @@ pub fn export_config(store: &Store, password: &str) -> Result<Vec<u8>, String> {
     result.extend_from_slice(&nonce_bytes);
     result.extend_from_slice(&ciphertext);
 
-    log(&format!(
+    log!(
         "[export_config] Export complete, file size: {} bytes",
         result.len()
-    ));
+    );
     Ok(result)
 }
 
 /// Импорт: принимает бинарные данные файла и пароль, возвращает Store
 pub fn import_config(data: &[u8], password: &str) -> Result<(Vec<Connection>, Vec<Label>), String> {
-    log("[import_config] Starting import");
+    log!("[import_config] Starting import");
 
     // Валидация магии
     if data.len() < MAGIC.len() + 12 {
@@ -138,10 +120,7 @@ pub fn import_config(data: &[u8], password: &str) -> Result<(Vec<Connection>, Ve
         .decrypt(nonce, ciphertext)
         .map_err(|_| "Неверный пароль или файл повреждён".to_string())?;
 
-    log(&format!(
-        "[import_config] Decrypted {} bytes",
-        plaintext.len()
-    ));
+    log!("[import_config] Decrypted {} bytes", plaintext.len());
 
     let payload: ExportPayload =
         serde_json::from_slice(&plaintext).map_err(|e| format!("Parse error: {}", e))?;
@@ -172,11 +151,11 @@ pub fn import_config(data: &[u8], password: &str) -> Result<(Vec<Connection>, Ve
         });
     }
 
-    log(&format!(
+    log!(
         "[import_config] Import parsed: {} connections, {} labels",
         connections.len(),
-        payload.labels.len()
-    ));
+        payload.labels.len(),
+    );
 
     Ok((connections, payload.labels))
 }

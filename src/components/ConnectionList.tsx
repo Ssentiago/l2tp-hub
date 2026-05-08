@@ -190,18 +190,22 @@ function ActionButtons({ c, onConnect, onDisconnect, onEdit, onDelete }: {
 // ─── ConnectionRow ────────────────────────────────────────────────────────────
 
 function ConnectionRow({ connection: c, labels, onConnect, onDisconnect, onEdit, onDelete }: ConnectionItemProps) {
-  const onDoubleClick = (e: React.MouseEvent) => {
-    switch (c.status) {
-      case "connected":
-      case "unknown":
-        onDisconnect(c.id);
-        break
-      case "disconnected":
-        onConnect(c.id)
-            break
+    const onDoubleClick = (e: React.MouseEvent) => {
+        // если клик был по кнопке — не дублируем
+        if ((e.target as HTMLElement).closest('button')) return;
+
+        switch (c.status) {
+            case "connected":
+                onDisconnect(c.id);
+                break;
+            case "disconnected":
+            case "unknown":
+                onConnect(c.id);
+                break;
+        }
     }
-  }
-  return (
+
+    return (
       <TableRow hover onDoubleClick={onDoubleClick}>
         <TableCell>
           <Typography variant="body2" sx={{ fontWeight: 500 }}>

@@ -2,10 +2,10 @@ use std::collections::HashMap;
 use tauri::State;
 use uuid::Uuid;
 
-use crate::export_import;
 use crate::keychain;
 use crate::l2tp;
 use crate::store::{self, Connection};
+use crate::{export_import, log};
 
 #[cfg(target_os = "macos")]
 use crate::sudo::SudoSession;
@@ -25,26 +25,11 @@ fn service_hash(conn: &Connection, password: &str, shared_secret: &str) -> Strin
     format!("{:x}", h.finish())
 }
 
-fn log(msg: &str) {
-    use std::fs::OpenOptions;
-    use std::io::Write;
-    #[cfg(target_os = "windows")]
-    let path = "C:\\l2tp-hub-debug.log";
-    #[cfg(not(target_os = "windows"))]
-    let path = "/tmp/l2tp-hub-debug.log";
-    let mut f = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(path)
-        .unwrap();
-    writeln!(f, "{}", msg).unwrap();
-}
-
 // ─── CRUD ────────────────────────────────────────────────────────────────────
 
 #[tauri::command]
 pub async fn get_connections(app_handle: tauri::AppHandle) -> Vec<Connection> {
-    log("[get_connections] called");
+    log!("[get_connections] called");
     tokio::task::spawn_blocking(move || store::load(app_handle.config()).connections)
         .await
         .unwrap_or_default()
@@ -67,7 +52,7 @@ pub async fn save_connection(
     app_handle: tauri::AppHandle,
     input: SaveConnectionInput,
 ) -> Result<Connection, String> {
-    log(&format!("[save_connection] called, id={:?}", input.id));
+    log!("[save_connection] called, id={:?}", input.id);
     tokio::task::spawn_blocking(move || {
         let mut store = store::load(app_handle.config());
 
@@ -105,7 +90,7 @@ pub async fn save_connection(
         }
 
         store::save(&store)?;
-        log("[save_connection] success");
+        log!("[save_connection] success");
         Ok(conn)
     })
     .await
@@ -119,7 +104,7 @@ pub async fn delete_connection(
     id: String,
     sudo: State<'_, SudoSession>,
 ) -> Result<(), String> {
-    log(&format!("[delete_connection] (macos) called for id={}", id));
+    log!("[delete_connection] (macos) called for id={}", id);
     let sudo = sudo.inner().clone();
     tokio::task::spawn_blocking(move || {
         let mut store = store::load(app_handle.config());
@@ -138,10 +123,7 @@ pub async fn delete_connection(
 #[tauri::command]
 #[cfg(target_os = "windows")]
 pub async fn delete_connection(app_handle: tauri::AppHandle, id: String) -> Result<(), String> {
-    log(&format!(
-        "[delete_connection] (windows) called for id={}",
-        id
-    ));
+    log!("[delete_connection] (windows) called for id={}", id);
     tokio::task::spawn_blocking(move || {
         let mut store = store::load(app_handle.config());
         if let Some(conn) = store.connections.iter().find(|c| c.id == id) {
@@ -165,7 +147,7 @@ pub async fn connect_vpn(
     id: String,
     sudo: State<'_, SudoSession>,
 ) -> Result<(), String> {
-    log(&format!("[connect_vpn] (macos) called for id={}", id));
+    log!("[connect_vpn] (macos) called for id={}", id);
     let sudo = sudo.inner().clone();
     tokio::task::spawn_blocking(move || {
         let mut store = store::load(app_handle.config());
@@ -181,7 +163,7 @@ pub async fn connect_vpn(
 
         let hash = service_hash(&conn, &password, &shared_secret);
         let needs_recreate = conn.service_hash.as_deref() != Some(hash.as_str());
-        log(&format!("[connect_vpn] needs_recreate={}", needs_recreate));
+        log!("[connect_vpn] needs_recreate={}", needs_recreate);
 
         if needs_recreate {
             l2tp::create_vpn_service(
@@ -209,7 +191,7 @@ pub async fn connect_vpn(
 #[tauri::command]
 #[cfg(target_os = "windows")]
 pub async fn connect_vpn(app_handle: tauri::AppHandle, id: String) -> Result<(), String> {
-    log(&format!("[connect_vpn] (windows) called for id={}", id));
+    log!("[connect_vpn] (windows) called for id={}", id);
     tokio::task::spawn_blocking(move || {
         let mut store = store::load(app_handle.config());
         let conn = store
@@ -249,7 +231,7 @@ pub async fn connect_vpn(app_handle: tauri::AppHandle, id: String) -> Result<(),
 
 #[tauri::command]
 pub async fn disconnect_vpn(id: String, app_handle: tauri::AppHandle) -> Result<(), String> {
-    log(&format!("[disconnect_vpn] called for id={}", id));
+    log!("[disconnect_vpn] called for id={}", id);
     tokio::task::spawn_blocking(move || {
         let store = store::load(app_handle.config());
         let conn = store
@@ -285,7 +267,7 @@ pub async fn authenticate_sudo(
     password: String,
     sudo: State<'_, SudoSession>,
 ) -> Result<(), String> {
-    log("[authenticate_sudo] called");
+    log!("[authenticate_sudo] called");
     let sudo = sudo.inner().clone();
     tokio::task::spawn_blocking(move || sudo.authenticate(&password))
         .await
@@ -382,7 +364,7 @@ pub async fn export_config_dialog(
     app_handle: tauri::AppHandle,
     password: String,
 ) -> Result<bool, String> {
-    log("[export_config_dialog] called");
+    log!("[export_config_dialog] called");
 
     let bytes = tokio::task::spawn_blocking({
         let app_handle = app_handle.clone();
@@ -414,7 +396,7 @@ pub async fn export_config_dialog(
             tokio::fs::write(&path_buf, &bytes)
                 .await
                 .map_err(|e| format!("Ошибка записи файла: {}", e))?;
-            log(&format!("[export_config_dialog] Saved to {:?}", path_buf));
+            log!("[export_config_dialog] Saved to {:?}", path_buf);
             Ok(true)
         }
         None => Ok(false),
@@ -426,7 +408,7 @@ pub async fn import_config_dialog(
     app_handle: tauri::AppHandle,
     password: String,
 ) -> Result<bool, String> {
-    log("[import_config_dialog] called");
+    log!("[import_config_dialog] called");
 
     let path = tokio::task::spawn_blocking({
         let app_handle = app_handle.clone();
@@ -480,7 +462,7 @@ pub async fn import_config_dialog(
             .await
             .map_err(|e| e.to_string())??;
 
-            log("[import_config_dialog] done");
+            log!("[import_config_dialog] done");
             Ok(true)
         }
         None => Ok(false),
@@ -489,7 +471,7 @@ pub async fn import_config_dialog(
 
 #[tauri::command]
 pub async fn reset_all(app_handle: tauri::AppHandle) -> Result<(), String> {
-    log("[reset_all] called");
+    log!("[reset_all] called");
     tokio::task::spawn_blocking(move || {
         let mut store = store::load(app_handle.config());
         // удаляем пароли из keychain

@@ -1,144 +1,98 @@
+use crate::{log, logger};
 use keyring::Entry;
 
 const SERVICE: &str = "com.senti.l2tp";
 
-fn log(msg: &str) {
-    use std::fs::OpenOptions;
-    use std::io::Write;
-
-    #[cfg(target_os = "windows")]
-    let path = "C:\\l2tp-hub-debug.log";
-
-    #[cfg(not(target_os = "windows"))]
-    let path = "/tmp/l2tp-hub-debug.log"; // на Mac при dev-запуске
-
-    let mut f = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(path)
-        .unwrap();
-    writeln!(f, "{}", msg).unwrap();
-}
-
 pub fn set_password(key: &str, password: &str) -> Result<(), String> {
-    log(&format!(
+    log!(
         "[set_password] Called for key: '{}'. Password length: {}",
         key,
         password.len()
-    ));
+    );
 
     let entry = Entry::new(SERVICE, key).map_err(|e| {
         let err_msg = format!("[set_password] Entry::new failed for key '{}': {}", key, e);
-        log(&err_msg);
+        log!("{}", &err_msg);
         e.to_string()
     })?;
 
     match entry.set_password(password) {
         Ok(_) => {
-            log(&format!(
+            log!(
                 "[set_password] Successfully updated password for key: '{}'",
                 key
-            ));
+            );
             Ok(())
         }
         Err(e) => {
-            let err_msg = format!(
+            log!(
                 "[set_password] set_password failed for key '{}': {}",
-                key, e
+                key,
+                e
             );
-            log(&err_msg);
             Err(e.to_string())
         }
     }
 }
 
 pub fn get_password(key: &str) -> Result<String, String> {
-    log(&format!(
-        "[get_password] Attempting to retrieve key: '{}'",
-        key
-    ));
+    log!("[get_password] Attempting to retrieve key: '{}'", key);
 
     let entry = Entry::new(SERVICE, key).map_err(|e| {
-        let err_msg = format!("[get_password] Entry::new failed for key '{}': {}", key, e);
-        log(&err_msg);
+        log!("[get_password] Entry::new failed for key '{}': {}", key, e);
         e.to_string()
     })?;
 
     match entry.get_password() {
         Ok(pass) => {
-            log(&format!(
+            log!(
                 "[get_password] Successfully retrieved password for key: '{}'",
-                key
-            ));
+                key,
+            );
             Ok(pass)
         }
         Err(e) => {
-            let err_msg = format!(
+            log!(
                 "[get_password] get_password failed for key '{}': {}",
-                key, e
+                key,
+                e
             );
-            log(&err_msg);
             Err(format!("Keychain: key '{}' not found: {}", key, e))
         }
     }
 }
 
 pub fn delete_password(key: &str) -> Result<(), String> {
-    log(&format!(
-        "[delete_password] Attempting to delete key: '{}'",
-        key
-    ));
+    log!("[delete_password] Attempting to delete key: '{}'", key);
 
     let entry = Entry::new_with_target("local", SERVICE, key).map_err(|e| {
-        let err_msg = format!(
+        log!(
             "[delete_password] Entry::new_with_target failed for key '{}': {}",
-            key, e
+            key,
+            e
         );
-        log(&err_msg);
         e.to_string()
     })?;
 
     match entry.delete_credential() {
         Ok(_) => {
-            log(&format!(
-                "[delete_password] Successfully deleted key: '{}'",
-                key
-            ));
+            log!("[delete_password] Successfully deleted key: '{}'", key);
             Ok(())
         }
         Err(keyring::Error::NoEntry) => {
-            log(&format!(
+            log!(
                 "[delete_password] Key '{}' not found, nothing to delete (NoEntry)",
                 key
-            ));
+            );
             Ok(())
         }
         Err(e) => {
-            let err_msg = format!(
+            log!(
                 "[delete_password] delete_credential failed for key '{}': {}",
-                key, e
+                key,
+                e
             );
-            log(&err_msg);
             Err(e.to_string())
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_keyring() {
-        log("[test_keyring] Starting unit test");
-        let set_result = set_password("test_key", "test_val");
-        println!("set: {:?}", set_result);
-
-        let get_result = get_password("test_key");
-        println!("get: {:?}", get_result);
-
-        set_result.expect("Test set_password failed");
-        get_result.expect("Test get_password failed");
-        log("[test_keyring] Unit test finished successfully");
     }
 }

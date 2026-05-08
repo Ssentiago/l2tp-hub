@@ -13,7 +13,6 @@ impl SudoSession {
         }
     }
 
-    // остальное без изменений
     pub fn authenticate(&self, password: &str) -> Result<(), String> {
         let output = Command::new("sudo")
             .args(["-S", "true"])

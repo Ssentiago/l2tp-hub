@@ -1,6 +1,8 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use crate::logger::AppLogger;
+use std::sync::Arc;
 use tauri::Manager;
 
 mod commands;
@@ -9,13 +11,29 @@ mod keychain;
 #[cfg(target_os = "macos")]
 pub mod l2tp;
 
-mod app_handle_storage;
 pub mod export_import;
 #[cfg(target_os = "windows")]
 #[path = "l2tp_windows.rs"]
 pub mod l2tp;
+pub mod logger;
+mod state;
 mod store;
 mod sudo;
+
+pub static LOGGER: std::sync::OnceLock<Arc<AppLogger>> = std::sync::OnceLock::new();
+
+pub fn log_h(s: &str) {
+    if let Some(logger) = LOGGER.get() {
+        logger.log(s)
+    }
+}
+
+#[macro_export]
+macro_rules! log {
+    ($($arg:tt)*) => {
+          $crate::log_h(&format!($($arg)*))
+    };
+}
 
 #[cfg(target_os = "macos")]
 fn check_macos_version() -> Result<(), String> {
@@ -58,13 +76,15 @@ fn main() {
 
     tauri::Builder::default()
         .setup(|app| {
-            app_handle_storage::init_app_handle(app.handle().clone());
+            let logger = Arc::new(logger::AppLogger::new());
+            logger.init(app.handle().clone());
+            LOGGER.set(logger).ok();
 
             let window = app
                 .get_webview_window("main")
                 .expect("Main window not found");
-            app_handle_storage::init_main_window(window);
 
+            state::init_state(app.handle().clone(), window);
             Ok(())
         })
         .manage(sudo::SudoSession::new())

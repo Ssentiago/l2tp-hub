@@ -1,4 +1,5 @@
-use crate::app_handle_storage::get_app_handle;
+use crate::log;
+use crate::state::get_state;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -23,7 +24,6 @@ pub struct Connection {
     pub send_all_traffic: bool,
     pub service_hash: Option<String>,
     pub priority: u8,
-    // убираем company/branch/group/tags/description
     pub labels: std::collections::HashMap<String, String>, // label_id → value
 }
 
@@ -53,104 +53,83 @@ impl Default for Store {
     }
 }
 
-fn log(msg: &str) {
-    use std::fs::OpenOptions;
-    use std::io::Write;
-
-    #[cfg(target_os = "windows")]
-    let path = "C:\\l2tp-hub-debug.log";
-
-    #[cfg(not(target_os = "windows"))]
-    let path = "/tmp/l2tp-hub-debug.log"; // на Mac при dev-запуске
-
-    let mut f = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(path)
-        .unwrap();
-    writeln!(f, "{}", msg).unwrap();
-}
-
 fn store_path() -> PathBuf {
-    log("[store_path] Resolving application handle");
-    let app = get_app_handle();
+    log!("[store_path] Resolving application handle");
+    let app = get_state().app.clone();
 
     let path = app
         .path()
         .resolve("connections.json", BaseDirectory::AppData)
         .expect("Не удалось вычислить путь");
 
-    log(&format!("[store_path] Resolved path: {:?}", path));
+    log!("[store_path] Resolved path: {:?}", path);
     path
 }
 
 pub fn load(_config: &tauri::Config) -> Store {
-    log("[load] Starting to load store");
+    log!("[load] Starting to load store");
     let path = store_path();
 
     if !path.exists() {
-        log("[load] Store file does not exist, returning default Store");
+        log!("[load] Store file does not exist, returning default Store");
         return Store::default();
     }
 
-    log("[load] Reading file content");
+    log!("[load] Reading file content");
     match fs::read_to_string(&path) {
         Ok(data) => {
-            log(&format!(
-                "[load] File read successfully ({} bytes)",
-                data.len()
-            ));
+            log!("[load] File read successfully ({} bytes)", data.len());
             match serde_json::from_str::<Store>(&data) {
                 Ok(store) => {
-                    log(&format!(
+                    log!(
                         "[load] JSON parsed successfully. Connections count: {}",
                         store.connections.len()
-                    ));
+                    );
                     store
                 }
                 Err(e) => {
-                    log(&format!("[load] ERROR: Failed to parse JSON: {}", e));
+                    log!("[load] ERROR: Failed to parse JSON: {}", e);
                     Store::default()
                 }
             }
         }
         Err(e) => {
-            log(&format!("[load] ERROR: Failed to read file: {}", e));
+            log!("[load] ERROR: Failed to read file: {}", e);
             Store::default()
         }
     }
 }
 
 pub fn save(store: &Store) -> Result<(), String> {
-    log(&format!(
+    log!(
         "[save] Starting save process. Connections to save: {}",
         store.connections.len()
-    ));
+    );
     let path = store_path();
 
     if let Some(parent) = path.parent() {
-        log(&format!("[save] Ensuring directory exists: {:?}", parent));
+        log!("[save] Ensuring directory exists: {:?}", parent);
         fs::create_dir_all(parent).map_err(|e| {
             let err = format!("[save] ERROR: Could not create directory: {}", e);
-            log(&err);
+            log!("{}", err);
             e.to_string()
         })?;
     }
 
-    log("[save] Serializing store to pretty JSON");
+    log!("[save] Serializing store to pretty JSON");
     let data = serde_json::to_string_pretty(store).map_err(|e| {
         let err = format!("[save] ERROR: Serialization failed: {}", e);
-        log(&err);
+        log!("{}", err);
         e.to_string()
     })?;
 
-    log(&format!("[save] Writing data to {:?}", path));
+    log!("[save] Writing data to {:?}", path);
     fs::write(&path, data).map_err(|e| {
         let err = format!("[save] ERROR: File write failed: {}", e);
-        log(&err);
+        log!("{}", err);
         e.to_string()
     })?;
 
-    log("[save] Store saved successfully");
+    log!("[save] Store saved successfully");
     Ok(())
 }
