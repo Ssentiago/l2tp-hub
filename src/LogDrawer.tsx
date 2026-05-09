@@ -21,6 +21,7 @@ const MAX_AGE_MS = 45 * 60 * 1000;
 const PRUNE_INTERVAL_MS = 60 * 1000;
 const MAX_ENTRIES = 2000;
 const ROW_HEIGHT = 22;
+const FLUSH_INTERVAL_MS = 100; // батчим события, флашим раз в 100ms
 
 function formatTime(ts: number): string {
     return new Date(ts).toLocaleTimeString("ru-RU", {
@@ -46,9 +47,12 @@ interface Props {
 export function LogDrawer({open, onClose}: Props) {
     const [entries, setEntries] = useState<LogEntry[]>([]);
     const [paused, setPaused] = useState(false);
+
+    // refs — не триггерят ре-рендер
     const pausedRef = useRef(false);
     pausedRef.current = paused;
 
+    const bufferRef = useRef<LogEntry[]>([]); // буфер событий между флашами
     const scrollRef = useRef<HTMLDivElement>(null);
     const userScrolledUp = useRef(false);
 
@@ -59,20 +63,36 @@ export function LogDrawer({open, onClose}: Props) {
         overscan: 20,
     });
 
+    // подписка на tauri — только пишем в буфер, никакого setState
     useEffect(() => {
         let unlisten: (() => void) | null = null;
         listen<LogEntry>("app:log", (event) => {
             if (pausedRef.current) return;
-            setEntries((prev) => {
-                const next = [...prev, event.payload];
-                return next.length > MAX_ENTRIES ? next.slice(-MAX_ENTRIES) : next;
-            });
+            bufferRef.current.push(event.payload);
         }).then((fn) => {
             unlisten = fn;
         });
         return () => unlisten?.();
     }, []);
 
+    // флаш буфера в state раз в FLUSH_INTERVAL_MS
+    useEffect(() => {
+        const id = setInterval(() => {
+            const buf = bufferRef.current;
+            if (buf.length === 0) return;
+            bufferRef.current = []; // очищаем буфер до setState чтобы не потерять события что прилетят во время рендера
+
+            setEntries((prev) => {
+                const next = prev.length + buf.length > MAX_ENTRIES
+                    ? [...prev, ...buf].slice(-MAX_ENTRIES)
+                    : [...prev, ...buf];
+                return next;
+            });
+        }, FLUSH_INTERVAL_MS);
+        return () => clearInterval(id);
+    }, []);
+
+    // чистка старых записей
     useEffect(() => {
         const id = setInterval(() => {
             const cutoff = Date.now() - MAX_AGE_MS;
@@ -81,6 +101,7 @@ export function LogDrawer({open, onClose}: Props) {
         return () => clearInterval(id);
     }, []);
 
+    // автоскролл — только при изменении длины, не при каждом рендере
     useEffect(() => {
         if (paused || !open || userScrolledUp.current || entries.length === 0) return;
         virtualizer.scrollToIndex(entries.length - 1, {behavior: "auto"});
@@ -93,7 +114,10 @@ export function LogDrawer({open, onClose}: Props) {
         userScrolledUp.current = !atBottom;
     };
 
-    const clear = () => setEntries([]);
+    const clear = () => {
+        bufferRef.current = [];
+        setEntries([]);
+    };
 
     const resumeAndScrollDown = () => {
         setPaused(false);
@@ -256,7 +280,7 @@ export function LogDrawer({open, onClose}: Props) {
             <Divider sx={{borderColor: "#30363d"}}/>
             <Box sx={{px: 2, py: 1, flexShrink: 0}}>
                 <Typography sx={{color: "#484f58", fontSize: 10, fontFamily: "'JetBrains Mono', monospace"}}>
-                    Хранение: 45 мин · макс {MAX_ENTRIES} записей{paused && " · ⏸ пауза"}
+                    Хранение: 45 мин · макс {MAX_ENTRIES} записей · батч {FLUSH_INTERVAL_MS}ms{paused && " · ⏸ пауза"}
                 </Typography>
             </Box>
         </Drawer>

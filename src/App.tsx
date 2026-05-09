@@ -36,7 +36,6 @@ type View = "list" | "form" | "settings" | "about";
 const DEFAULT_FILTER: FilterState = {
     search: "",
     status: "all",
-    priority: null,
     labels: {},
 };
 
@@ -194,8 +193,7 @@ export default function App() {
                     return false;
             }
             if (filter.status !== "all" && c.status !== filter.status) return false;
-            if (filter.priority !== null && c.priority !== filter.priority)
-                return false;
+
             for (const [id, value] of Object.entries(filter.labels)) {
                 if (value && c.labels[id] !== value) return false;
             }
@@ -203,7 +201,6 @@ export default function App() {
         })
         .sort((a, b) => {
             const dir = sortDir === "asc" ? 1 : -1;
-            if (sortField === "priority") return (a.priority - b.priority) * dir;
             if (sortField === "status") return a.status.localeCompare(b.status) * dir;
             return (
                 (a.labels["company"] ?? a.name).localeCompare(

@@ -23,7 +23,6 @@ pub struct Connection {
     pub shared_secret_key: String,
     pub send_all_traffic: bool,
     pub service_hash: Option<String>,
-    pub priority: u8,
     pub labels: std::collections::HashMap<String, String>, // label_id → value
 }
 

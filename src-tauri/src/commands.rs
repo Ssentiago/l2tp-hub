@@ -43,7 +43,6 @@ pub struct SaveConnectionInput {
     pub password: String,
     pub shared_secret: String,
     pub send_all_traffic: bool,
-    pub priority: u8,
     pub labels: HashMap<String, String>,
 }
 
@@ -78,7 +77,6 @@ pub async fn save_connection(
             keychain_key,
             shared_secret_key,
             send_all_traffic: input.send_all_traffic,
-            priority: input.priority,
             service_hash: None,
             labels: input.labels,
         };

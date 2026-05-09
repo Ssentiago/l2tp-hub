@@ -21,7 +21,6 @@ struct ConnectionExport {
     password: String,      // plaintext из keychain
     shared_secret: String, // plaintext из keychain
     send_all_traffic: bool,
-    priority: u8,
     labels: std::collections::HashMap<String, String>,
 }
 
@@ -55,7 +54,6 @@ pub fn export_config(store: &Store, password: &str) -> Result<Vec<u8>, String> {
             password: password_val,
             shared_secret: shared_secret_val,
             send_all_traffic: conn.send_all_traffic,
-            priority: conn.priority,
             labels: conn.labels.clone(),
         });
     }
@@ -145,7 +143,6 @@ pub fn import_config(data: &[u8], password: &str) -> Result<(Vec<Connection>, Ve
             keychain_key,
             shared_secret_key,
             send_all_traffic: exp.send_all_traffic,
-            priority: exp.priority,
             service_hash: None, // сбрасываем — сервис надо пересоздать
             labels: exp.labels,
         });
