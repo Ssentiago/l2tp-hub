@@ -1,6 +1,7 @@
 # L2TP Hub
 
-A manager for L2TP/IPSec VPN connections on macOS and Windows. Built for IT professionals who work with many client networks.
+A manager for L2TP/IPSec VPN connections on macOS and Windows. Built for IT professionals who work with many client
+networks.
 
 ## Features
 
@@ -20,7 +21,6 @@ A manager for L2TP/IPSec VPN connections on macOS and Windows. Built for IT prof
 ## Build
 
 ```bash
-bun install
 bun run tauri build
 ```
 
@@ -29,9 +29,3 @@ bun run tauri build
 ```bash
 bun run tauri dev
 ```
-
-## Stack
-
-- [Tauri 2](https://tauri.app/) — framework
-- React + TypeScript + MUI — UI
-- Rust — backend, system calls, encryption
