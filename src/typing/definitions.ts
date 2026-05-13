@@ -23,7 +23,7 @@ export interface ConnectionWithStatus extends Connection {
     status: VpnStatus;
 }
 
-export interface SaveConnectionInput {
+export interface ConnectionFormData {
     id?: string;
     server: string;
     username: string;
@@ -37,7 +37,7 @@ export interface SaveConnectionInput {
 export interface FilterState {
     search: string;
     status: VpnStatus | "all";
-    labels: Record<string, string>; // фильтр по меткам
+    labels: Record<string, string>;
 }
 
 export type SortField = "name" | "priority" | "status";

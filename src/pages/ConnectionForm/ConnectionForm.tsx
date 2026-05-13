@@ -12,8 +12,8 @@ import {
     Typography,
     Paper,
 } from "@mui/material";
-import {api} from "../api";
-import {Connection, SaveConnectionInput, Label} from "../types";
+import {api} from "../../core/api";
+import {Connection, ConnectionFormData, Label} from "../../typing/definitions";
 
 interface Props {
     initial: Connection | null;
@@ -23,7 +23,7 @@ interface Props {
 }
 
 export function ConnectionForm({initial, labels, onSave, onCancel}: Props) {
-    const [form, setForm] = useState<SaveConnectionInput>({
+    const [form, setForm] = useState<ConnectionFormData>({
         id: initial?.id,
         server: initial?.server ?? "",
         username: initial?.username ?? "",
@@ -34,13 +34,13 @@ export function ConnectionForm({initial, labels, onSave, onCancel}: Props) {
         labels: initial?.labels ?? {},
     });
 
-    const f = (field: Partial<SaveConnectionInput>) =>
+    const f = (field: Partial<ConnectionFormData>) =>
         setForm((prev) => ({...prev, ...field}));
     const setLabel = (id: string, value: string) =>
         setForm((prev) => ({...prev, labels: {...prev.labels, [id]: value}}));
 
     const save = async () => {
-        await api.saveConnection(form);
+        await api.connections.save(form);
         onSave();
     };
 

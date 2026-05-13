@@ -41,7 +41,7 @@ import {
     SortField,
     Connection,
     Label,
-} from "../types";
+} from "../../typing/definitions";
 
 // ─── utils ───────────────────────────────────────────────────────────────────
 
