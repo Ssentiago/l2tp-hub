@@ -18,7 +18,7 @@ interface Props {
     onBack: () => void;
 }
 
-const techStack = ["Rust + Tauri", "React + TypeScript", "Material UI"];
+const techStack = ["Rust + Tauri", "React + TypeScript", "Material UI with MUI"];
 
 export function About({version, onBack}: Props) {
     return (
