@@ -47,7 +47,6 @@ export function Connections({labels, onEdit}: Props) {
         if (current.length === 0) return;
         const updated = await Promise.all(
             current.map(async (c) => {
-                if (c.status === "connecting") return c;
                 return {
                     ...c,
                     status: await api.vpn.getStatus(c.id).catch(() => "unknown" as const),
