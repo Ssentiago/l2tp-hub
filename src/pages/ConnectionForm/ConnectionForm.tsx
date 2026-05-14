@@ -34,14 +34,24 @@ export function ConnectionForm({initial, labels, onSave, onCancel}: Props) {
         labels: initial?.labels ?? {},
     });
 
+    const [saving, setSaving] = useState(false);
+
+
     const f = (field: Partial<ConnectionFormData>) =>
         setForm((prev) => ({...prev, ...field}));
     const setLabel = (id: string, value: string) =>
         setForm((prev) => ({...prev, labels: {...prev.labels, [id]: value}}));
 
+
     const save = async () => {
-        await api.connections.save(form);
-        onSave();
+        if (saving) return;
+        setSaving(true);
+        try {
+            await api.connections.save(form);
+            onSave();
+        } finally {
+            setSaving(false);
+        }
     };
 
     return (
@@ -116,7 +126,7 @@ export function ConnectionForm({initial, labels, onSave, onCancel}: Props) {
                 <Button variant="outlined" onClick={onCancel}>
                     Отмена
                 </Button>
-                <Button variant="contained" onClick={save}>
+                <Button variant="contained" onClick={save} disabled={saving}>
                     Сохранить
                 </Button>
             </Box>
