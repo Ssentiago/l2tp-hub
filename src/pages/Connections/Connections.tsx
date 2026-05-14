@@ -46,14 +46,16 @@ export function Connections({labels, onEdit}: Props) {
         const current = connectionsRef.current;
         if (current.length === 0) return;
         const updated = await Promise.all(
-            current.map(async (c) => ({
-                ...c,
-                status: await api.vpn.getStatus(c.id).catch(() => "unknown" as const),
-            })),
+            current.map(async (c) => {
+                if (c.status === "connecting") return c;
+                return {
+                    ...c,
+                    status: await api.vpn.getStatus(c.id).catch(() => "unknown" as const),
+                };
+            }),
         );
         setConnections(updated);
     }, []);
-
     useEffect(() => {
         loadConnections();
         api.sudo.checkSession().then((ready) => {
@@ -68,17 +70,28 @@ export function Connections({labels, onEdit}: Props) {
     }, [pollStatuses]);
 
     const handleConnect = async (id: string) => {
+        console.log("[handleConnect] called, id=", id, "sudoReady=", sudoReady);
         if (!sudoReady) {
             setShowSudoModal(true);
             return;
         }
+
+        const current = connectionsRef.current.find(c => c.id === id);
+        if (current?.status === "connecting" || current?.status === "connected") return;
+
         setConnections((prev) =>
             prev.map((c) => (c.id === id ? {...c, status: "connecting"} : c)),
         );
         try {
+            console.log("[handleConnect] calling api.vpn.connect");
             await api.vpn.connect(id);
+            console.log("[handleConnect] api.vpn.connect resolved OK");
+        } catch (e) {
+            console.error("[handleConnect] api.vpn.connect ERROR:", e);
         } finally {
+            console.log("[handleConnect] finally: calling getStatus");
             const status = await api.vpn.getStatus(id).catch(() => "unknown" as const);
+            console.log("[handleConnect] finally: status=", status);
             setConnections((prev) =>
                 prev.map((c) => (c.id === id ? {...c, status} : c)),
             );

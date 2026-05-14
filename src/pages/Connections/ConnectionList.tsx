@@ -29,10 +29,10 @@ import {
     PlayArrow,
     Stop,
     Edit,
+    Info,
     Delete,
     ViewList,
     GridView,
-    LowPriority,
 } from "@mui/icons-material";
 import {
     ConnectionWithStatus,
@@ -183,6 +183,13 @@ function ActionButtons({c, onConnect, onDisconnect, onEdit, onDelete}: {
           </IconButton>
         </span>
             </Tooltip>
+            <Tooltip title={c.id}>
+        <span>
+          <IconButton size="small" color="default" disabled={busy}>
+            <Info fontSize="small"/>
+          </IconButton>
+        </span>
+            </Tooltip>
         </>
     );
 }
@@ -191,9 +198,8 @@ function ActionButtons({c, onConnect, onDisconnect, onEdit, onDelete}: {
 
 function ConnectionRow({connection: c, labels, onConnect, onDisconnect, onEdit, onDelete}: ConnectionItemProps) {
     const onDoubleClick = (e: React.MouseEvent) => {
-        // если клик был по кнопке — не дублируем
         if ((e.target as HTMLElement).closest('button')) return;
-
+        console.log("[onDoubleClick] status=", c.status, "id=", c.id);
         switch (c.status) {
             case "connected":
                 onDisconnect(c.id);
@@ -202,6 +208,8 @@ function ConnectionRow({connection: c, labels, onConnect, onDisconnect, onEdit, 
             case "unknown":
                 onConnect(c.id);
                 break;
+            default:
+                console.log("[onDoubleClick] no action for status=", c.status);
         }
     }
 
