@@ -1,4 +1,3 @@
-// Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use crate::logger::AppLogger;
@@ -45,7 +44,6 @@ fn check_macos_version() -> Result<(), String> {
     let version = String::from_utf8_lossy(&output.stdout);
     let version = version.trim();
 
-    // парсим major версию
     let major: u32 = version
         .split('.')
         .next()
