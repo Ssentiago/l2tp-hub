@@ -96,6 +96,8 @@ pub fn get_vpn_status(name: &str) -> VpnStatus {
     match output {
         Ok(o) => {
             let stdout = String::from_utf8_lossy(&o.stdout).to_lowercase();
+            let stdout = stdout.as_str().trim();
+            println!("stdout = {stdout}");
             let first_line = stdout.lines().next().unwrap_or("").trim();
             match first_line {
                 "connected" => VpnStatus::Connected,
@@ -105,22 +107,5 @@ pub fn get_vpn_status(name: &str) -> VpnStatus {
             }
         }
         Err(_) => VpnStatus::Unknown,
-    }
-}
-
-pub fn list_vpn_services() -> Vec<String> {
-    let output = Command::new("scutil").args(["--nc", "list"]).output();
-
-    match output {
-        Ok(o) => String::from_utf8_lossy(&o.stdout)
-            .lines()
-            .filter_map(|line| {
-                let start = line.find('"')?;
-                let rest = &line[start + 1..];
-                let end = rest.find('"')?;
-                Some(rest[..end].to_string())
-            })
-            .collect(),
-        Err(_) => vec![],
     }
 }

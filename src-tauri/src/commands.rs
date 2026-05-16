@@ -10,6 +10,7 @@ use crate::{export_import, log};
 #[cfg(target_os = "macos")]
 use crate::sudo::SudoSession;
 
+use crate::l2tp::VpnStatus;
 use tauri_plugin_dialog::DialogExt;
 
 fn service_hash(conn: &Connection, password: &str, shared_secret: &str) -> String {
@@ -160,7 +161,9 @@ pub async fn connect_vpn(
         let shared_secret = keychain::get_password(&conn.shared_secret_key)?;
 
         let hash = service_hash(&conn, &password, &shared_secret);
-        let needs_recreate = conn.service_hash.as_deref() != Some(hash.as_str());
+        let status = l2tp::get_vpn_status(&id);
+        let needs_recreate =
+            conn.service_hash.as_deref() != Some(hash.as_str()) || status == VpnStatus::Unknown;
         log!("[connect_vpn] needs_recreate={}", needs_recreate);
 
         if needs_recreate {

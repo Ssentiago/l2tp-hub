@@ -104,6 +104,7 @@ export function Connections({labels, onEdit}: Props) {
         try {
             await api.vpn.disconnect(id);
         } finally {
+            await new Promise((r) => setTimeout(r, 2000));
             const status = await api.vpn.getStatus(id).catch(() => "unknown" as const);
             setConnections((prev) =>
                 prev.map((c) => (c.id === id ? {...c, status} : c)),

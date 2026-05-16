@@ -12,6 +12,7 @@ import {LogDrawer} from "./pages/Connections/LogDrawer";
 import {Connections} from "./pages/Connections/Connections";
 import {getVersion} from "@tauri-apps/api/app";
 import type {Connection, Label} from "./typing/definitions";
+import {Toaster} from "react-hot-toast";
 
 type View = "list" | "form" | "settings" | "about";
 
@@ -146,6 +147,7 @@ export default function App() {
                     />
                 )}
             </Box>
+            <Toaster/>
         </ThemeProvider>
     );
 }
