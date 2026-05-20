@@ -1,0 +1,31 @@
+[project]
+name = "l2tp-hub"
+repo = "Ssentiago/l2tp-hub"
+branches = ["main"]
+changelog_type = "conventional"
+changelog = "CHANGELOG.md"
+release_mode = "ci"
+
+[[components]]
+name = "backend-tauri"
+path = "src-tauri/"
+build = ""
+artifact = ""
+zip = false
+
+[[components.version_files]]
+file = "Cargo.toml"
+
+[[components.version_files]]
+file = "tauri.conf.json"
+path = ["version"]
+
+[[components]]
+name = "frontend"
+path = "."
+build = ""
+artifact = ""
+zip = false
+
+[[components.version_files]]
+file = "package.json"
