@@ -8,13 +8,14 @@ import {
   DialogContentText,
   DialogTitle,
   Paper,
+  Typography,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableRow,
   TableSortLabel,
-  TextField,
+  TextField
 } from "@mui/material";
 import {
   Connection,
@@ -22,9 +23,10 @@ import {
   FilterState,
   Label,
   SortDir,
-  SortField,
+  SortField
 } from "../../../typing/definitions";
 import { ConnectionRow, ConnectionRowProps } from "./ConnectionRow.tsx";
+import { ChevronRight, ExpandMore } from "@mui/icons-material";
 
 function useDeleteConfirm(onDelete: (id: string) => void) {
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -72,17 +74,54 @@ interface ConnectionListProps {
   onDelete: (id: string) => void;
 }
 
+
+function groupByCompany(connections: ConnectionWithStatus[], labels: Label[]) {
+  const groups = new Map<string, ConnectionWithStatus[]>();
+
+  for (const c of connections) {
+    const company = c.labels["company"] ?? "";
+    if (!groups.has(company)) groups.set(company, []);
+    groups.get(company)!.push(c);
+  }
+
+  return [...groups.entries()].sort(([a], [b]) => {
+    if (!a && b) return 1;
+    if (a && !b) return -1;
+    return a.localeCompare(b);
+  });
+}
+
 export function ConnectionList({
-  connections,
-  labels,
-  loading,
-  filter,
-  onFilterChange,
-  ...props
-}: ConnectionListProps) {
+                                 connections,
+                                 labels,
+                                 loading,
+                                 filter,
+                                 onFilterChange,
+                                 ...props
+                               }: ConnectionListProps) {
   const { request: requestDelete, dialog: deleteDialog } = useDeleteConfirm(
-    props.onDelete,
+    props.onDelete
   );
+
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
+    new Set()
+  );
+
+  const toggleGroup = (company: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      next.has(company) ? next.delete(company) : next.add(company);
+      return next;
+    });
+  };
+
+  const rowProps = {
+    labels,
+    onConnect: props.onConnect,
+    onDisconnect: props.onDisconnect,
+    onEdit: props.onEdit,
+    onDelete: requestDelete
+  };
 
   return (
     <Box>
@@ -132,29 +171,72 @@ export function ConnectionList({
               </TableRow>
             </TableHead>
             <TableBody>
-              {connections.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={5}
-                    align="center"
-                    sx={{ py: 4, color: "text.secondary" }}
-                  >
-                    Нет подключений
-                  </TableCell>
-                </TableRow>
-              ) : (
-                connections.map((c) => (
-                  <ConnectionRow
-                    key={c.id}
-                    connection={c}
-                    onConnect={props.onConnect}
-                    onDisconnect={props.onDisconnect}
-                    onEdit={props.onEdit}
-                    onDelete={props.onDelete}
-                    labels={labels}
-                  />
-                ))
-              )}
+              {(() => {
+                const groups = groupByCompany(connections, labels);
+
+                if (groups.length === 1 && !groups[0][0]) {
+                  return connections.map((c) => (
+                    <ConnectionRow key={c.id} connection={c} {...rowProps} />
+                  ));
+                }
+
+                return groups.flatMap(([company, conns]) => {
+                  const isCollapsed = collapsedGroups.has(company);
+
+                  return [
+                    <TableRow
+                      key={`group-${company}`}
+                      onClick={() => toggleGroup(company)}
+                      sx={{ cursor: "pointer" }}
+                    >
+                      <TableCell
+                        colSpan={4}
+                        sx={{
+                          py: 0.5,
+                          px: 2,
+                          bgcolor: "action.hover",
+                          borderBottom: "1px solid",
+                          borderColor: "divider"
+                        }}
+                      >
+                        <Box
+                          sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                        >
+                          {isCollapsed ? (
+                            <ChevronRight fontSize="small" />
+                          ) : (
+                            <ExpandMore fontSize="small" />
+                          )}
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{
+                              fontWeight: 600,
+                              letterSpacing: 0.5,
+                              textTransform: "uppercase"
+                            }}
+                          >
+                            {company || "Без компании"}
+                          </Typography>
+                          <Typography variant="caption" color="text.disabled">
+                            {conns.length}
+                          </Typography>
+                        </Box>
+                      </TableCell>
+                    </TableRow>,
+                    ...(!isCollapsed
+                      ? conns.map((c) => (
+                        <ConnectionRow
+                          key={c.id}
+                          connection={c}
+                          {...rowProps}
+                          hideCompanyLabel
+                        />
+                      ))
+                      : [])
+                  ];
+                });
+              })()}
             </TableBody>
           </Table>
         </Paper>

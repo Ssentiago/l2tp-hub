@@ -1,7 +1,7 @@
 import {
   Connection,
   ConnectionWithStatus,
-  Label,
+  Label
 } from "../../../typing/definitions.ts";
 import React, { useCallback } from "react";
 import { Box, Chip, TableCell, TableRow, Typography } from "@mui/material";
@@ -14,26 +14,26 @@ const STATUS_COLOR: Record<
   connected: "success",
   connecting: "warning",
   disconnected: "default",
-  unknown: "error",
+  unknown: "error"
 };
 export const STATUS_LABEL: Record<string, string> = {
   connected: "Подключён",
   connecting: "Подключение...",
   disconnected: "Отключён",
-  unknown: "Неизвестно",
+  unknown: "Неизвестно"
 };
 
 function LabelChips({
-  connection,
-  labels,
-}: {
+                      connection,
+                      labels
+                    }: {
   connection: Connection;
   labels: Label[];
 }) {
   const entries = Object.entries(connection.labels)
     .map(([id, value]) => ({
       key: labels.find((l) => l.id === id)?.name ?? id,
-      value,
+      value
     }))
     .filter((e) => e.value);
 
@@ -56,7 +56,7 @@ function LabelChips({
             px: 1,
             py: "2px",
             fontSize: 11,
-            gap: "4px",
+            gap: "4px"
           }}
         >
           <span style={{ color: "var(--mui-palette-text-secondary)" }}>
@@ -66,7 +66,7 @@ function LabelChips({
           <span
             style={{
               color: "var(--mui-palette-text-primary)",
-              fontWeight: 500,
+              fontWeight: 500
             }}
           >
             {e.value}
@@ -87,16 +87,18 @@ export interface ConnectionRowProps {
   onDisconnect: (id: string) => void;
   onEdit: (c: Connection) => void;
   onDelete: (id: string) => void;
+  hideCompanyLabel?: boolean;
 }
 
 export function ConnectionRow({
-  connection: c,
-  labels,
-  onConnect,
-  onDisconnect,
-  onEdit,
-  onDelete,
-}: ConnectionRowProps) {
+                                connection: c,
+                                labels,
+                                onConnect,
+                                onDisconnect,
+                                onEdit,
+                                onDelete,
+                                hideCompanyLabel = false
+                              }: ConnectionRowProps) {
   const onDoubleClick = useCallback(
     (e: React.MouseEvent) => {
       if ((e.target as HTMLElement).closest("button")) return;
@@ -113,14 +115,16 @@ export function ConnectionRow({
           console.log("[onDoubleClick] no action for status=", c.status);
       }
     },
-    [c.status, c.id, onDisconnect, onConnect],
+    [c.status, c.id, onDisconnect, onConnect]
   );
 
   return (
     <TableRow hover onDoubleClick={onDoubleClick}>
       <TableCell>
         <Typography variant="body2" sx={{ fontWeight: 500 }}>
-          {c.labels["company"] || c.name}
+          {hideCompanyLabel
+            ? (c.labels["branch"] ?? c.name)
+            : (c.labels["company"] ?? c.name)}
         </Typography>
         <Typography variant="caption" color="text.secondary">
           {c.server}
