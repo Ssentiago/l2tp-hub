@@ -2,6 +2,7 @@ use crate::l2tp;
 use crate::models::connection::Connection;
 use crate::models::connection_payload::ConnectionPayload;
 use crate::sudo::SudoSession;
+use crate::tray;
 use crate::{keychain, log, store};
 use tauri::State;
 use uuid::Uuid;
@@ -20,8 +21,9 @@ pub async fn save_connection(
     input: ConnectionPayload,
 ) -> Result<Connection, String> {
     log!("[save_connection] called, id={:?}", input.id);
-    tokio::task::spawn_blocking(move || {
-        let mut store = store::load(app_handle.config());
+    let app_clone = app_handle.clone();
+    let result = tokio::task::spawn_blocking(move || {
+        let mut store = store::load(app_clone.config());
 
         let id = input
             .id
@@ -59,7 +61,10 @@ pub async fn save_connection(
         Ok(conn)
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+
+    let _ = tray::refresh_tray(&app_handle);
+    result
 }
 
 #[tauri::command]
@@ -71,8 +76,9 @@ pub async fn delete_connection(
 ) -> Result<(), String> {
     log!("[delete_connection] (macos) called for id={}", id);
     let sudo = sudo.inner().clone();
-    tokio::task::spawn_blocking(move || {
-        let mut store = store::load(app_handle.config());
+    let app_clone = app_handle.clone();
+    let result = tokio::task::spawn_blocking(move || {
+        let mut store = store::load(app_clone.config());
         if let Some(conn) = store.connections.iter().find(|c| c.id == id) {
             let _ = keychain::delete_password(&conn.keychain_key);
             let _ = keychain::delete_password(&conn.shared_secret_key);
@@ -82,15 +88,19 @@ pub async fn delete_connection(
         store::save(&store)
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+
+    let _ = tray::refresh_tray(&app_handle);
+    result
 }
 
 #[tauri::command]
 #[cfg(target_os = "windows")]
 pub async fn delete_connection(app_handle: tauri::AppHandle, id: String) -> Result<(), String> {
     log!("[delete_connection] (windows) called for id={}", id);
-    tokio::task::spawn_blocking(move || {
-        let mut store = store::load(app_handle.config());
+    let app_clone = app_handle.clone();
+    let result = tokio::task::spawn_blocking(move || {
+        let mut store = store::load(app_clone.config());
         if let Some(conn) = store.connections.iter().find(|c| c.id == id) {
             let _ = keychain::delete_password(&conn.keychain_key);
             let _ = keychain::delete_password(&conn.shared_secret_key);
@@ -100,5 +110,8 @@ pub async fn delete_connection(app_handle: tauri::AppHandle, id: String) -> Resu
         store::save(&store)
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+
+    let _ = tray::refresh_tray(&app_handle);
+    result
 }
