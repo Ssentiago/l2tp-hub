@@ -16,6 +16,7 @@ pub mod startup;
 mod state;
 mod store;
 mod sudo;
+pub mod tray;
 
 pub static LOGGER: std::sync::OnceLock<Arc<Logger>> = std::sync::OnceLock::new();
 
@@ -44,7 +45,13 @@ fn main() {
         }
     }
 
+    let tray_state = state::TrayState {
+        tray: std::sync::Mutex::new(None),
+    };
+
     tauri::Builder::default()
+        .manage(sudo::SudoSession::new())
+        .manage(tray_state)
         .setup(|app| {
             let logger = Arc::new(logger::Logger::new(app.handle().clone()));
             LOGGER.set(logger).ok();
@@ -54,9 +61,17 @@ fn main() {
                 .expect("Main window not found");
 
             state::init_state(app.handle().clone(), window);
+
+            match tray::create_tray(app.handle()) {
+                Ok(tray) => {
+                    let tray_state = app.state::<state::TrayState>();
+                    *tray_state.tray.lock().unwrap() = Some(tray);
+                }
+                Err(e) => eprintln!("Failed to create tray: {}", e),
+            }
+
             Ok(())
         })
-        .manage(sudo::SudoSession::new())
         .invoke_handler(tauri::generate_handler![
             commands::get_connections,
             commands::save_connection,

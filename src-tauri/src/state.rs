@@ -1,5 +1,6 @@
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 use tauri::{AppHandle, WebviewWindow};
+use tauri::tray::TrayIcon;
 
 pub struct AppState {
     pub app: AppHandle,
@@ -19,4 +20,8 @@ pub fn get_state() -> &'static AppState {
     APP_STATE
         .get()
         .expect("AppState not initialized. Did you call init_state?")
+}
+
+pub struct TrayState {
+    pub tray: Mutex<Option<TrayIcon>>,
 }

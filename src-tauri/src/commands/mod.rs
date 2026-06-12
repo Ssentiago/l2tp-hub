@@ -3,7 +3,7 @@ pub mod connections;
 pub mod labels;
 pub mod sudo;
 pub mod system;
-mod utils;
+pub mod utils;
 pub mod vpn;
 
 pub use config::*;
