@@ -1,7 +1,7 @@
 use serde::Serialize;
 use std::fs::OpenOptions;
 use std::io::Write;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use tauri::{AppHandle, Emitter};
 
 #[derive(Serialize, Clone)]

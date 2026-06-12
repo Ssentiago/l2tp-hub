@@ -15,7 +15,7 @@ pub fn create_vpn_service(
     password: &str,
     shared_secret: &str,
 ) -> Result<(), String> {
-    let mut args: Vec<String> = vec![
+    let args: Vec<String> = vec![
         macosvpn_bin().to_string(),
         "create".to_string(),
         "--l2tp".to_string(),

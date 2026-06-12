@@ -1,5 +1,6 @@
 use crate::state::get_state;
 use crate::sudo::SudoSession;
+use crate::tray;
 use crate::{backup, keychain, l2tp, log, store};
 use tauri::State;
 use tauri_plugin_dialog::DialogExt;
@@ -62,6 +63,9 @@ pub async fn import(password: String) -> Result<bool, String> {
             .await
             .map_err(|e| e.to_string())??;
 
+            let app_clone = get_state().app.clone();
+
+            let _ = tray::refresh_tray(&app_clone);
             log!("[import_config_dialog] done");
             Ok(true)
         }
@@ -120,6 +124,7 @@ pub async fn reset(
     log!("[reset] called");
     let sudo = sudo.inner().clone();
 
+    let app_clone = app_handle.clone();
     tokio::task::spawn_blocking(move || {
         let vpn_services = l2tp::list_vpn_services();
 
@@ -139,15 +144,18 @@ pub async fn reset(
             }
         }
 
-        let mut store = store::load(app_handle.config());
+        let store = store::load(app_clone.config());
         for conn in &store.connections {
             let _ = keychain::delete_password(&conn.keychain_key);
             let _ = keychain::delete_password(&conn.shared_secret_key);
         }
         store::save(&store::Store::default())?;
 
-        Ok(())
+        Ok::<(), String>(())
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+
+    let _ = tray::refresh_tray(&app_handle);
+    Ok(())
 }
