@@ -88,8 +88,14 @@ fn build_menu(app: &AppHandle) -> Result<tauri::menu::Menu<tauri::Wry>, Box<dyn 
         menu = menu.item(&item);
     } else {
         for conn in &connected {
-            let display_name = display_name(conn);
-            let label = format!("● {}  [отключить]", display_name);
+            let company = conn.labels.get("company").map(|s| s.as_str()).unwrap_or("");
+            let branch = conn.labels.get("branch").map(|s| s.as_str()).unwrap_or("");
+            let label = match (company, branch) {
+                (c, b) if !c.is_empty() && !b.is_empty() => format!("● {} / {}  [отключить]", c, b),
+                (c, _) if !c.is_empty() => format!("● {}  [отключить]", c),
+                (_, b) if !b.is_empty() => format!("● {}  [отключить]", b),
+                _ => format!("● {}  [отключить]", conn.server),
+            };
             let item = MenuItemBuilder::with_id(
                 format!("stop_{}", conn.id),
                 &label,
