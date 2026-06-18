@@ -89,6 +89,8 @@ fn main() {
             commands::import,
             commands::export,
             commands::reset,
+            commands::check_update,
+            commands::apply_update,
         ])
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())

@@ -17,6 +17,7 @@ import {
   DialogActions,
   Alert,
   DialogContentText,
+  CircularProgress,
 } from "@mui/material";
 import {
   Delete,
@@ -25,8 +26,10 @@ import {
   FileUpload,
   FileDownload,
   DeleteForever,
+  SystemUpdate,
 } from "@mui/icons-material";
 import { api } from "../../core/api";
+import type { UpdateInfo } from "../../core/api";
 import { Label } from "../../typing/definitions";
 
 interface Props {
@@ -48,6 +51,13 @@ export function Settings({ labels, onLabelsChange }: Props) {
   const [resetOpen, setResetOpen] = useState(false);
   const [resetConfirmText, setResetConfirmText] = useState("");
   const [resetting, setResetting] = useState(false);
+
+  const [updateChecking, setUpdateChecking] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
+  const [updateDownloading, setUpdateDownloading] = useState(false);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+  const [updateSuccess, setUpdateSuccess] = useState<string | null>(null);
 
   const RESET_WORD = "СБРОС";
 
@@ -114,6 +124,37 @@ export function Settings({ labels, onLabelsChange }: Props) {
       setError(e?.message ?? String(e));
     } finally {
       setResetting(false);
+    }
+  };
+
+  const handleCheckUpdate = async () => {
+    setUpdateChecking(true);
+    setUpdateError(null);
+    try {
+      const { getVersion } = await import("@tauri-apps/api/app");
+      const version = await getVersion();
+      const update = await api.update.check(version);
+      if (update) {
+        setUpdateInfo(update);
+        setUpdateDialogOpen(true);
+      } else {
+        setUpdateSuccess("Установлена последняя версия");
+      }
+    } catch (e: any) {
+      setUpdateError(e?.message ?? String(e));
+    } finally {
+      setUpdateChecking(false);
+    }
+  };
+
+  const handleApplyUpdate = async () => {
+    if (!updateInfo) return;
+    setUpdateDownloading(true);
+    try {
+      await api.update.apply(updateInfo.download_url, updateInfo.asset_name);
+    } catch (e: any) {
+      setUpdateError(e?.message ?? String(e));
+      setUpdateDownloading(false);
     }
   };
 
@@ -234,7 +275,42 @@ export function Settings({ labels, onLabelsChange }: Props) {
                   />
                 )}
               </ListItem>
+      {/* Update dialog */}
+      <Dialog
+        open={updateDialogOpen}
+        onClose={() => !updateDownloading && setUpdateDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Доступно обновление</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Новая версия: <strong>{updateInfo?.latest_version}</strong>
+          </DialogContentText>
+          {updateDownloading && (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2, mt: 2 }}>
+              <CircularProgress size={20} />
+              <Typography variant="body2">Скачиваем...</Typography>
             </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setUpdateDialogOpen(false)}
+            disabled={updateDownloading}
+          >
+            Позже
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleApplyUpdate}
+            disabled={updateDownloading}
+          >
+            Установить
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
           ))}
         </List>
 
@@ -258,6 +334,38 @@ export function Settings({ labels, onLabelsChange }: Props) {
             Добавить
           </Button>
         </Box>
+      </Paper>
+
+      <Paper variant="outlined" sx={{ p: 3, mb: 3 }}>
+        <Typography variant="overline" color="text.secondary">
+          Обновления
+        </Typography>
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ display: "block", mb: 2 }}
+        >
+          Проверить наличие новой версии приложения.
+        </Typography>
+        {updateError && (
+          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setUpdateError(null)}>
+            {updateError}
+          </Alert>
+        )}
+        {updateSuccess && (
+          <Alert severity="success" sx={{ mb: 2 }} onClose={() => setUpdateSuccess(null)}>
+            {updateSuccess}
+          </Alert>
+        )}
+        <Button
+          variant="outlined"
+          startIcon={updateChecking ? <CircularProgress size={16} /> : <SystemUpdate />}
+          onClick={handleCheckUpdate}
+          disabled={updateChecking}
+          fullWidth
+        >
+          {updateChecking ? "Проверяем..." : "Проверить обновления"}
+        </Button>
       </Paper>
 
       <Paper

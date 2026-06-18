@@ -6,6 +6,12 @@ import {
   VpnStatus,
 } from "../typing/definitions.ts";
 
+export interface UpdateInfo {
+  latest_version: string;
+  download_url: string;
+  asset_name: string;
+}
+
 export const api = {
   connections: {
     getAll: () => invoke<Connection[]>("get_connections"),
@@ -36,5 +42,11 @@ export const api = {
     import: (password: string) => invoke<boolean>("import", { password }),
     export: (password: string) => invoke<boolean>("export", { password }),
     reset: () => invoke<void>("reset"),
+  },
+  update: {
+    check: (currentVersion: string) =>
+      invoke<UpdateInfo | null>("check_update", { currentVersion }),
+    apply: (downloadUrl: string, assetName: string) =>
+      invoke<void>("apply_update", { downloadUrl, assetName }),
   },
 };
