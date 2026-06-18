@@ -1,4 +1,4 @@
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use tauri::{AppHandle, WebviewWindow};
 use tauri::tray::TrayIcon;
 
@@ -24,4 +24,5 @@ pub fn get_state() -> &'static AppState {
 
 pub struct TrayState {
     pub tray: Mutex<Option<TrayIcon>>,
+    pub poller_running: Mutex<bool>,
 }

@@ -47,6 +47,7 @@ fn main() {
 
     let tray_state = state::TrayState {
         tray: std::sync::Mutex::new(None),
+        poller_running: std::sync::Mutex::new(false),
     };
 
     tauri::Builder::default()

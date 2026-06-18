@@ -2,6 +2,7 @@ use crate::commands::utils::service_hash;
 use crate::l2tp;
 use crate::l2tp::VpnStatus;
 use crate::sudo::SudoSession;
+use crate::tray;
 use crate::{keychain, log, store};
 use tauri::State;
 
@@ -14,8 +15,9 @@ pub async fn connect_vpn(
 ) -> Result<(), String> {
     log!("[connect_vpn] (macos) called for id={}", id);
     let sudo = sudo.inner().clone();
+    let app_clone = app_handle.clone();
     tokio::task::spawn_blocking(move || {
-        let mut store = store::load(app_handle.config());
+        let mut store = store::load(app_clone.config());
         let conn = store
             .connections
             .iter()
@@ -51,15 +53,19 @@ pub async fn connect_vpn(
         l2tp::connect_vpn(&conn.name)
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+
+    let _ = tray::refresh_tray(&app_handle);
+    Ok(())
 }
 
 #[tauri::command]
 #[cfg(target_os = "windows")]
 pub async fn connect_vpn(app_handle: tauri::AppHandle, id: String) -> Result<(), String> {
     log!("[connect_vpn] (windows) called for id={}", id);
+    let app_clone = app_handle.clone();
     tokio::task::spawn_blocking(move || {
-        let mut store = store::load(app_handle.config());
+        let mut store = store::load(app_clone.config());
         let conn = store
             .connections
             .iter()
@@ -93,14 +99,18 @@ pub async fn connect_vpn(app_handle: tauri::AppHandle, id: String) -> Result<(),
         l2tp::connect_vpn(&conn.name, &conn.username, &password)
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+
+    let _ = tray::refresh_tray(&app_handle);
+    Ok(())
 }
 
 #[tauri::command]
 pub async fn disconnect_vpn(id: String, app_handle: tauri::AppHandle) -> Result<(), String> {
     log!("[disconnect_vpn] called for id={}", id);
+    let app_clone = app_handle.clone();
     tokio::task::spawn_blocking(move || {
-        let store = store::load(app_handle.config());
+        let store = store::load(app_clone.config());
         let conn = store
             .connections
             .iter()
@@ -110,7 +120,10 @@ pub async fn disconnect_vpn(id: String, app_handle: tauri::AppHandle) -> Result<
         l2tp::disconnect_vpn(&conn.name)
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+
+    let _ = tray::refresh_tray(&app_handle);
+    Ok(())
 }
 
 #[tauri::command]

@@ -1,4 +1,5 @@
 use crate::l2tp;
+use crate::l2tp::VpnStatus;
 use crate::models::connection::Connection;
 use crate::store::Store;
 use crate::sudo::SudoSession;
@@ -6,6 +7,7 @@ use crate::{keychain, log, store};
 use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
 use tauri::tray::{TrayIcon, TrayIconBuilder};
 use tauri::{AppHandle, Manager};
+use std::collections::HashMap;
 
 pub fn create_tray(app: &AppHandle) -> Result<TrayIcon, Box<dyn std::error::Error>> {
     let icon = load_tray_icon();
@@ -50,6 +52,8 @@ pub fn create_tray(app: &AppHandle) -> Result<TrayIcon, Box<dyn std::error::Erro
         })
         .build(app)?;
 
+    start_status_poller(app);
+
     Ok(tray)
 }
 
@@ -75,7 +79,7 @@ fn build_menu(app: &AppHandle) -> Result<tauri::menu::Menu<tauri::Wry>, Box<dyn 
     let connected: Vec<&Connection> = store
         .connections
         .iter()
-        .filter(|c| l2tp::get_vpn_status(&c.name) == l2tp::VpnStatus::Connected)
+        .filter(|c| l2tp::get_vpn_status(&c.name) == VpnStatus::Connected)
         .collect();
 
     if connected.is_empty() {
@@ -84,8 +88,8 @@ fn build_menu(app: &AppHandle) -> Result<tauri::menu::Menu<tauri::Wry>, Box<dyn 
         menu = menu.item(&item);
     } else {
         for conn in &connected {
-            let display_name = conn.labels.get("branch").map(|s| s.as_str()).unwrap_or(&conn.server);
-            let label = format!("Активное подключение: {}  ●", display_name);
+            let display_name = display_name(conn);
+            let label = format!("● {}  [отключить]", display_name);
             let item = MenuItemBuilder::with_id(
                 format!("stop_{}", conn.id),
                 &label,
@@ -103,13 +107,12 @@ fn build_menu(app: &AppHandle) -> Result<tauri::menu::Menu<tauri::Wry>, Box<dyn 
 
         for (group_name, connections) in &groups {
             if groups.len() > 1 {
-                let mut submenu = SubmenuBuilder::new(app, group_name);
+                let mut submenu = SubmenuBuilder::new(app, &group_name);
 
                 for conn in connections {
-                    let display_name = conn.labels.get("branch").map(|s| s.as_str()).unwrap_or(&conn.server);
                     let item = MenuItemBuilder::with_id(
                         format!("connect_{}", conn.id),
-                        display_name,
+                        display_name(conn),
                     )
                     .build(app)?;
                     submenu = submenu.item(&item);
@@ -119,10 +122,9 @@ fn build_menu(app: &AppHandle) -> Result<tauri::menu::Menu<tauri::Wry>, Box<dyn 
                 menu = menu.item(&submenu);
             } else {
                 for conn in connections {
-                    let display_name = conn.labels.get("branch").map(|s| s.as_str()).unwrap_or(&conn.server);
                     let item = MenuItemBuilder::with_id(
                         format!("connect_{}", conn.id),
-                        display_name,
+                        display_name(conn),
                     )
                     .build(app)?;
                     menu = menu.item(&item);
@@ -138,6 +140,10 @@ fn build_menu(app: &AppHandle) -> Result<tauri::menu::Menu<tauri::Wry>, Box<dyn 
     menu = menu.item(&quit_item);
 
     Ok(menu.build()?)
+}
+
+fn display_name(conn: &Connection) -> &str {
+    conn.labels.get("branch").map(|s| s.as_str()).unwrap_or(&conn.server)
 }
 
 fn group_connections(store: &Store) -> Vec<(String, Vec<&Connection>)> {
@@ -170,7 +176,7 @@ fn handle_tray_connect(app: &AppHandle, id: &str) {
 
     let status = l2tp::get_vpn_status(&conn.name);
 
-    if status == l2tp::VpnStatus::Connected || status == l2tp::VpnStatus::Connecting {
+    if status == VpnStatus::Connected || status == VpnStatus::Connecting {
         match l2tp::disconnect_vpn(&conn.name) {
             Ok(()) => log!("[tray] disconnected {}", conn.server),
             Err(e) => log!("[tray] disconnect error: {}", e),
@@ -215,7 +221,7 @@ fn connect_vpn_macos(
     let hash = crate::commands::utils::service_hash(&conn, &password, &shared_secret);
     let status = l2tp::get_vpn_status(&conn.name);
     let needs_recreate =
-        conn.service_hash.as_deref() != Some(hash.as_str()) || status == l2tp::VpnStatus::Unknown;
+        conn.service_hash.as_deref() != Some(hash.as_str()) || status == VpnStatus::Unknown;
 
     if needs_recreate {
         l2tp::create_vpn_service(
@@ -255,7 +261,7 @@ fn connect_vpn_windows(app: &AppHandle, id: &str) -> Result<(), String> {
     let hash = crate::commands::utils::service_hash(&conn, &password, &shared_secret);
     let status = l2tp::get_vpn_status(&conn.name);
     let needs_recreate =
-        conn.service_hash.as_deref() != Some(hash.as_str()) || status == l2tp::VpnStatus::Unknown;
+        conn.service_hash.as_deref() != Some(hash.as_str()) || status == VpnStatus::Unknown;
 
     if needs_recreate {
         l2tp::create_vpn_service(
@@ -288,4 +294,39 @@ pub fn refresh_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+fn start_status_poller(app: &AppHandle) {
+    let tray_state = app.state::<crate::state::TrayState>();
+    let mut running = tray_state.poller_running.lock().unwrap();
+    if *running {
+        return;
+    }
+    *running = true;
+    drop(running);
+
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let mut prev_statuses: HashMap<String, VpnStatus> = HashMap::new();
+
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(3));
+
+            let store = store::load(app.config());
+            let mut changed = false;
+
+            for conn in &store.connections {
+                let status = l2tp::get_vpn_status(&conn.name);
+                let prev = prev_statuses.get(&conn.id).copied();
+                if prev != Some(status) {
+                    changed = true;
+                }
+                prev_statuses.insert(conn.id.clone(), status);
+            }
+
+            if changed {
+                let _ = refresh_tray(&app);
+            }
+        }
+    });
 }
