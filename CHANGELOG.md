@@ -1,3 +1,8 @@
+## [0.4.0] - 2026-06-18
+
+### Features
+- show company and branch in active connection label ([`b1a9cd2`](https://github.com/Ssentiago/l2tp-hub/commit/b1a9cd23ed67ced669fda9217baf9b3039cfc877))
+
 ## [0.3.1] - 2026-06-18
 
 ### Bug Fixes
