@@ -1,3 +1,8 @@
+## [0.3.1] - 2026-06-18
+
+### Bug Fixes
+- add tray status poller and refresh after connect/disconnect ([`9786f44`](https://github.com/Ssentiago/l2tp-hub/commit/9786f44da3eb90cf10b7f8693d518d613f65fa0b))
+
 ## [0.3.0] - 2026-06-13
 
 ### Features
