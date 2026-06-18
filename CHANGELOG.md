@@ -1,3 +1,8 @@
+## [0.5.0] - 2026-06-18
+
+### Features
+- add self-update with GitHub releases check ([`c519d25`](https://github.com/Ssentiago/l2tp-hub/commit/c519d251a80fc5403f7094cb903e9fe34eac0d77))
+
 ## [0.4.0] - 2026-06-18
 
 ### Features
