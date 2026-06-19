@@ -6,6 +6,7 @@ pub mod system;
 pub mod update;
 pub mod utils;
 pub mod vpn;
+pub mod workspace;
 
 pub use config::*;
 pub use connections::*;
@@ -14,3 +15,4 @@ pub use sudo::*;
 pub use system::*;
 pub use update::*;
 pub use vpn::*;
+pub use workspace::*;

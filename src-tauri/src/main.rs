@@ -91,6 +91,12 @@ fn main() {
             commands::reset,
             commands::check_update,
             commands::apply_update,
+            commands::get_workspaces,
+            commands::get_active_workspace_id,
+            commands::create_workspace,
+            commands::rename_workspace,
+            commands::delete_workspace,
+            commands::switch_workspace,
         ])
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
