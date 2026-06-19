@@ -18,6 +18,8 @@ const MAGIC: &[u8] = b"L2TP-HUB";
 pub struct ConnectionExport {
     pub id: String,
     pub name: String,
+    #[serde(default)]
+    pub display_name: String,
     pub server: String,
     pub username: String,
     pub password: String,
@@ -50,6 +52,7 @@ pub fn make_backup(store: &Store, password: &str) -> Result<Vec<u8>, String> {
             connections_export.push(ConnectionExport {
                 id: conn.id.clone(),
                 name: conn.name.clone(),
+                display_name: conn.display_name.clone(),
                 server: conn.server.clone(),
                 username: conn.username.clone(),
                 password: password_val,
@@ -137,6 +140,7 @@ pub fn restore_backup(
         connections.push(Connection {
             id: exp.id,
             name: exp.name,
+            display_name: exp.display_name,
             server: exp.server,
             username: exp.username,
             keychain_key,

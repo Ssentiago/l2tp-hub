@@ -3,6 +3,8 @@ use std::collections::HashMap;
 #[derive(serde::Deserialize)]
 pub struct ConnectionPayload {
     pub id: Option<String>,
+    #[serde(default)]
+    pub display_name: String,
     pub server: String,
     pub username: String,
     pub password: String,

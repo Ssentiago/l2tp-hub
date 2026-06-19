@@ -47,6 +47,7 @@ pub async fn save_connection(
         let conn = Connection {
             id: id.clone(),
             name: id.clone(),
+            display_name: input.display_name,
             server: input.server,
             username: input.username,
             keychain_key,

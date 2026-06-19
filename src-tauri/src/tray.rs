@@ -192,7 +192,7 @@ fn build_menu(app: &AppHandle) -> Result<tauri::menu::Menu<tauri::Wry>, Box<dyn 
 }
 
 fn display_name(conn: &Connection) -> &str {
-    conn.labels.get("branch").map(|s| s.as_str()).unwrap_or(&conn.server)
+    conn.display_title()
 }
 
 fn group_connections_for_workspace(ws: &crate::models::workspace::Workspace) -> Vec<(String, Vec<&Connection>)> {
