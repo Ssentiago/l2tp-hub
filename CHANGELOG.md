@@ -1,3 +1,13 @@
+## [0.6.0] - 2026-06-19
+
+### Features
+- add display_name field to connection form and getDisplayTitle utility ([`add2520`](https://github.com/Ssentiago/l2tp-hub/commit/add25204fb7f24403fcb77eb43e836bc357dfec5))
+- add display_name field to Connection with priority-based display_title() ([`864128a`](https://github.com/Ssentiago/l2tp-hub/commit/864128a0c3a490bb6fda39127fa1f43fbae8e88f))
+- add workspace selector with create/rename/delete ([`a4d6f67`](https://github.com/Ssentiago/l2tp-hub/commit/a4d6f67c27ca4298d2288f7bb54fb233ccd55d3c))
+- add workspace API and WorkspaceInfo type ([`2fbdbd8`](https://github.com/Ssentiago/l2tp-hub/commit/2fbdbd80539fdba0e6cbb99f8e972f8bde7deb94))
+- add workspace CRUD commands (create/rename/delete/switch/list) ([`07f7dea`](https://github.com/Ssentiago/l2tp-hub/commit/07f7deaf70834dc87af8c588e110277a916022cb))
+- add Workspace model, migrate Store to per-workspace connections ([`e7a5383`](https://github.com/Ssentiago/l2tp-hub/commit/e7a53839f36d4eba7dae134c62af0f7b23ecbb59))
+
 ## [0.5.0] - 2026-06-18
 
 ### Features
