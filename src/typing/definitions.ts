@@ -43,3 +43,8 @@ export interface FilterState {
 
 export type SortField = "name" | "priority" | "status";
 export type SortDir = "asc" | "desc";
+
+export interface WorkspaceInfo {
+  id: string;
+  name: string;
+}

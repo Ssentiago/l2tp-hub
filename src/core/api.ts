@@ -4,6 +4,7 @@ import {
   ConnectionPayload,
   Label,
   VpnStatus,
+  WorkspaceInfo,
 } from "../typing/definitions.ts";
 
 export interface UpdateInfo {
@@ -48,5 +49,15 @@ export const api = {
       invoke<UpdateInfo | null>("check_update", { currentVersion }),
     apply: (downloadUrl: string, assetName: string) =>
       invoke<void>("apply_update", { downloadUrl, assetName }),
+  },
+  workspaces: {
+    list: () => invoke<WorkspaceInfo[]>("get_workspaces"),
+    getActiveId: () => invoke<string>("get_active_workspace_id"),
+    create: (name: string) =>
+      invoke<WorkspaceInfo>("create_workspace", { name }),
+    rename: (id: string, name: string) =>
+      invoke<void>("rename_workspace", { id, name }),
+    delete: (id: string) => invoke<void>("delete_workspace", { id }),
+    switch: (id: string) => invoke<void>("switch_workspace", { id }),
   },
 };
