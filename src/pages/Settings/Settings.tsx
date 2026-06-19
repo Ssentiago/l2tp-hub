@@ -215,6 +215,7 @@ export function Settings({ labels, onLabelsChange }: Props) {
           sx={{ display: "block", mb: 2 }}
         >
           Поля для категоризации подключений. Встроенные метки нельзя удалить.
+          Метки общие для всех пространств. Подключения и группировка — свои в каждом пространстве.
         </Typography>
 
         <List disablePadding>

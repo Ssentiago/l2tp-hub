@@ -25,6 +25,7 @@ import { Settings } from "./pages/Settings/Settings";
 import { About } from "./pages/About/About";
 import { LogDrawer } from "./components/LogDrawer";
 import { UpdateBanner } from "./components/UpdateBanner";
+import { WorkspaceSelector } from "./components/WorkspaceSelector";
 import { Connections } from "./pages/Connections/Connections";
 import { getVersion } from "@tauri-apps/api/app";
 import type { Connection, Label } from "./typing/definitions";
@@ -58,15 +59,23 @@ export default function App() {
   const [appVersion, setAppVersion] = useState("...");
   const [showLog, setShowLog] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState("");
+  const [workspaceVersion, setWorkspaceVersion] = useState(0);
 
   const loadLabels = useCallback(async () => {
     setLabels(await api.labels.getAll());
+  }, []);
+
+  const bumpWorkspace = useCallback(() => {
+    setWorkspaceVersion((v) => v + 1);
   }, []);
 
   useEffect(() => {
     (async () => {
       const appVersion = await getVersion();
       setAppVersion(appVersion);
+      const id = await api.workspaces.getActiveId();
+      setActiveWorkspaceId(id);
       await loadLabels();
 
       try {
@@ -87,11 +96,17 @@ export default function App() {
     await loadLabels();
     setView("list");
     setEditingConn(null);
+    bumpWorkspace();
   };
 
   const handleLabelsChange = useCallback(async () => {
     await loadLabels();
   }, [loadLabels]);
+
+  const handleWorkspaceSwitch = async (id: string) => {
+    setActiveWorkspaceId(id);
+    bumpWorkspace();
+  };
 
   return (
     <ThemeProvider theme={theme}>
@@ -113,14 +128,15 @@ export default function App() {
             >
               Назад
             </Button>
-          ) : null}
+          ) : (
+            <WorkspaceSelector
+              activeId={activeWorkspaceId}
+              onSwitch={handleWorkspaceSwitch}
+              onChange={bumpWorkspace}
+            />
+          )}
 
-          <Typography
-            variant="h6"
-            sx={{ flexGrow: 1, fontWeight: 700, letterSpacing: 1 }}
-          >
-            L2TP Hub
-          </Typography>
+          <Box sx={{ flexGrow: 1 }} />
 
           {view === "list" && (
             <>
@@ -166,7 +182,11 @@ export default function App() {
           />
         )}
         {view === "list" ? (
-          <Connections labels={labels} onEdit={handleEdit} />
+          <Connections
+            key={activeWorkspaceId}
+            labels={labels}
+            onEdit={handleEdit}
+          />
         ) : view === "about" ? (
           <About version={appVersion} onBack={() => setView("list")} />
         ) : view === "settings" ? (
