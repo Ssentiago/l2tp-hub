@@ -10,6 +10,7 @@ export type LabelValue = string;
 export interface Connection {
   id: string;
   name: string;
+  display_name: string;
   server: string;
   username: string;
   keychain_key: string;
@@ -28,6 +29,7 @@ export interface ConnectionWithStatus extends Connection {
 
 export interface ConnectionPayload {
   id?: string;
+  display_name: string;
   server: string;
   username: string;
   password: string;

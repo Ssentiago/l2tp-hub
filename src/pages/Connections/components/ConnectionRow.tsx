@@ -3,6 +3,7 @@ import {
   ConnectionWithStatus,
   Label
 } from "../../../typing/definitions.ts";
+import { getDisplayTitle } from "../../../core/display";
 import React, { useCallback } from "react";
 import { Box, Chip, TableCell, TableRow, Typography } from "@mui/material";
 import { ActionButtons } from "./ActionButtons.tsx";
@@ -122,9 +123,7 @@ export function ConnectionRow({
     <TableRow hover onDoubleClick={onDoubleClick}>
       <TableCell>
         <Typography variant="body2" sx={{ fontWeight: 500 }}>
-          {hideCompanyLabel
-            ? (c.labels["branch"] ?? c.name)
-            : (c.labels["company"] ?? c.name)}
+          {getDisplayTitle(c)}
         </Typography>
         <Typography variant="caption" color="text.secondary">
           {c.server}

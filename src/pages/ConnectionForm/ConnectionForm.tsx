@@ -18,6 +18,7 @@ export function ConnectionForm({
 }: ConnectionFormProps) {
   const [formData, setFormData] = useState<ConnectionPayload>({
     id: initialConnection?.id,
+    display_name: initialConnection?.display_name ?? "",
     server: initialConnection?.server ?? "",
     username: initialConnection?.username ?? "",
     password: "",
@@ -58,6 +59,14 @@ export function ConnectionForm({
           Подключение
         </Typography>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
+          <TextField
+            label="Название"
+            size="small"
+            value={formData.display_name}
+            onChange={(e) => updateFormData({ display_name: e.target.value })}
+            placeholder="Например: Офис, Дом"
+            helperText="Необязательно. Если не указано — используется Филиал, Компания или IP"
+          />
           <TextField
             label="Сервер"
             size="small"
