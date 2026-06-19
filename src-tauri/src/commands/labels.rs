@@ -48,8 +48,10 @@ pub async fn delete_label(app_handle: tauri::AppHandle, id: String) -> Result<()
             return Err("Нельзя удалить встроенную метку".into());
         }
         s.labels.retain(|l| l.id != id);
-        for conn in &mut s.connections {
-            conn.labels.remove(&id);
+        for ws in &mut s.workspaces {
+            for conn in &mut ws.connections {
+                conn.labels.remove(&id);
+            }
         }
         store::save(&s)
     })

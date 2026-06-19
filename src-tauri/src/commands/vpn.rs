@@ -6,6 +6,17 @@ use crate::tray;
 use crate::{keychain, log, store};
 use tauri::State;
 
+fn find_connection_mut<'a>(
+    store: &'a mut store::Store,
+    id: &str,
+) -> Option<&'a mut crate::models::connection::Connection> {
+    store
+        .workspaces
+        .iter_mut()
+        .flat_map(|ws| ws.connections.iter_mut())
+        .find(|c| c.id == id)
+}
+
 #[tauri::command]
 #[cfg(target_os = "macos")]
 pub async fn connect_vpn(
@@ -19,8 +30,9 @@ pub async fn connect_vpn(
     tokio::task::spawn_blocking(move || {
         let mut store = store::load(app_clone.config());
         let conn = store
-            .connections
+            .workspaces
             .iter()
+            .flat_map(|ws| ws.connections.iter())
             .find(|c| c.id == id)
             .ok_or("Подключение не найдено")?
             .clone();
@@ -43,7 +55,7 @@ pub async fn connect_vpn(
                 &password,
                 &shared_secret,
             )?;
-            if let Some(c) = store.connections.iter_mut().find(|c| c.id == id) {
+            if let Some(c) = find_connection_mut(&mut store, &id) {
                 c.service_hash = Some(hash);
             }
             store::save(&store)?;
@@ -67,8 +79,9 @@ pub async fn connect_vpn(app_handle: tauri::AppHandle, id: String) -> Result<(),
     tokio::task::spawn_blocking(move || {
         let mut store = store::load(app_clone.config());
         let conn = store
-            .connections
+            .workspaces
             .iter()
+            .flat_map(|ws| ws.connections.iter())
             .find(|c| c.id == id)
             .ok_or("Подключение не найдено")?
             .clone();
@@ -89,7 +102,7 @@ pub async fn connect_vpn(app_handle: tauri::AppHandle, id: String) -> Result<(),
                 &password,
                 &shared_secret,
             )?;
-            if let Some(c) = store.connections.iter_mut().find(|c| c.id == id) {
+            if let Some(c) = find_connection_mut(&mut store, &id) {
                 c.service_hash = Some(hash);
             }
             store::save(&store)?;
@@ -112,8 +125,9 @@ pub async fn disconnect_vpn(id: String, app_handle: tauri::AppHandle) -> Result<
     tokio::task::spawn_blocking(move || {
         let store = store::load(app_clone.config());
         let conn = store
-            .connections
+            .workspaces
             .iter()
+            .flat_map(|ws| ws.connections.iter())
             .find(|c| c.id == id)
             .ok_or("Подключение не найдено")?
             .clone();
@@ -130,7 +144,12 @@ pub async fn disconnect_vpn(id: String, app_handle: tauri::AppHandle) -> Result<
 pub async fn get_vpn_status(id: String, app_handle: tauri::AppHandle) -> VpnStatus {
     tokio::task::spawn_blocking(move || -> VpnStatus {
         let store = store::load(app_handle.config());
-        match store.connections.iter().find(|c| c.id == id) {
+        match store
+            .workspaces
+            .iter()
+            .flat_map(|ws| ws.connections.iter())
+            .find(|c| c.id == id)
+        {
             Some(conn) => l2tp::get_vpn_status(&conn.name),
             None => VpnStatus::Unknown,
         }

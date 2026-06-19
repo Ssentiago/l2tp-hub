@@ -10,9 +10,14 @@ use uuid::Uuid;
 #[tauri::command]
 pub async fn get_connections(app_handle: tauri::AppHandle) -> Vec<Connection> {
     log!("[get_connections] called");
-    tokio::task::spawn_blocking(move || store::load(app_handle.config()).connections)
-        .await
-        .unwrap_or_default()
+    tokio::task::spawn_blocking(move || {
+        store::load(app_handle.config())
+            .active_workspace()
+            .connections
+            .clone()
+    })
+    .await
+    .unwrap_or_default()
 }
 
 #[tauri::command]
@@ -50,10 +55,11 @@ pub async fn save_connection(
             labels: input.labels,
         };
 
-        if let Some(idx) = store.connections.iter().position(|c| c.id == id) {
-            store.connections[idx] = conn.clone();
+        let ws = store.active_workspace_mut();
+        if let Some(idx) = ws.connections.iter().position(|c| c.id == id) {
+            ws.connections[idx] = conn.clone();
         } else {
-            store.connections.push(conn.clone());
+            ws.connections.push(conn.clone());
         }
 
         store::save(&store)?;
@@ -79,12 +85,13 @@ pub async fn delete_connection(
     let app_clone = app_handle.clone();
     let result = tokio::task::spawn_blocking(move || {
         let mut store = store::load(app_clone.config());
-        if let Some(conn) = store.connections.iter().find(|c| c.id == id) {
+        let ws = store.active_workspace_mut();
+        if let Some(conn) = ws.connections.iter().find(|c| c.id == id) {
             let _ = keychain::delete_password(&conn.keychain_key);
             let _ = keychain::delete_password(&conn.shared_secret_key);
             let _ = l2tp::delete_vpn_service(&sudo, &conn.name);
         }
-        store.connections.retain(|c| c.id != id);
+        ws.connections.retain(|c| c.id != id);
         store::save(&store)
     })
     .await
@@ -101,12 +108,13 @@ pub async fn delete_connection(app_handle: tauri::AppHandle, id: String) -> Resu
     let app_clone = app_handle.clone();
     let result = tokio::task::spawn_blocking(move || {
         let mut store = store::load(app_clone.config());
-        if let Some(conn) = store.connections.iter().find(|c| c.id == id) {
+        let ws = store.active_workspace_mut();
+        if let Some(conn) = ws.connections.iter().find(|c| c.id == id) {
             let _ = keychain::delete_password(&conn.keychain_key);
             let _ = keychain::delete_password(&conn.shared_secret_key);
             let _ = l2tp::delete_vpn_service(&conn.name);
         }
-        store.connections.retain(|c| c.id != id);
+        ws.connections.retain(|c| c.id != id);
         store::save(&store)
     })
     .await

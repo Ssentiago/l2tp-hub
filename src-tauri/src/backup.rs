@@ -41,19 +41,22 @@ pub fn make_backup(store: &Store, password: &str) -> Result<Vec<u8>, String> {
     log!("[make_backup] Starting export");
 
     let mut connections_export = Vec::new();
-    for conn in &store.connections {
-        let password_val = keychain::get_password(&conn.keychain_key).unwrap_or_default();
-        let shared_secret_val = keychain::get_password(&conn.shared_secret_key).unwrap_or_default();
+    for ws in &store.workspaces {
+        for conn in &ws.connections {
+            let password_val = keychain::get_password(&conn.keychain_key).unwrap_or_default();
+            let shared_secret_val =
+                keychain::get_password(&conn.shared_secret_key).unwrap_or_default();
 
-        connections_export.push(ConnectionExport {
-            id: conn.id.clone(),
-            name: conn.name.clone(),
-            server: conn.server.clone(),
-            username: conn.username.clone(),
-            password: password_val,
-            shared_secret: shared_secret_val,
-            labels: conn.labels.clone(),
-        });
+            connections_export.push(ConnectionExport {
+                id: conn.id.clone(),
+                name: conn.name.clone(),
+                server: conn.server.clone(),
+                username: conn.username.clone(),
+                password: password_val,
+                shared_secret: shared_secret_val,
+                labels: conn.labels.clone(),
+            });
+        }
     }
 
     let payload = ExportPayload {
@@ -78,7 +81,6 @@ pub fn make_backup(store: &Store, password: &str) -> Result<Vec<u8>, String> {
         .encrypt(nonce, json.as_slice())
         .map_err(|_| "Encryption failed".to_string())?;
 
-    // File format: MAGIC(8) + NONCE(12) + CIPHERTEXT
     let mut result = Vec::new();
     result.extend_from_slice(MAGIC);
     result.extend_from_slice(&nonce_bytes);
@@ -139,7 +141,7 @@ pub fn restore_backup(
             username: exp.username,
             keychain_key,
             shared_secret_key,
-            service_hash: None, // service needs to recreate
+            service_hash: None,
             labels: exp.labels,
         });
     }

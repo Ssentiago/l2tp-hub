@@ -39,7 +39,7 @@ pub fn create_tray(app: &AppHandle) -> Result<TrayIcon, Box<dyn std::error::Erro
                 id if id.starts_with("stop_") => {
                     let conn_id = id.strip_prefix("stop_").unwrap().to_string();
                     let store = store::load(app.config());
-                    if let Some(conn) = store.connections.iter().find(|c| c.id == conn_id) {
+                    if let Some(conn) = find_connection(&store, &conn_id) {
                         match l2tp::disconnect_vpn(&conn.name) {
                             Ok(()) => log!("[tray] disconnected {}", conn.server),
                             Err(e) => log!("[tray] disconnect error: {}", e),
@@ -65,6 +65,14 @@ fn load_tray_icon() -> Result<tauri::image::Image<'static>, Box<dyn std::error::
     Ok(tauri::image::Image::new_owned(rgba.into_raw(), width, height))
 }
 
+fn find_connection<'a>(store: &'a Store, id: &str) -> Option<&'a Connection> {
+    store
+        .workspaces
+        .iter()
+        .flat_map(|ws| ws.connections.iter())
+        .find(|c| c.id == id)
+}
+
 fn build_menu(app: &AppHandle) -> Result<tauri::menu::Menu<tauri::Wry>, Box<dyn std::error::Error>> {
     let store = store::load(app.config());
 
@@ -76,10 +84,16 @@ fn build_menu(app: &AppHandle) -> Result<tauri::menu::Menu<tauri::Wry>, Box<dyn 
     let separator = PredefinedMenuItem::separator(app)?;
     menu = menu.item(&separator);
 
-    let connected: Vec<&Connection> = store
-        .connections
+    let all_conns: Vec<&Connection> = store
+        .workspaces
+        .iter()
+        .flat_map(|ws| ws.connections.iter())
+        .collect();
+
+    let connected: Vec<&Connection> = all_conns
         .iter()
         .filter(|c| l2tp::get_vpn_status(&c.name) == VpnStatus::Connected)
+        .copied()
         .collect();
 
     if connected.is_empty() {
@@ -105,37 +119,66 @@ fn build_menu(app: &AppHandle) -> Result<tauri::menu::Menu<tauri::Wry>, Box<dyn 
         }
     }
 
-    if !store.connections.is_empty() {
+    if !all_conns.is_empty() {
         let separator = PredefinedMenuItem::separator(app)?;
         menu = menu.item(&separator);
+    }
 
-        let groups = group_connections(&store);
+    for ws in &store.workspaces {
+        if ws.connections.is_empty() {
+            continue;
+        }
 
-        for (group_name, connections) in &groups {
-            if groups.len() > 1 {
-                let mut submenu = SubmenuBuilder::new(app, &group_name);
+        let ws_label = if ws.id == store.active_workspace_id {
+            format!("{} ✓", ws.name)
+        } else {
+            ws.name.clone()
+        };
 
-                for conn in connections {
-                    let item = MenuItemBuilder::with_id(
-                        format!("connect_{}", conn.id),
-                        display_name(conn),
-                    )
-                    .build(app)?;
-                    submenu = submenu.item(&item);
-                }
+        let ws_separator = PredefinedMenuItem::separator(app)?;
+        menu = menu.item(&ws_separator);
 
-                let submenu = submenu.build()?;
-                menu = menu.item(&submenu);
-            } else {
-                for conn in connections {
-                    let item = MenuItemBuilder::with_id(
-                        format!("connect_{}", conn.id),
-                        display_name(conn),
-                    )
-                    .build(app)?;
-                    menu = menu.item(&item);
+        let groups = group_connections_for_workspace(ws);
+
+        if groups.len() == 1 && groups[0].0.is_empty() {
+            for conn in &groups[0].1 {
+                let item = MenuItemBuilder::with_id(
+                    format!("connect_{}", conn.id),
+                    display_name(conn),
+                )
+                .build(app)?;
+                menu = menu.item(&item);
+            }
+        } else {
+            let mut submenu = SubmenuBuilder::new(app, &ws_label);
+
+            for (group_name, connections) in &groups {
+                if group_name.is_empty() {
+                    for conn in connections {
+                        let item = MenuItemBuilder::with_id(
+                            format!("connect_{}", conn.id),
+                            display_name(conn),
+                        )
+                        .build(app)?;
+                        submenu = submenu.item(&item);
+                    }
+                } else {
+                    let mut sub = SubmenuBuilder::new(app, group_name);
+                    for conn in connections {
+                        let item = MenuItemBuilder::with_id(
+                            format!("connect_{}", conn.id),
+                            display_name(conn),
+                        )
+                        .build(app)?;
+                        sub = sub.item(&item);
+                    }
+                    let sub = sub.build()?;
+                    submenu = submenu.item(&sub);
                 }
             }
+
+            let submenu = submenu.build()?;
+            menu = menu.item(&submenu);
         }
     }
 
@@ -152,17 +195,24 @@ fn display_name(conn: &Connection) -> &str {
     conn.labels.get("branch").map(|s| s.as_str()).unwrap_or(&conn.server)
 }
 
-fn group_connections(store: &Store) -> Vec<(String, Vec<&Connection>)> {
+fn group_connections_for_workspace(ws: &crate::models::workspace::Workspace) -> Vec<(String, Vec<&Connection>)> {
+    let group_field = match ws.group_by.first() {
+        Some(f) => f.as_str(),
+        None => return vec![("".into(), ws.connections.iter().collect())],
+    };
+
     let mut groups: Vec<(String, Vec<&Connection>)> = Vec::new();
 
-    for conn in &store.connections {
-        let group = conn
-            .labels
-            .get("company")
-            .cloned()
-            .unwrap_or_else(|| "Без компании".into());
+    for conn in &ws.connections {
+        let group = conn.labels.get(group_field).cloned().unwrap_or_default();
 
-        if let Some(existing) = groups.iter_mut().find(|(name, _)| name == &group) {
+        if group.is_empty() {
+            if let Some(flat) = groups.iter_mut().find(|(name, _)| name.is_empty()) {
+                flat.1.push(conn);
+            } else {
+                groups.push(("".into(), vec![conn]));
+            }
+        } else if let Some(existing) = groups.iter_mut().find(|(name, _)| name == &group) {
             existing.1.push(conn);
         } else {
             groups.push((group, vec![conn]));
@@ -175,7 +225,7 @@ fn group_connections(store: &Store) -> Vec<(String, Vec<&Connection>)> {
 
 fn handle_tray_connect(app: &AppHandle, id: &str) {
     let store = store::load(app.config());
-    let conn = match store.connections.iter().find(|c| c.id == id) {
+    let conn = match find_connection(&store, id) {
         Some(c) => c.clone(),
         None => return,
     };
@@ -214,10 +264,7 @@ fn connect_vpn_macos(
     sudo: &SudoSession,
 ) -> Result<(), String> {
     let store = store::load(app.config());
-    let conn = store
-        .connections
-        .iter()
-        .find(|c| c.id == id)
+    let conn = find_connection(&store, id)
         .ok_or("Подключение не найдено")?
         .clone();
 
@@ -240,8 +287,10 @@ fn connect_vpn_macos(
         )?;
 
         let mut store = store::load(app.config());
-        if let Some(c) = store.connections.iter_mut().find(|c| c.id == id) {
-            c.service_hash = Some(hash);
+        for ws in &mut store.workspaces {
+            if let Some(c) = ws.connections.iter_mut().find(|c| c.id == id) {
+                c.service_hash = Some(hash.clone());
+            }
         }
         let _ = store::save(&store);
 
@@ -254,10 +303,7 @@ fn connect_vpn_macos(
 #[cfg(target_os = "windows")]
 fn connect_vpn_windows(app: &AppHandle, id: &str) -> Result<(), String> {
     let store = store::load(app.config());
-    let conn = store
-        .connections
-        .iter()
-        .find(|c| c.id == id)
+    let conn = find_connection(&store, id)
         .ok_or("Подключение не найдено")?
         .clone();
 
@@ -279,8 +325,10 @@ fn connect_vpn_windows(app: &AppHandle, id: &str) -> Result<(), String> {
         )?;
 
         let mut store = store::load(app.config());
-        if let Some(c) = store.connections.iter_mut().find(|c| c.id == id) {
-            c.service_hash = Some(hash);
+        for ws in &mut store.workspaces {
+            if let Some(c) = ws.connections.iter_mut().find(|c| c.id == id) {
+                c.service_hash = Some(hash.clone());
+            }
         }
         let _ = store::save(&store);
 
@@ -321,13 +369,15 @@ fn start_status_poller(app: &AppHandle) {
             let store = store::load(app.config());
             let mut changed = false;
 
-            for conn in &store.connections {
-                let status = l2tp::get_vpn_status(&conn.name);
-                let prev = prev_statuses.get(&conn.id).copied();
-                if prev != Some(status) {
-                    changed = true;
+            for ws in &store.workspaces {
+                for conn in &ws.connections {
+                    let status = l2tp::get_vpn_status(&conn.name);
+                    let prev = prev_statuses.get(&conn.id).copied();
+                    if prev != Some(status) {
+                        changed = true;
+                    }
+                    prev_statuses.insert(conn.id.clone(), status);
                 }
-                prev_statuses.insert(conn.id.clone(), status);
             }
 
             if changed {

@@ -35,15 +35,16 @@ pub async fn import(password: String) -> Result<bool, String> {
                 let (connections, labels) = backup::restore_backup(&data, &password)?;
                 let mut store = store::load(app.config());
 
+                let ws = store.active_workspace_mut();
                 for imported_conn in connections {
-                    if let Some(idx) = store
+                    if let Some(idx) = ws
                         .connections
                         .iter()
                         .position(|c| c.id == imported_conn.id)
                     {
-                        store.connections[idx] = imported_conn;
+                        ws.connections[idx] = imported_conn;
                     } else {
-                        store.connections.push(imported_conn);
+                        ws.connections.push(imported_conn);
                     }
                 }
 
@@ -145,9 +146,11 @@ pub async fn reset(
         }
 
         let store = store::load(app_clone.config());
-        for conn in &store.connections {
-            let _ = keychain::delete_password(&conn.keychain_key);
-            let _ = keychain::delete_password(&conn.shared_secret_key);
+        for ws in &store.workspaces {
+            for conn in &ws.connections {
+                let _ = keychain::delete_password(&conn.keychain_key);
+                let _ = keychain::delete_password(&conn.shared_secret_key);
+            }
         }
         store::save(&store::Store::default())?;
 
