@@ -259,6 +259,21 @@ export function ConnectionList({
             </TableHead>
             <TableBody>
               {(() => {
+                if (connections.length === 0) {
+                  return (
+                    <TableRow>
+                      <TableCell colSpan={4} align="center" sx={{ py: 6 }}>
+                        <Typography color="text.disabled">
+                          Нет подключений
+                        </Typography>
+                        <Typography variant="caption" color="text.disabled" sx={{ display: "block", mt: 0.5 }}>
+                          Нажмите «Добавить», чтобы создать первое подключение
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  );
+                }
+
                 const groups = groupByCompany(connections, labels);
 
                 if (groups.length === 1 && !groups[0][0]) {

@@ -122,15 +122,21 @@ export function ConnectionForm({
           Метки
         </Typography>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
-          {labels.map((label) => (
-            <TextField
-              key={label.id}
-              label={label.name}
-              size="small"
-              value={formData.labels[label.id] ?? ""}
-              onChange={(e) => setLabel(label.id, e.target.value)}
-            />
-          ))}
+          {labels.length === 0 ? (
+            <Typography variant="body2" color="text.disabled">
+              Нет меток. Создайте метки в Настройках.
+            </Typography>
+          ) : (
+            labels.map((label) => (
+              <TextField
+                key={label.id}
+                label={label.name}
+                size="small"
+                value={formData.labels[label.id] ?? ""}
+                onChange={(e) => setLabel(label.id, e.target.value)}
+              />
+            ))
+          )}
         </Box>
       </Paper>
 
