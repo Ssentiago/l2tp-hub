@@ -150,10 +150,10 @@ export function ConnectionRow({
             }}
           />
         )}
-        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+        <Typography variant="body2" sx={{ fontWeight: 500, userSelect: "text" }}>
           {getDisplayTitle(c)}
         </Typography>
-        <Typography variant="caption" color="text.secondary">
+        <Typography variant="caption" color="text.secondary" sx={{ userSelect: "text" }}>
           {c.server}
         </Typography>
       </TableCell>

@@ -44,9 +44,6 @@ const theme = createTheme({
     MuiCssBaseline: {
       styleOverrides: {
         "*": { userSelect: "none" },
-        "p, span, h1, h2, h3, h4, h5, h6, label, li, td, th, div": {
-          cursor: "default",
-        },
       },
     },
   },
@@ -141,12 +138,12 @@ export default function App() {
           {view === "list" && (
             <>
               <Tooltip title="Лог / отладка">
-                <IconButton color="inherit" onClick={() => setShowLog(true)}>
+                <IconButton color="inherit" onClick={() => setShowLog(true)} aria-label="Лог / отладка">
                   <Terminal />
                 </IconButton>
               </Tooltip>
               <Tooltip title="О приложении">
-                <IconButton color="inherit" onClick={() => setView("about")}>
+                <IconButton color="inherit" onClick={() => setView("about")} aria-label="О приложении">
                   <Info />
                 </IconButton>
               </Tooltip>
@@ -155,6 +152,7 @@ export default function App() {
                   color="inherit"
                   onClick={() => setView("settings")}
                   sx={{ mr: 1 }}
+                  aria-label="Настройки"
                 >
                   <SettingsIcon />
                 </IconButton>

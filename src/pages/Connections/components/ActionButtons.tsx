@@ -28,6 +28,7 @@ export function ConnectButton({
           color="error"
           onClick={() => onDisconnect(connection.id)}
           disabled={disconnectingId === connection.id}
+          aria-label="Отключить"
         >
           {disconnectingId === connection.id ? (
             <CircularProgress size={18} color="inherit" />
@@ -49,6 +50,7 @@ export function ConnectButton({
             connection.status === "connecting" ||
             connectingId === connection.id
           }
+          aria-label="Подключить"
         >
           {connectingId === connection.id ? (
             <CircularProgress size={18} color="inherit" />
@@ -100,6 +102,7 @@ export function ActionButtons({
             size="small"
             onClick={() => onEdit(connection)}
             disabled={busy}
+            aria-label="Редактировать"
           >
             <Edit fontSize="small" />
           </IconButton>
@@ -112,6 +115,7 @@ export function ActionButtons({
             color="error"
             onClick={() => onDelete(connection.id)}
             disabled={busy}
+            aria-label="Удалить"
           >
             {deletingId === connection.id ? (
               <CircularProgress size={18} color="inherit" />
@@ -127,6 +131,7 @@ export function ActionButtons({
             size="small"
             color="default"
             disabled={busy}
+            aria-label="Скопировать ID подключения"
             onClick={async () => {
               await navigator.clipboard.write([
                 new ClipboardItem({

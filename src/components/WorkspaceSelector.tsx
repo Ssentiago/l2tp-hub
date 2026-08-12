@@ -128,6 +128,7 @@ export function WorkspaceSelector({ activeId, onSwitch, onChange }: Props) {
                 <Tooltip title="Переименовать">
                   <IconButton
                     size="small"
+                    aria-label="Переименовать пространство"
                     onClick={(e) => {
                       e.stopPropagation();
                       setEditId(ws.id);
@@ -142,6 +143,7 @@ export function WorkspaceSelector({ activeId, onSwitch, onChange }: Props) {
                   <Tooltip title="Удалить">
                     <IconButton
                       size="small"
+                      aria-label="Удалить пространство"
                       onClick={(e) => {
                         e.stopPropagation();
                         setDeleteId(ws.id);
@@ -159,7 +161,7 @@ export function WorkspaceSelector({ activeId, onSwitch, onChange }: Props) {
         ))}
       </Tabs>
       <Tooltip title="Новое пространство">
-        <IconButton size="small" onClick={() => setCreateOpen(true)} disabled={submitting}>
+        <IconButton size="small" onClick={() => setCreateOpen(true)} disabled={submitting} aria-label="Новое пространство">
           <Add fontSize="small" />
         </IconButton>
       </Tooltip>
