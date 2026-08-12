@@ -5,7 +5,7 @@ import {
 } from "../../../typing/definitions.ts";
 import { getDisplayTitle } from "../../../core/display";
 import React, { useCallback } from "react";
-import { Box, Chip, TableCell, TableRow, Typography } from "@mui/material";
+import { Box, Chip, LinearProgress, TableCell, TableRow, Typography } from "@mui/material";
 import { ActionButtons } from "./ActionButtons.tsx";
 
 const STATUS_COLOR: Record<
@@ -89,6 +89,9 @@ export interface ConnectionRowProps {
   onEdit: (c: Connection) => void;
   onDelete: (id: string) => void;
   hideCompanyLabel?: boolean;
+  connectingId: string | null;
+  disconnectingId: string | null;
+  deletingId: string | null;
 }
 
 export function ConnectionRow({
@@ -98,8 +101,15 @@ export function ConnectionRow({
                                 onDisconnect,
                                 onEdit,
                                 onDelete,
-                                hideCompanyLabel = false
+                                hideCompanyLabel = false,
+                                connectingId,
+                                disconnectingId,
+                                deletingId
                               }: ConnectionRowProps) {
+  const isBusy =
+    connectingId === c.id ||
+    disconnectingId === c.id ||
+    deletingId === c.id;
   const onDoubleClick = useCallback(
     (e: React.MouseEvent) => {
       if ((e.target as HTMLElement).closest("button")) return;
@@ -120,8 +130,26 @@ export function ConnectionRow({
   );
 
   return (
-    <TableRow hover onDoubleClick={onDoubleClick}>
-      <TableCell>
+    <TableRow
+      hover
+      onDoubleClick={onDoubleClick}
+      sx={{
+        opacity: isBusy ? 0.6 : 1,
+        transition: "opacity 0.2s",
+      }}
+    >
+      <TableCell sx={{ position: "relative" }}>
+        {isBusy && (
+          <LinearProgress
+            sx={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 2,
+            }}
+          />
+        )}
         <Typography variant="body2" sx={{ fontWeight: 500 }}>
           {getDisplayTitle(c)}
         </Typography>
@@ -148,6 +176,9 @@ export function ConnectionRow({
             onDisconnect={onDisconnect}
             onEdit={onEdit}
             onDelete={onDelete}
+            connectingId={connectingId}
+            disconnectingId={disconnectingId}
+            deletingId={deletingId}
           />
         </Box>
       </TableCell>

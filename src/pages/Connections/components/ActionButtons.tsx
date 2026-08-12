@@ -2,7 +2,7 @@ import {
   Connection,
   ConnectionWithStatus,
 } from "../../../typing/definitions.ts";
-import { IconButton, Tooltip } from "@mui/material";
+import { IconButton, Tooltip, CircularProgress } from "@mui/material";
 import { Delete, Edit, Info, PlayArrow, Stop } from "@mui/icons-material";
 import React from "react";
 import toast from "react-hot-toast";
@@ -11,10 +11,14 @@ export function ConnectButton({
   connection,
   onConnect,
   onDisconnect,
+  connectingId,
+  disconnectingId,
 }: {
   connection: ConnectionWithStatus;
   onConnect: (id: string) => void;
   onDisconnect: (id: string) => void;
+  connectingId: string | null;
+  disconnectingId: string | null;
 }) {
   if (connection.status === "connected") {
     return (
@@ -23,8 +27,13 @@ export function ConnectButton({
           size="small"
           color="error"
           onClick={() => onDisconnect(connection.id)}
+          disabled={disconnectingId === connection.id}
         >
-          <Stop fontSize="small" />
+          {disconnectingId === connection.id ? (
+            <CircularProgress size={18} color="inherit" />
+          ) : (
+            <Stop fontSize="small" />
+          )}
         </IconButton>
       </Tooltip>
     );
@@ -36,9 +45,16 @@ export function ConnectButton({
           size="small"
           color="success"
           onClick={() => onConnect(connection.id)}
-          disabled={connection.status === "connecting"}
+          disabled={
+            connection.status === "connecting" ||
+            connectingId === connection.id
+          }
         >
-          <PlayArrow fontSize="small" />
+          {connectingId === connection.id ? (
+            <CircularProgress size={18} color="inherit" />
+          ) : (
+            <PlayArrow fontSize="small" />
+          )}
         </IconButton>
       </span>
     </Tooltip>
@@ -51,20 +67,32 @@ export function ActionButtons({
   onDisconnect,
   onEdit,
   onDelete,
+  connectingId,
+  disconnectingId,
+  deletingId,
 }: {
   connection: ConnectionWithStatus;
   onConnect: (id: string) => void;
   onDisconnect: (id: string) => void;
   onEdit: (c: Connection) => void;
   onDelete: (id: string) => void;
+  connectingId: string | null;
+  disconnectingId: string | null;
+  deletingId: string | null;
 }) {
-  const busy = ["connected", "connecting"].includes(connection.status);
+  const busy =
+    ["connected", "connecting"].includes(connection.status) ||
+    connectingId === connection.id ||
+    disconnectingId === connection.id ||
+    deletingId === connection.id;
   return (
     <>
       <ConnectButton
         connection={connection}
         onConnect={onConnect}
         onDisconnect={onDisconnect}
+        connectingId={connectingId}
+        disconnectingId={disconnectingId}
       />
       <Tooltip title="Редактировать">
         <span>
@@ -85,7 +113,11 @@ export function ActionButtons({
             onClick={() => onDelete(connection.id)}
             disabled={busy}
           >
-            <Delete fontSize="small" />
+            {deletingId === connection.id ? (
+              <CircularProgress size={18} color="inherit" />
+            ) : (
+              <Delete fontSize="small" />
+            )}
           </IconButton>
         </span>
       </Tooltip>

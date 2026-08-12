@@ -11,6 +11,7 @@ import {
   DialogActions,
   Button,
   TextField,
+  CircularProgress,
 } from "@mui/material";
 import { Add, Edit, Delete } from "@mui/icons-material";
 import toast from "react-hot-toast";
@@ -30,6 +31,7 @@ export function WorkspaceSelector({ activeId, onSwitch, onChange }: Props) {
   const [editId, setEditId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const load = async () => {
     setWorkspaces(await api.workspaces.list());
@@ -41,6 +43,7 @@ export function WorkspaceSelector({ activeId, onSwitch, onChange }: Props) {
 
   const handleCreate = async () => {
     if (!newName.trim()) return;
+    setSubmitting(true);
     try {
       const ws = await api.workspaces.create(newName.trim());
       setNewName("");
@@ -52,11 +55,14 @@ export function WorkspaceSelector({ activeId, onSwitch, onChange }: Props) {
     } catch (e) {
       console.error("[handleCreate] ERROR:", e);
       toast.error(`Ошибка создания пространства: ${String(e)}`);
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleRename = async () => {
     if (!editId || !editName.trim()) return;
+    setSubmitting(true);
     try {
       await api.workspaces.rename(editId, editName.trim());
       setEditId(null);
@@ -65,11 +71,14 @@ export function WorkspaceSelector({ activeId, onSwitch, onChange }: Props) {
     } catch (e) {
       console.error("[handleRename] ERROR:", e);
       toast.error(`Ошибка переименования: ${String(e)}`);
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleDelete = async () => {
     if (!deleteId) return;
+    setSubmitting(true);
     try {
       await api.workspaces.delete(deleteId);
       setDeleteId(null);
@@ -78,10 +87,13 @@ export function WorkspaceSelector({ activeId, onSwitch, onChange }: Props) {
     } catch (e) {
       console.error("[handleDelete] ERROR:", e);
       toast.error(`Ошибка удаления пространства: ${String(e)}`);
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleSwitch = async (id: string) => {
+    setSubmitting(true);
     try {
       await api.workspaces.switch(id);
       onSwitch(id);
@@ -89,6 +101,8 @@ export function WorkspaceSelector({ activeId, onSwitch, onChange }: Props) {
     } catch (e) {
       console.error("[handleSwitch] ERROR:", e);
       toast.error(`Ошибка переключения пространства: ${String(e)}`);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -99,7 +113,11 @@ export function WorkspaceSelector({ activeId, onSwitch, onChange }: Props) {
       <Tabs
         value={activeIdx >= 0 ? activeIdx : 0}
         onChange={(_, v) => handleSwitch(workspaces[v].id)}
-        sx={{ minHeight: 36 }}
+        sx={{
+          minHeight: 36,
+          pointerEvents: submitting ? "none" : "auto",
+          opacity: submitting ? 0.5 : 1,
+        }}
       >
         {workspaces.map((ws) => (
           <Tab
@@ -141,10 +159,11 @@ export function WorkspaceSelector({ activeId, onSwitch, onChange }: Props) {
         ))}
       </Tabs>
       <Tooltip title="Новое пространство">
-        <IconButton size="small" onClick={() => setCreateOpen(true)}>
+        <IconButton size="small" onClick={() => setCreateOpen(true)} disabled={submitting}>
           <Add fontSize="small" />
         </IconButton>
       </Tooltip>
+      {submitting && <CircularProgress size={16} sx={{ ml: 1 }} />}
 
       <Dialog open={createOpen} onClose={() => setCreateOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle>Новое пространство</DialogTitle>
@@ -161,8 +180,8 @@ export function WorkspaceSelector({ activeId, onSwitch, onChange }: Props) {
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setCreateOpen(false)}>Отмена</Button>
-          <Button variant="contained" onClick={handleCreate} disabled={!newName.trim()}>
+          <Button onClick={() => setCreateOpen(false)} disabled={submitting}>Отмена</Button>
+          <Button variant="contained" onClick={handleCreate} disabled={!newName.trim() || submitting}>
             Создать
           </Button>
         </DialogActions>
@@ -183,8 +202,8 @@ export function WorkspaceSelector({ activeId, onSwitch, onChange }: Props) {
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setEditId(null)}>Отмена</Button>
-          <Button variant="contained" onClick={handleRename} disabled={!editName.trim()}>
+          <Button onClick={() => setEditId(null)} disabled={submitting}>Отмена</Button>
+          <Button variant="contained" onClick={handleRename} disabled={!editName.trim() || submitting}>
             Сохранить
           </Button>
         </DialogActions>
@@ -196,8 +215,8 @@ export function WorkspaceSelector({ activeId, onSwitch, onChange }: Props) {
           Все подключения внутри будут удалены без возможности восстановления.
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteId(null)}>Отмена</Button>
-          <Button color="error" variant="contained" onClick={handleDelete}>
+          <Button onClick={() => setDeleteId(null)} disabled={submitting}>Отмена</Button>
+          <Button color="error" variant="contained" onClick={handleDelete} disabled={submitting}>
             Удалить
           </Button>
         </DialogActions>

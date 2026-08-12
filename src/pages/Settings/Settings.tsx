@@ -31,6 +31,7 @@ import {
 import { api } from "../../core/api";
 import type { UpdateInfo } from "../../core/api";
 import { Label } from "../../typing/definitions";
+import toast from "react-hot-toast";
 
 interface Props {
   labels: Label[];
@@ -41,6 +42,7 @@ export function Settings({ labels, onLabelsChange }: Props) {
   const [newName, setNewName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
+  const [labelsSubmitting, setLabelsSubmitting] = useState(false);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<"export" | "import">("export");
@@ -63,22 +65,43 @@ export function Settings({ labels, onLabelsChange }: Props) {
 
   const handleAdd = async () => {
     if (!newName.trim()) return;
-    const id = newName.trim().toLowerCase().replace(/\s+/g, "_");
-    await api.labels.save(id, newName.trim());
-    setNewName("");
-    onLabelsChange();
+    setLabelsSubmitting(true);
+    try {
+      const id = newName.trim().toLowerCase().replace(/\s+/g, "_");
+      await api.labels.save(id, newName.trim());
+      setNewName("");
+      onLabelsChange();
+    } catch (e) {
+      console.error("[handleAdd label] ERROR:", e);
+    } finally {
+      setLabelsSubmitting(false);
+    }
   };
 
   const handleRename = async (id: string) => {
     if (!editingName.trim()) return;
-    await api.labels.save(id, editingName.trim());
-    setEditingId(null);
-    onLabelsChange();
+    setLabelsSubmitting(true);
+    try {
+      await api.labels.save(id, editingName.trim());
+      setEditingId(null);
+      onLabelsChange();
+    } catch (e) {
+      console.error("[handleRename label] ERROR:", e);
+    } finally {
+      setLabelsSubmitting(false);
+    }
   };
 
   const handleDelete = async (id: string) => {
-    await api.labels.delete(id);
-    onLabelsChange();
+    setLabelsSubmitting(true);
+    try {
+      await api.labels.delete(id);
+      onLabelsChange();
+    } catch (e) {
+      console.error("[handleDelete label] ERROR:", e);
+    } finally {
+      setLabelsSubmitting(false);
+    }
   };
 
   const openDialog = (mode: "export" | "import") => {
@@ -209,6 +232,9 @@ export function Settings({ labels, onLabelsChange }: Props) {
         <Typography variant="overline" color="text.secondary">
           Метки
         </Typography>
+        {labelsSubmitting && (
+          <CircularProgress size={14} sx={{ ml: 1, verticalAlign: "middle" }} />
+        )}
         <Typography
           variant="caption"
           color="text.secondary"
@@ -233,7 +259,7 @@ export function Settings({ labels, onLabelsChange }: Props) {
                       <IconButton
                         size="small"
                         color="error"
-                        disabled={label.built_in}
+                        disabled={label.built_in || labelsSubmitting}
                         onClick={() => handleDelete(label.id)}
                       >
                         {label.built_in ? (
@@ -251,6 +277,7 @@ export function Settings({ labels, onLabelsChange }: Props) {
                     size="small"
                     autoFocus
                     value={editingName}
+                    disabled={labelsSubmitting}
                     onChange={(e) => setEditingName(e.target.value)}
                     onBlur={() => handleRename(label.id)}
                     onKeyDown={(e) => {
@@ -322,6 +349,7 @@ export function Settings({ labels, onLabelsChange }: Props) {
             size="small"
             placeholder="Название новой метки"
             value={newName}
+            disabled={labelsSubmitting}
             onChange={(e) => setNewName(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleAdd()}
             sx={{ flex: 1 }}
@@ -330,7 +358,7 @@ export function Settings({ labels, onLabelsChange }: Props) {
             variant="outlined"
             startIcon={<Add />}
             onClick={handleAdd}
-            disabled={!newName.trim()}
+            disabled={!newName.trim() || labelsSubmitting}
           >
             Добавить
           </Button>

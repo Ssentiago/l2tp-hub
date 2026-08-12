@@ -32,6 +32,9 @@ export function Connections({ labels, onEdit }: Props) {
   const [loading, setLoading] = useState(true);
   const [sudoReady, setSudoReady] = useState(false);
   const [showSudoModal, setShowSudoModal] = useState(false);
+  const [connectingId, setConnectingId] = useState<string | null>(null);
+  const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const connectionsRef = useRef<ConnectionWithStatus[]>([]);
   connectionsRef.current = connections;
@@ -89,44 +92,78 @@ export function Connections({ labels, onEdit }: Props) {
     setConnections((prev) =>
       prev.map((c) => (c.id === id ? { ...c, status: "connecting" } : c)),
     );
+    setConnectingId(id);
+
     try {
       console.log("[handleConnect] calling api.vpn.connect");
       await api.vpn.connect(id);
       console.log("[handleConnect] api.vpn.connect resolved OK");
     } catch (e) {
       console.error("[handleConnect] api.vpn.connect ERROR:", e);
-    } finally {
-      console.log("[handleConnect] finally: calling getStatus");
+      toast.error(`Ошибка подключения: ${String(e)}`);
+      setConnectingId(null);
+      setConnections((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, status: "unknown" } : c)),
+      );
+      return;
+    }
+
+    // Poll until connected or timeout — keep loading state active
+    for (let i = 0; i < 20; i++) {
+      await new Promise((r) => setTimeout(r, 500));
       const status = await api.vpn
         .getStatus(id)
         .catch(() => "unknown" as const);
-      console.log("[handleConnect] finally: status=", status);
       setConnections((prev) =>
         prev.map((c) => (c.id === id ? { ...c, status } : c)),
       );
+      if (status === "connected" || status !== "connecting") {
+        setConnectingId(null);
+        return;
+      }
     }
+    // Timeout after 10s — still clear loading state
+    setConnectingId(null);
   };
 
   const handleDisconnect = async (id: string) => {
+    const prevStatus = connectionsRef.current.find((c) => c.id === id)?.status;
     setConnections((prev) =>
       prev.map((c) => (c.id === id ? { ...c, status: "disconnected" } : c)),
     );
+    setDisconnectingId(id);
+
     try {
       await api.vpn.disconnect(id);
-    } finally {
-      await new Promise((r) => setTimeout(r, 2000));
-      const status = await api.vpn
-        .getStatus(id)
-        .catch(() => "unknown" as const);
+    } catch (e) {
+      console.error("[handleDisconnect] ERROR:", e);
+      toast.error(`Ошибка отключения: ${String(e)}`);
+      setDisconnectingId(null);
       setConnections((prev) =>
-        prev.map((c) => (c.id === id ? { ...c, status } : c)),
+        prev.map((c) => (c.id === id ? { ...c, status: prevStatus ?? "unknown" } : c)),
       );
+      return;
     }
+
+    // Wait 2s then poll for final status
+    await new Promise((r) => setTimeout(r, 2000));
+    const status = await api.vpn
+      .getStatus(id)
+      .catch(() => "unknown" as const);
+    setConnections((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, status } : c)),
+    );
+    setDisconnectingId(null);
   };
 
   const handleDelete = async (id: string) => {
-    await api.connections.delete(id);
-    setConnections((prev) => prev.filter((c) => c.id !== id));
+    try {
+      setDeletingId(id);
+      await api.connections.delete(id);
+      setConnections((prev) => prev.filter((c) => c.id !== id));
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const handleSudoAuth = async (password: string) => {
@@ -197,6 +234,9 @@ export function Connections({ labels, onEdit }: Props) {
           onDisconnect={handleDisconnect}
           onEdit={onEdit}
           onDelete={handleDelete}
+          connectingId={connectingId}
+          disconnectingId={disconnectingId}
+          deletingId={deletingId}
         />
       )}
     </>

@@ -72,6 +72,9 @@ interface ConnectionListProps {
   onDisconnect: (id: string) => void;
   onEdit: (c: Connection) => void;
   onDelete: (id: string) => void;
+  connectingId: string | null;
+  disconnectingId: string | null;
+  deletingId: string | null;
 }
 
 
@@ -97,6 +100,9 @@ export function ConnectionList({
                                  loading,
                                  filter,
                                  onFilterChange,
+                                 connectingId,
+                                 disconnectingId,
+                                 deletingId,
                                  ...props
                                }: ConnectionListProps) {
   const { request: requestDelete, dialog: deleteDialog } = useDeleteConfirm(
@@ -120,7 +126,10 @@ export function ConnectionList({
     onConnect: props.onConnect,
     onDisconnect: props.onDisconnect,
     onEdit: props.onEdit,
-    onDelete: requestDelete
+    onDelete: requestDelete,
+    connectingId,
+    disconnectingId,
+    deletingId,
   };
 
   return (
