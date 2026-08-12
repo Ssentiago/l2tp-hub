@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Box, Button, Paper, TextField, Typography } from "@mui/material";
 import { api } from "../../core/api";
 import { Connection, ConnectionPayload, Label } from "../../typing/definitions";
+import toast from "react-hot-toast";
 
 interface ConnectionFormProps {
   initialConnection: Connection | null;
@@ -43,6 +44,9 @@ export function ConnectionForm({
     try {
       await api.connections.save(formData);
       onSave();
+    } catch (e) {
+      console.error("[save] ERROR:", e);
+      toast.error(`Ошибка сохранения: ${String(e)}`);
     } finally {
       setSaving(false);
     }

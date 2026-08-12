@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Box, CircularProgress } from "@mui/material";
+import toast from "react-hot-toast";
 import { api } from "../../core/api";
 import { ConnectionList } from "./components/ConnectionList";
 import { SudoModal } from "./components/SudoModal";

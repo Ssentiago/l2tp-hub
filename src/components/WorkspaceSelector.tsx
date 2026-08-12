@@ -13,6 +13,7 @@ import {
   TextField,
 } from "@mui/material";
 import { Add, Edit, Delete } from "@mui/icons-material";
+import toast from "react-hot-toast";
 import { api } from "../core/api";
 import type { WorkspaceInfo } from "../typing/definitions";
 
@@ -40,35 +41,55 @@ export function WorkspaceSelector({ activeId, onSwitch, onChange }: Props) {
 
   const handleCreate = async () => {
     if (!newName.trim()) return;
-    const ws = await api.workspaces.create(newName.trim());
-    setNewName("");
-    setCreateOpen(false);
-    await api.workspaces.switch(ws.id);
-    onSwitch(ws.id);
-    onChange();
-    load();
+    try {
+      const ws = await api.workspaces.create(newName.trim());
+      setNewName("");
+      setCreateOpen(false);
+      await api.workspaces.switch(ws.id);
+      onSwitch(ws.id);
+      onChange();
+      load();
+    } catch (e) {
+      console.error("[handleCreate] ERROR:", e);
+      toast.error(`Ошибка создания пространства: ${String(e)}`);
+    }
   };
 
   const handleRename = async () => {
     if (!editId || !editName.trim()) return;
-    await api.workspaces.rename(editId, editName.trim());
-    setEditId(null);
-    onChange();
-    load();
+    try {
+      await api.workspaces.rename(editId, editName.trim());
+      setEditId(null);
+      onChange();
+      load();
+    } catch (e) {
+      console.error("[handleRename] ERROR:", e);
+      toast.error(`Ошибка переименования: ${String(e)}`);
+    }
   };
 
   const handleDelete = async () => {
     if (!deleteId) return;
-    await api.workspaces.delete(deleteId);
-    setDeleteId(null);
-    onChange();
-    load();
+    try {
+      await api.workspaces.delete(deleteId);
+      setDeleteId(null);
+      onChange();
+      load();
+    } catch (e) {
+      console.error("[handleDelete] ERROR:", e);
+      toast.error(`Ошибка удаления пространства: ${String(e)}`);
+    }
   };
 
   const handleSwitch = async (id: string) => {
-    await api.workspaces.switch(id);
-    onSwitch(id);
-    onChange();
+    try {
+      await api.workspaces.switch(id);
+      onSwitch(id);
+      onChange();
+    } catch (e) {
+      console.error("[handleSwitch] ERROR:", e);
+      toast.error(`Ошибка переключения пространства: ${String(e)}`);
+    }
   };
 
   const activeIdx = workspaces.findIndex((w) => w.id === activeId);
