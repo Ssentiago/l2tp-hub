@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Connection {
     pub id: String,
     pub name: String,
@@ -12,6 +12,14 @@ pub struct Connection {
     pub shared_secret_key: String,
     pub service_hash: Option<String>,
     pub labels: std::collections::HashMap<String, String>,
+    #[serde(default)]
+    pub connect_count: u32,
+    #[serde(default)]
+    pub connected_since: Option<i64>,
+    #[serde(default)]
+    pub last_connected_at: Option<i64>,
+    #[serde(default)]
+    pub last_disconnected_at: Option<i64>,
 }
 
 impl Connection {

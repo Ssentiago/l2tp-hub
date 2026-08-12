@@ -52,8 +52,8 @@ pub async fn save_connection(
             username: input.username,
             keychain_key,
             shared_secret_key,
-            service_hash: None,
             labels: input.labels,
+            ..Default::default()
         };
 
         let ws = store.active_workspace_mut();

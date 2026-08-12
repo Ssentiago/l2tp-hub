@@ -4,7 +4,7 @@ import {
   Label
 } from "../../../typing/definitions.ts";
 import { getDisplayTitle } from "../../../core/display";
-import React, { useCallback } from "react";
+import React, { useCallback, useState, useEffect, useRef } from "react";
 import { Box, Chip, LinearProgress, TableCell, TableRow, Typography } from "@mui/material";
 import { ActionButtons } from "./ActionButtons.tsx";
 
@@ -112,6 +112,31 @@ export function ConnectionRow({
     connectingId === c.id ||
     disconnectingId === c.id ||
     deletingId === c.id;
+  const [uptime, setUptime] = useState("");
+  const fallbackSince = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (c.status !== "connected") {
+      setUptime("");
+      fallbackSince.current = null;
+      return;
+    }
+    if (!c.connected_since && fallbackSince.current === null) {
+      fallbackSince.current = Math.floor(Date.now() / 1000);
+    }
+    const since = c.connected_since ?? fallbackSince.current!;
+    const update = () => {
+      const diff = Math.floor(Date.now() / 1000) - since;
+      const h = Math.floor(diff / 3600);
+      const m = Math.floor((diff % 3600) / 60);
+      const s = diff % 60;
+      setUptime(h > 0 ? `${h}ч ${m}м` : `${m}м ${s}с`);
+    };
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [c.status, c.connected_since]);
+
   const onDoubleClick = useCallback(
     (e: React.MouseEvent) => {
       if ((e.target as HTMLElement).closest("button")) return;
@@ -155,8 +180,28 @@ export function ConnectionRow({
         <Typography variant="body2" sx={{ fontWeight: 500, userSelect: "text" }}>
           {getDisplayTitle(c)}
         </Typography>
-        <Typography variant="caption" color="text.secondary" sx={{ userSelect: "text" }}>
+        <Typography variant="caption" color="text.secondary" sx={{ userSelect: "text", whiteSpace: "nowrap" }}>
           {c.server}
+          {uptime && (
+            <Typography component="span" variant="caption" color="text.disabled" sx={{ fontSize: 10, ml: 0.5 }}>
+              · ↑ {uptime}
+            </Typography>
+          )}
+          {!uptime && c.last_connected_at && (
+            <Typography component="span" variant="caption" color="text.disabled" sx={{ fontSize: 10, ml: 0.5 }}>
+              · последний раз: {new Date(c.last_connected_at * 1000).toLocaleString("ru-RU", {
+                day: "numeric",
+                month: "short",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </Typography>
+          )}
+          {c.connect_count > 0 && (
+            <Typography component="span" variant="caption" color="text.disabled" sx={{ fontSize: 10 }}>
+              · {c.connect_count} подключ.
+            </Typography>
+          )}
         </Typography>
       </TableCell>
       <TableCell sx={{ width: 150, whiteSpace: "nowrap" }}>

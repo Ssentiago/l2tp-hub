@@ -19,6 +19,10 @@ export interface Connection {
   send_all_traffic: boolean;
   service_hash: string | null;
   labels: Record<LabelID, LabelValue>;
+  connect_count: number;
+  connected_since: number | null;
+  last_connected_at: number | null;
+  last_disconnected_at: number | null;
 }
 
 export type VpnStatus = "connected" | "connecting" | "disconnected" | "unknown";

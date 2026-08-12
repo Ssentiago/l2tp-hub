@@ -145,8 +145,8 @@ pub fn restore_backup(
             username: exp.username,
             keychain_key,
             shared_secret_key,
-            service_hash: None,
             labels: exp.labels,
+            ..Default::default()
         });
     }
 
