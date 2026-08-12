@@ -41,7 +41,16 @@ pub fn create_tray(app: &AppHandle) -> Result<TrayIcon, Box<dyn std::error::Erro
                     let store = store::load(app.config());
                     if let Some(conn) = find_connection(&store, &conn_id) {
                         match l2tp::disconnect_vpn(&conn.name) {
-                            Ok(()) => log!("[tray] disconnected {}", conn.server),
+                            Ok(()) => {
+                                log!("[tray] disconnected {}", conn.server);
+                                let _ = app.emit(
+                                    "vpn:status-changed",
+                                    VpnStatusPayload {
+                                        id: conn_id.clone(),
+                                        status: VpnStatus::Disconnected,
+                                    },
+                                );
+                            }
                             Err(e) => log!("[tray] disconnect error: {}", e),
                         }
                         let _ = refresh_tray(app);
@@ -234,7 +243,16 @@ fn handle_tray_connect(app: &AppHandle, id: &str) {
 
     if status == VpnStatus::Connected || status == VpnStatus::Connecting {
         match l2tp::disconnect_vpn(&conn.name) {
-            Ok(()) => log!("[tray] disconnected {}", conn.server),
+            Ok(()) => {
+                log!("[tray] disconnected {}", conn.server);
+                let _ = app.emit(
+                    "vpn:status-changed",
+                    VpnStatusPayload {
+                        id: id.to_string(),
+                        status: VpnStatus::Disconnected,
+                    },
+                );
+            }
             Err(e) => log!("[tray] disconnect error: {}", e),
         }
     } else {
@@ -243,6 +261,14 @@ fn handle_tray_connect(app: &AppHandle, id: &str) {
             let sudo = app.state::<SudoSession>();
             if let Err(e) = connect_vpn_macos(app, id, &sudo) {
                 log!("[tray] connect failed: {}", e);
+            } else {
+                let _ = app.emit(
+                    "vpn:status-changed",
+                    VpnStatusPayload {
+                        id: id.to_string(),
+                        status: VpnStatus::Connecting,
+                    },
+                );
             }
         }
 
@@ -250,6 +276,14 @@ fn handle_tray_connect(app: &AppHandle, id: &str) {
         {
             if let Err(e) = connect_vpn_windows(app, id) {
                 log!("[tray] connect failed: {}", e);
+            } else {
+                let _ = app.emit(
+                    "vpn:status-changed",
+                    VpnStatusPayload {
+                        id: id.to_string(),
+                        status: VpnStatus::Connecting,
+                    },
+                );
             }
         }
     }
