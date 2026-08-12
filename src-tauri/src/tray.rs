@@ -6,7 +6,7 @@ use crate::sudo::SudoSession;
 use crate::{keychain, log, store};
 use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
 use tauri::tray::{TrayIcon, TrayIconBuilder};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 use std::collections::HashMap;
 
 pub fn create_tray(app: &AppHandle) -> Result<TrayIcon, Box<dyn std::error::Error>> {
@@ -350,6 +350,12 @@ pub fn refresh_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[derive(Clone, serde::Serialize)]
+struct VpnStatusPayload {
+    id: String,
+    status: VpnStatus,
+}
+
 fn start_status_poller(app: &AppHandle) {
     let tray_state = app.state::<crate::state::TrayState>();
     let mut running = tray_state.poller_running.lock().unwrap();
@@ -375,6 +381,13 @@ fn start_status_poller(app: &AppHandle) {
                     let prev = prev_statuses.get(&conn.id).copied();
                     if prev != Some(status) {
                         changed = true;
+                        let _ = app.emit(
+                            "vpn:status-changed",
+                            VpnStatusPayload {
+                                id: conn.id.clone(),
+                                status,
+                            },
+                        );
                     }
                     prev_statuses.insert(conn.id.clone(), status);
                 }

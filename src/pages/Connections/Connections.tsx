@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Box, CircularProgress } from "@mui/material";
 import toast from "react-hot-toast";
 import { api } from "../../core/api";
+import { listen } from "@tauri-apps/api/event";
 import { ConnectionList } from "./components/ConnectionList";
 import { SudoModal } from "./components/SudoModal";
 import type {
@@ -11,6 +12,7 @@ import type {
   SortDir,
   SortField,
   Label,
+  VpnStatus,
 } from "../../typing/definitions";
 
 const DEFAULT_FILTER: FilterState = {
@@ -51,20 +53,6 @@ export function Connections({ labels, onEdit }: Props) {
     setLoading(false);
   }, []);
 
-  const pollStatuses = useCallback(async () => {
-    const current = connectionsRef.current;
-    if (current.length === 0) return;
-    const updated = await Promise.all(
-      current.map(async (c) => {
-        return {
-          ...c,
-          status: await api.vpn.getStatus(c.id).catch(() => "unknown" as const),
-        };
-      }),
-    );
-    setConnections(updated);
-  }, []);
-
   useEffect(() => {
     loadConnections();
     api.sudo.checkSession().then((ready) => {
@@ -74,9 +62,19 @@ export function Connections({ labels, onEdit }: Props) {
   }, [loadConnections]);
 
   useEffect(() => {
-    const interval = setInterval(pollStatuses, 5000);
-    return () => clearInterval(interval);
-  }, [pollStatuses]);
+    const unlistenPromise = listen<{ id: string; status: VpnStatus }>(
+      "vpn:status-changed",
+      (event) => {
+        const { id, status } = event.payload;
+        setConnections((prev) =>
+          prev.map((c) => (c.id === id ? { ...c, status } : c)),
+        );
+      },
+    );
+    return () => {
+      unlistenPromise.then((fn) => fn());
+    };
+  }, []);
 
   const handleConnect = async (id: string) => {
     console.log("[handleConnect] called, id=", id, "sudoReady=", sudoReady);
