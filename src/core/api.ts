@@ -43,6 +43,8 @@ export const api = {
   },
   config: {
     import: (password: string) => invoke<boolean>("import", { password }),
+    importFile: (filePath: string, password: string) =>
+      invoke<boolean>("import_file", { filePath, password }),
     export: (password: string) => invoke<boolean>("export", { password }),
     reset: () => invoke<void>("reset"),
   },

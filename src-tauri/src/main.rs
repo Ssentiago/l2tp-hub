@@ -103,6 +103,7 @@ fn main() {
             commands::save_label,
             commands::delete_label,
             commands::import,
+            commands::import_file,
             commands::export,
             commands::reset,
             commands::check_update,

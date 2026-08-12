@@ -31,6 +31,7 @@ import {
 } from "@mui/icons-material";
 import { api } from "../../core/api";
 import type { UpdateInfo } from "../../core/api";
+import { open } from "@tauri-apps/plugin-dialog";
 import toast from "react-hot-toast";
 
 export function Settings() {
@@ -50,6 +51,7 @@ export function Settings() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [importFilePath, setImportFilePath] = useState<string | null>(null);
 
   const [resetOpen, setResetOpen] = useState(false);
   const [resetConfirmText, setResetConfirmText] = useState("");
@@ -109,6 +111,21 @@ export function Settings() {
     }
   };
 
+  const handleFileImport = async () => {
+    const selected = await open({
+      filters: [{ name: "L2TP Hub Config", extensions: ["conf"] }],
+      multiple: false,
+    });
+    if (selected && typeof selected === "string") {
+      setImportFilePath(selected);
+      setDialogMode("import");
+      setPassword("");
+      setError(null);
+      setSuccess(null);
+      setDialogOpen(true);
+    }
+  };
+
   const openDialog = (mode: "export" | "import") => {
     setDialogMode(mode);
     setPassword("");
@@ -128,11 +145,14 @@ export function Settings() {
           setDialogOpen(false);
         }
       } else {
-        const imported = await api.config.import(password);
-        if (imported) {
-          setSuccess("Конфигурация импортирована");
-          await loadLabels();
-          setDialogOpen(false);
+        if (importFilePath) {
+          const imported = await api.config.importFile(importFilePath, password);
+          if (imported) {
+            setSuccess("Конфигурация импортирована");
+            await loadLabels();
+            setImportFilePath(null);
+            setDialogOpen(false);
+          }
         }
       }
     } catch (e: any) {
@@ -225,7 +245,7 @@ export function Settings() {
           <Button
             variant="outlined"
             startIcon={<FileUpload />}
-            onClick={() => openDialog("import")}
+            onClick={handleFileImport}
             fullWidth
           >
             Импорт
@@ -448,6 +468,11 @@ export function Settings() {
               ? "Файл будет зашифрован этим паролем. Без него восстановление невозможно."
               : "Введите пароль, которым был зашифрован файл при экспорте."}
           </Typography>
+          {dialogMode === "import" && importFilePath && (
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              Файл: {importFilePath.split(/[/\\]/).pop()}
+            </Typography>
+          )}
           {error && (
             <Alert severity="error" sx={{ mb: 2 }}>
               {error}

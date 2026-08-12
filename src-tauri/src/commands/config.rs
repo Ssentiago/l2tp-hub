@@ -75,6 +75,56 @@ pub async fn import(password: String) -> Result<bool, String> {
 }
 
 #[tauri::command]
+pub async fn import_file(file_path: String, password: String) -> Result<bool, String> {
+    log!("[import_file] called with path={}", file_path);
+
+    let app = crate::state::get_state().app.clone();
+
+    let path_buf = std::path::PathBuf::from(&file_path);
+    let data = tokio::fs::read(&path_buf)
+        .await
+        .map_err(|e| format!("Ошибка чтения файла: {}", e))?;
+
+    tokio::task::spawn_blocking(move || {
+        let (connections, labels) = backup::restore_backup(&data, &password)?;
+        let mut store = store::load(app.config());
+
+        let ws = store.active_workspace_mut();
+        for imported_conn in connections {
+            if let Some(idx) = ws
+                .connections
+                .iter()
+                .position(|c| c.id == imported_conn.id)
+            {
+                ws.connections[idx] = imported_conn;
+            } else {
+                ws.connections.push(imported_conn);
+            }
+        }
+
+        for imported_label in labels {
+            if imported_label.built_in {
+                continue;
+            }
+            if let Some(idx) = store.labels.iter().position(|l| l.id == imported_label.id) {
+                store.labels[idx] = imported_label;
+            } else {
+                store.labels.push(imported_label);
+            }
+        }
+
+        store::save(&store)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+
+    let app_clone = crate::state::get_state().app.clone();
+    let _ = tray::refresh_tray(&app_clone);
+    log!("[import_file] done");
+    Ok(true)
+}
+
+#[tauri::command]
 pub async fn export(password: String) -> Result<bool, String> {
     log!("[export_config_dialog] called");
 
