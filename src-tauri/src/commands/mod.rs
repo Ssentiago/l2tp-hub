@@ -1,5 +1,6 @@
 pub mod config;
 pub mod connections;
+pub mod health;
 pub mod labels;
 pub mod sudo;
 pub mod system;
@@ -10,6 +11,7 @@ pub mod workspace;
 
 pub use config::*;
 pub use connections::*;
+pub use health::*;
 pub use labels::*;
 pub use sudo::*;
 pub use system::*;

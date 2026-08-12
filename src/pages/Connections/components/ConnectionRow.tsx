@@ -92,6 +92,7 @@ export interface ConnectionRowProps {
   connectingId: string | null;
   disconnectingId: string | null;
   deletingId: string | null;
+  anyActive: boolean;
 }
 
 export function ConnectionRow({
@@ -104,7 +105,8 @@ export function ConnectionRow({
                                 hideCompanyLabel = false,
                                 connectingId,
                                 disconnectingId,
-                                deletingId
+                                deletingId,
+                                anyActive
                               }: ConnectionRowProps) {
   const isBusy =
     connectingId === c.id ||
@@ -179,6 +181,7 @@ export function ConnectionRow({
             connectingId={connectingId}
             disconnectingId={disconnectingId}
             deletingId={deletingId}
+            anyActive={anyActive}
           />
         </Box>
       </TableCell>

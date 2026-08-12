@@ -201,6 +201,10 @@ export function Connections({ labels, onEdit }: Props) {
       );
     });
 
+  const anyActive = connections.some(
+    (c) => c.status === "connected" || c.status === "connecting",
+  );
+
   return (
     <>
       {showSudoModal && (
@@ -240,6 +244,7 @@ export function Connections({ labels, onEdit }: Props) {
           connectingId={connectingId}
           disconnectingId={disconnectingId}
           deletingId={deletingId}
+          anyActive={anyActive}
         />
       )}
     </>

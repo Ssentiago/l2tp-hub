@@ -24,6 +24,8 @@ export const api = {
     connect: (id: string) => invoke<void>("connect_vpn", { id }),
     disconnect: (id: string) => invoke<void>("disconnect_vpn", { id }),
     getStatus: (id: string) => invoke<VpnStatus>("get_vpn_status", { id }),
+    check: (id: string) =>
+      invoke<{ reachable: boolean }>("check_connection", { id }),
   },
   sudo: {
     authenticate: (password: string) =>

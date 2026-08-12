@@ -3,9 +3,10 @@ import {
   ConnectionWithStatus,
 } from "../../../typing/definitions.ts";
 import { IconButton, Tooltip, CircularProgress } from "@mui/material";
-import { Delete, Edit, Info, PlayArrow, Stop } from "@mui/icons-material";
+import { Delete, Edit, Info, NetworkCheck, PlayArrow, Stop } from "@mui/icons-material";
 import React from "react";
 import toast from "react-hot-toast";
+import { api } from "../../../core/api";
 
 export function ConnectButton({
   connection,
@@ -72,6 +73,7 @@ export function ActionButtons({
   connectingId,
   disconnectingId,
   deletingId,
+  anyActive,
 }: {
   connection: ConnectionWithStatus;
   onConnect: (id: string) => void;
@@ -81,6 +83,7 @@ export function ActionButtons({
   connectingId: string | null;
   disconnectingId: string | null;
   deletingId: string | null;
+  anyActive: boolean;
 }) {
   const busy =
     ["connected", "connecting"].includes(connection.status) ||
@@ -122,6 +125,35 @@ export function ActionButtons({
             ) : (
               <Delete fontSize="small" />
             )}
+          </IconButton>
+        </span>
+      </Tooltip>
+      <Tooltip
+        title={
+          anyActive
+            ? "Проверка недоступна во время активного VPN-подключения"
+            : "Проверить доступность сервера"
+        }
+      >
+        <span>
+          <IconButton
+            size="small"
+            color="default"
+            disabled={anyActive || busy}
+            onClick={async () => {
+              try {
+                const result = await api.vpn.check(connection.id);
+                if (result.reachable) {
+                  toast.success("Сервер доступен");
+                } else {
+                  toast.error("Сервер недоступен");
+                }
+              } catch (e) {
+                toast.error(String(e));
+              }
+            }}
+          >
+            <NetworkCheck fontSize="small" />
           </IconButton>
         </span>
       </Tooltip>

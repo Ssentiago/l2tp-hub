@@ -7,7 +7,6 @@ use tauri::Manager;
 
 pub mod backup;
 pub mod commands;
-
 pub mod keychain;
 pub mod l2tp;
 pub mod logger;
@@ -80,6 +79,7 @@ fn main() {
             commands::connect_vpn,
             commands::disconnect_vpn,
             commands::get_vpn_status,
+            commands::check_connection,
             commands::authenticate_sudo,
             commands::check_sudo_session,
             commands::get_labels,

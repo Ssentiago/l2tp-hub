@@ -80,6 +80,7 @@ interface ConnectionListProps {
   connectingId: string | null;
   disconnectingId: string | null;
   deletingId: string | null;
+  anyActive: boolean;
   groupBy: string;
   onGroupByChange: (labelId: string) => void;
 }
@@ -117,6 +118,7 @@ export function ConnectionList({
                                  connectingId,
                                  disconnectingId,
                                  deletingId,
+                                 anyActive,
                                  ...props
                                }: ConnectionListProps) {
   const { request: requestDelete, dialog: deleteDialog } = useDeleteConfirm(
@@ -166,6 +168,7 @@ export function ConnectionList({
     connectingId,
     disconnectingId,
     deletingId,
+    anyActive,
   };
 
   return (
