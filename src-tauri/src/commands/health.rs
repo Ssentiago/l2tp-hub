@@ -3,13 +3,67 @@ use crate::{l2tp, log, store};
 use rand::Rng;
 use std::io;
 use std::net::UdpSocket;
+use std::process::Command;
 use std::time::Duration;
 
 const IKE_SA_INIT_PAYLOAD: &[u8] = include_bytes!("../../../ike-sa-init-payload.bin");
 
 #[derive(serde::Serialize)]
 pub struct HealthResult {
-    pub reachable: bool,
+    pub ping: bool,
+    pub ipsec: bool,
+}
+
+fn icmp_ping(host: &str) -> bool {
+    let output = Command::new("ping")
+        .arg("-c")
+        .arg("1")
+        .arg("-W")
+        .arg("2000")
+        .arg(host)
+        .output();
+
+    match output {
+        Ok(o) => o.status.success(),
+        Err(_) => false,
+    }
+}
+
+fn ike_probe(server: &str) -> Result<bool, String> {
+    let addr = format!("{}:500", server);
+
+    let socket = UdpSocket::bind("0.0.0.0:0").map_err(|e| format!("Ошибка сокета: {}", e))?;
+    socket
+        .set_read_timeout(Some(Duration::from_secs(4)))
+        .map_err(|e| format!("Ошибка сокета: {}", e))?;
+    socket
+        .connect(&addr)
+        .map_err(|e| format!("Ошибка подключения: {}", e))?;
+
+    let mut packet = IKE_SA_INIT_PAYLOAD.to_vec();
+    let mut rng = rand::thread_rng();
+    rng.fill(&mut packet[0..8]);
+
+    log!("[health] IKE probe: sending {} bytes to {}", packet.len(), addr);
+
+    socket
+        .send(&packet)
+        .map_err(|e| format!("Ошибка отправки: {}", e))?;
+
+    let mut buf = [0u8; 1500];
+    match socket.recv(&mut buf) {
+        Ok(n) => {
+            log!("[health] IKE response: {} bytes from {}", n, addr);
+            Ok(true)
+        }
+        Err(ref e) if e.kind() == io::ErrorKind::WouldBlock
+            || e.kind() == io::ErrorKind::TimedOut =>
+        {
+            log!("[health] IKE timeout from {}", addr);
+            Ok(false)
+        }
+        Err(e) => Err(format!("Ошибка получения: {}", e)),
+    }
 }
 
 #[tauri::command]
@@ -38,49 +92,23 @@ pub async fn check_connection(app_handle: tauri::AppHandle, id: String) -> Resul
     }
 
     let server = conn.server.clone();
-    let app_clone = app_handle.clone();
 
     tokio::task::spawn_blocking(move || {
-        let addr = format!("{}:500", server);
+        let ping = icmp_ping(&server);
+        log!("[health] ICMP ping {}: {}", server, if ping { "OK" } else { "FAIL" });
 
-        let socket = UdpSocket::bind("0.0.0.0:0").map_err(|e| format!("Ошибка сокета: {}", e))?;
-        socket
-            .set_read_timeout(Some(Duration::from_secs(5)))
-            .map_err(|e| format!("Ошибка сокета: {}", e))?;
-        socket
-            .connect(&addr)
-            .map_err(|e| format!("Ошибка подключения: {}", e))?;
-
-        // Build packet: copy embedded payload, replace first 8 bytes with random cookie
-        let mut packet = IKE_SA_INIT_PAYLOAD.to_vec();
-        let mut rng = rand::thread_rng();
-        rng.fill(&mut packet[0..8]);
-
-        log!(
-            "[health] sending {} bytes to {}",
-            packet.len(),
-            addr
-        );
-
-        socket
-            .send(&packet)
-            .map_err(|e| format!("Ошибка отправки: {}", e))?;
-
-        // Wait for ANY ISAKMP response — even a notify message proves the server is alive
-        let mut buf = [0u8; 1500];
-        match socket.recv(&mut buf) {
-            Ok(n) => {
-                log!("[health] received {} bytes from {}", n, addr);
-                Ok(HealthResult { reachable: true })
+        let ipsec = match ike_probe(&server) {
+            Ok(result) => {
+                log!("[health] IKE probe {}: {}", server, if result { "OK" } else { "no response" });
+                result
             }
-            Err(ref e) if e.kind() == io::ErrorKind::WouldBlock
-                || e.kind() == io::ErrorKind::TimedOut =>
-            {
-                log!("[health] timeout from {}", addr);
-                Ok(HealthResult { reachable: false })
+            Err(e) => {
+                log!("[health] IKE probe error: {}", e);
+                false
             }
-            Err(e) => Err(format!("Ошибка получения: {}", e)),
-        }
+        };
+
+        Ok(HealthResult { ping, ipsec })
     })
     .await
     .map_err(|e| e.to_string())?

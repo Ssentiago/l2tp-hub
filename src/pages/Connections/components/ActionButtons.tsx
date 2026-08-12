@@ -143,10 +143,14 @@ export function ActionButtons({
             onClick={async () => {
               try {
                 const result = await api.vpn.check(connection.id);
-                if (result.reachable) {
-                  toast.success("Сервер доступен");
+                if (result.ping && result.ipsec) {
+                  toast.success("Сервер доступен, IPsec отвечает");
+                } else if (result.ping) {
+                  toast.success("Сервер доступен, IPsec не отвечает");
+                } else if (result.ipsec) {
+                  toast.success("IPsec отвечает, ICMP заблокирован");
                 } else {
-                  toast.error("Сервер недоступен");
+                  toast.error("Сервер не отвечает");
                 }
               } catch (e) {
                 toast.error(String(e));

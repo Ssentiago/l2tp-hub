@@ -25,7 +25,7 @@ export const api = {
     disconnect: (id: string) => invoke<void>("disconnect_vpn", { id }),
     getStatus: (id: string) => invoke<VpnStatus>("get_vpn_status", { id }),
     check: (id: string) =>
-      invoke<{ reachable: boolean }>("check_connection", { id }),
+      invoke<{ ping: boolean; ipsec: boolean }>("check_connection", { id }),
   },
   sudo: {
     authenticate: (password: string) =>
