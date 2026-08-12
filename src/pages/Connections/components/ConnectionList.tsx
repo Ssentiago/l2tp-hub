@@ -7,15 +7,19 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
+  FormControl,
+  InputLabel,
+  MenuItem,
   Paper,
-  Typography,
+  Select,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableRow,
   TableSortLabel,
-  TextField
+  TextField,
+  Typography
 } from "@mui/material";
 import {
   Connection,
@@ -25,7 +29,7 @@ import {
   SortDir,
   SortField
 } from "../../../typing/definitions";
-import { ConnectionRow, ConnectionRowProps } from "./ConnectionRow.tsx";
+import { ConnectionRow, STATUS_LABEL } from "./ConnectionRow.tsx";
 import { ChevronRight, ExpandMore } from "@mui/icons-material";
 
 function useDeleteConfirm(onDelete: (id: string) => void) {
@@ -61,6 +65,7 @@ function useDeleteConfirm(onDelete: (id: string) => void) {
 
 interface ConnectionListProps {
   connections: ConnectionWithStatus[];
+  allConnections: ConnectionWithStatus[];
   labels: Label[];
   loading: boolean;
   filter: FilterState;
@@ -96,6 +101,7 @@ function groupByCompany(connections: ConnectionWithStatus[], labels: Label[]) {
 
 export function ConnectionList({
                                  connections,
+                                 allConnections,
                                  labels,
                                  loading,
                                  filter,
@@ -113,6 +119,26 @@ export function ConnectionList({
     new Set()
   );
 
+  function collectLabelValues(
+    connections: ConnectionWithStatus[],
+    labels: Label[]
+  ): Map<string, string[]> {
+    const result = new Map<string, Set<string>>();
+    for (const label of labels) {
+      result.set(label.id, new Set());
+    }
+    for (const c of connections) {
+      for (const [id, value] of Object.entries(c.labels)) {
+        if (value && result.has(id)) {
+          result.get(id)!.add(value);
+        }
+      }
+    }
+    return new Map(
+      [...result.entries()].map(([id, set]) => [id, [...set].sort()])
+    );
+  }
+
   const toggleGroup = (company: string) => {
     setCollapsedGroups((prev) => {
       const next = new Set(prev);
@@ -120,6 +146,8 @@ export function ConnectionList({
       return next;
     });
   };
+
+  const labelValues = collectLabelValues(allConnections, labels);
 
   const rowProps = {
     labels,
@@ -136,7 +164,7 @@ export function ConnectionList({
     <Box>
       {deleteDialog}
 
-      <Box sx={{ display: "flex", gap: 2, mb: 2, alignItems: "center" }}>
+      <Box sx={{ mb: 2 }}>
         <TextField
           size="small"
           placeholder="Поиск..."
@@ -144,8 +172,58 @@ export function ConnectionList({
           onChange={(e) =>
             onFilterChange({ ...filter, search: e.target.value })
           }
-          sx={{ flex: 1 }}
+          fullWidth
+          sx={{ mb: 1 }}
         />
+        <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap", alignItems: "center" }}>
+          <FormControl size="small" sx={{ minWidth: 150 }}>
+            <InputLabel>Статус</InputLabel>
+            <Select
+              label="Статус"
+              value={filter.status}
+              onChange={(e) =>
+                onFilterChange({ ...filter, status: e.target.value })
+              }
+            >
+              <MenuItem value="all">Все</MenuItem>
+              {Object.entries(STATUS_LABEL).map(([value, label]) => (
+                <MenuItem key={value} value={value}>
+                  {label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          {labels.map((label) => {
+            const values = labelValues.get(label.id) ?? [];
+            if (values.length === 0) return null;
+            return (
+              <FormControl key={label.id} size="small" sx={{ minWidth: 140 }}>
+                <InputLabel>{label.name}</InputLabel>
+                <Select
+                  label={label.name}
+                  value={filter.labels[label.id] ?? ""}
+                  onChange={(e) =>
+                    onFilterChange({
+                      ...filter,
+                      labels: {
+                        ...filter.labels,
+                        [label.id]: e.target.value || "",
+                      },
+                    })
+                  }
+                >
+                  <MenuItem value="">Все</MenuItem>
+                  {values.map((v) => (
+                    <MenuItem key={v} value={v}>
+                      {v}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            );
+          })}
+        </Box>
       </Box>
 
       {

@@ -216,6 +216,7 @@ export function Connections({ labels, onEdit }: Props) {
       ) : (
         <ConnectionList
           connections={filtered}
+          allConnections={connections}
           labels={labels}
           loading={loading}
           filter={filter}
