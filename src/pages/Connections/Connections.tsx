@@ -1,13 +1,11 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Box, CircularProgress } from "@mui/material";
-import toast from "react-hot-toast";
-import { api } from "../../core/api";
 import { listen } from "@tauri-apps/api/event";
 import { ConnectionList } from "./components/ConnectionList";
 import { SudoModal } from "./components/SudoModal";
+import { useStore } from "../../store";
 import type {
   Connection,
-  ConnectionWithStatus,
   FilterState,
   SortDir,
   SortField,
@@ -27,49 +25,41 @@ interface Props {
 }
 
 export function Connections({ labels, onEdit }: Props) {
-  const [connections, setConnections] = useState<ConnectionWithStatus[]>([]);
+  const {
+    connections,
+    connectingId,
+    disconnectingId,
+    deletingId,
+    loadConnections,
+    connectVpn,
+    disconnectVpn,
+    deleteConnection,
+    sudoReady,
+    checkSudo,
+  } = useStore();
+
   const [filter, setFilter] = useState<FilterState>(DEFAULT_FILTER);
   const [sortField, setSortField] = useState<SortField>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [loading, setLoading] = useState(true);
-  const [sudoReady, setSudoReady] = useState(false);
   const [showSudoModal, setShowSudoModal] = useState(false);
-  const [connectingId, setConnectingId] = useState<string | null>(null);
-  const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [groupBy, setGroupBy] = useState<string>("company");
 
-  const connectionsRef = useRef<ConnectionWithStatus[]>([]);
-  connectionsRef.current = connections;
-
-  const loadConnections = useCallback(async () => {
-    const conns = await api.connections.getAll();
-    const withStatus = await Promise.all(
-      conns.map(async (c) => ({
-        ...c,
-        status: await api.vpn.getStatus(c.id).catch(() => "unknown" as const),
-      })),
-    );
-    setConnections(withStatus);
-    setLoading(false);
-  }, []);
-
   useEffect(() => {
-    loadConnections();
-    api.sudo.checkSession().then((ready) => {
-      setSudoReady(ready);
-      if (!ready) setShowSudoModal(true);
-    });
-  }, [loadConnections]);
+    loadConnections().then(() => setLoading(false));
+    checkSudo();
+  }, []);
 
   useEffect(() => {
     const unlistenPromise = listen<{ id: string; status: VpnStatus }>(
       "vpn:status-changed",
       (event) => {
         const { id, status } = event.payload;
-        setConnections((prev) =>
-          prev.map((c) => (c.id === id ? { ...c, status } : c)),
-        );
+        useStore.setState((s) => ({
+          connections: s.connections.map((c) =>
+            c.id === id ? { ...c, status } : c,
+          ),
+        }));
       },
     );
     return () => {
@@ -78,100 +68,26 @@ export function Connections({ labels, onEdit }: Props) {
   }, []);
 
   const handleConnect = async (id: string) => {
-    console.log("[handleConnect] called, id=", id, "sudoReady=", sudoReady);
     if (!sudoReady) {
       setShowSudoModal(true);
       return;
     }
-
-    const current = connectionsRef.current.find((c) => c.id === id);
-    if (current?.status === "connecting" || current?.status === "connected")
-      return;
-
-    setConnections((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, status: "connecting" } : c)),
-    );
-    setConnectingId(id);
-
-    try {
-      console.log("[handleConnect] calling api.vpn.connect");
-      await api.vpn.connect(id);
-      console.log("[handleConnect] api.vpn.connect resolved OK");
-    } catch (e) {
-      console.error("[handleConnect] api.vpn.connect ERROR:", e);
-      toast.error(`Ошибка подключения: ${String(e)}`);
-      setConnectingId(null);
-      setConnections((prev) =>
-        prev.map((c) => (c.id === id ? { ...c, status: "unknown" } : c)),
-      );
-      return;
-    }
-
-    // Poll until connected or timeout — keep loading state active
-    for (let i = 0; i < 20; i++) {
-      await new Promise((r) => setTimeout(r, 500));
-      const status = await api.vpn
-        .getStatus(id)
-        .catch(() => "unknown" as const);
-      setConnections((prev) =>
-        prev.map((c) => (c.id === id ? { ...c, status } : c)),
-      );
-      if (status === "connected" || status !== "connecting") {
-        setConnectingId(null);
-        return;
-      }
-    }
-    // Timeout after 10s — still clear loading state
-    setConnectingId(null);
+    const c = connections.find((c) => c.id === id);
+    if (c?.status === "connecting" || c?.status === "connected") return;
+    await connectVpn(id);
   };
 
   const handleDisconnect = async (id: string) => {
-    const prevStatus = connectionsRef.current.find((c) => c.id === id)?.status;
-    setConnections((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, status: "disconnected" } : c)),
-    );
-    setDisconnectingId(id);
-
-    try {
-      await api.vpn.disconnect(id);
-    } catch (e) {
-      console.error("[handleDisconnect] ERROR:", e);
-      toast.error(`Ошибка отключения: ${String(e)}`);
-      setDisconnectingId(null);
-      setConnections((prev) =>
-        prev.map((c) => (c.id === id ? { ...c, status: prevStatus ?? "unknown" } : c)),
-      );
-      return;
-    }
-
-    // Wait 2s then poll for final status
-    await new Promise((r) => setTimeout(r, 2000));
-    const status = await api.vpn
-      .getStatus(id)
-      .catch(() => "unknown" as const);
-    setConnections((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, status } : c)),
-    );
-    setDisconnectingId(null);
+    await disconnectVpn(id);
   };
 
   const handleDelete = async (id: string) => {
-    try {
-      setDeletingId(id);
-      await api.connections.delete(id);
-      setConnections((prev) => prev.filter((c) => c.id !== id));
-      toast.success("Подключение удалено");
-    } finally {
-      setDeletingId(null);
-    }
+    await deleteConnection(id);
   };
 
   const handleSudoAuth = async (password: string) => {
-    await api.sudo.authenticate(password);
-    if (await api.sudo.checkSession()) {
-      setSudoReady(true);
-      setShowSudoModal(false);
-    }
+    await useStore.getState().authenticateSudo(password);
+    if (useStore.getState().sudoReady) setShowSudoModal(false);
   };
 
   const filtered = connections

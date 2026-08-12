@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useStore } from "../../store";
 import {
   Box,
   Typography,
@@ -30,15 +31,15 @@ import {
 } from "@mui/icons-material";
 import { api } from "../../core/api";
 import type { UpdateInfo } from "../../core/api";
-import { Label } from "../../typing/definitions";
 import toast from "react-hot-toast";
 
-interface Props {
-  labels: Label[];
-  onLabelsChange: () => void;
-}
-
-export function Settings({ labels, onLabelsChange }: Props) {
+export function Settings() {
+  const {
+    labels,
+    saveLabel,
+    deleteLabel,
+    loadLabels,
+  } = useStore();
   const [newName, setNewName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
@@ -63,14 +64,17 @@ export function Settings({ labels, onLabelsChange }: Props) {
 
   const RESET_WORD = "СБРОС";
 
+  useEffect(() => {
+    loadLabels();
+  }, []);
+
   const handleAdd = async () => {
     if (!newName.trim()) return;
     setLabelsSubmitting(true);
     try {
       const id = newName.trim().toLowerCase().replace(/\s+/g, "_");
-      await api.labels.save(id, newName.trim());
+      await saveLabel(id, newName.trim());
       setNewName("");
-      onLabelsChange();
       toast.success("Метка добавлена");
     } catch (e) {
       console.error("[handleAdd label] ERROR:", e);
@@ -83,9 +87,8 @@ export function Settings({ labels, onLabelsChange }: Props) {
     if (!editingName.trim()) return;
     setLabelsSubmitting(true);
     try {
-      await api.labels.save(id, editingName.trim());
+      await saveLabel(id, editingName.trim());
       setEditingId(null);
-      onLabelsChange();
       toast.success("Метка переименована");
     } catch (e) {
       console.error("[handleRename label] ERROR:", e);
@@ -97,8 +100,7 @@ export function Settings({ labels, onLabelsChange }: Props) {
   const handleDelete = async (id: string) => {
     setLabelsSubmitting(true);
     try {
-      await api.labels.delete(id);
-      onLabelsChange();
+      await deleteLabel(id);
       toast.success("Метка удалена");
     } catch (e) {
       console.error("[handleDelete label] ERROR:", e);
@@ -129,7 +131,7 @@ export function Settings({ labels, onLabelsChange }: Props) {
         const imported = await api.config.import(password);
         if (imported) {
           setSuccess("Конфигурация импортирована");
-          onLabelsChange();
+          await loadLabels();
           setDialogOpen(false);
         }
       }
@@ -142,7 +144,7 @@ export function Settings({ labels, onLabelsChange }: Props) {
     setResetting(true);
     try {
       await api.config.reset();
-      await onLabelsChange();
+      await loadLabels();
       setSuccess("Все данные сброшены");
       setResetOpen(false);
       setResetConfirmText("");

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import {
   AppBar,
   Toolbar,
@@ -18,15 +18,14 @@ import {
   Info,
   Terminal,
 } from "@mui/icons-material";
-import { api } from "./core/api";
 import { ConnectionForm } from "./pages/ConnectionForm/ConnectionForm";
 import { Settings } from "./pages/Settings/Settings";
 import { About } from "./pages/About/About";
 import { LogDrawer } from "./components/LogDrawer";
 import { WorkspaceSelector } from "./components/WorkspaceSelector";
 import { Connections } from "./pages/Connections/Connections";
-import { getVersion } from "@tauri-apps/api/app";
-import type { Connection, Label } from "./typing/definitions";
+import { useStore } from "./store";
+import type { Connection } from "./typing/definitions";
 import { Toaster } from "react-hot-toast";
 
 type View = "list" | "form" | "settings" | "about";
@@ -50,29 +49,23 @@ const theme = createTheme({
 export default function App() {
   const [view, setView] = useState<View>("list");
   const [editingConn, setEditingConn] = useState<Connection | null>(null);
-  const [labels, setLabels] = useState<Label[]>([]);
-  const [appVersion, setAppVersion] = useState("...");
   const [showLog, setShowLog] = useState(false);
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState("");
-  const [workspaceVersion, setWorkspaceVersion] = useState(0);
 
-  const loadLabels = useCallback(async () => {
-    setLabels(await api.labels.getAll());
-  }, []);
-
-  const bumpWorkspace = useCallback(() => {
-    setWorkspaceVersion((v) => v + 1);
-  }, []);
+  const {
+    labels,
+    loadLabels,
+    appVersion,
+    loadAppVersion,
+    loadWorkspaces,
+    checkSudo,
+  } = useStore();
 
   useEffect(() => {
-    (async () => {
-      const appVersion = await getVersion();
-      setAppVersion(appVersion);
-      const id = await api.workspaces.getActiveId();
-      setActiveWorkspaceId(id);
-      await loadLabels();
-    })();
-  }, [loadLabels]);
+    loadAppVersion();
+    loadLabels();
+    loadWorkspaces();
+    checkSudo();
+  }, []);
 
   const handleEdit = (conn: Connection) => {
     setEditingConn(conn);
@@ -83,16 +76,6 @@ export default function App() {
     await loadLabels();
     setView("list");
     setEditingConn(null);
-    bumpWorkspace();
-  };
-
-  const handleLabelsChange = useCallback(async () => {
-    await loadLabels();
-  }, [loadLabels]);
-
-  const handleWorkspaceSwitch = async (id: string) => {
-    setActiveWorkspaceId(id);
-    bumpWorkspace();
   };
 
   return (
@@ -116,11 +99,7 @@ export default function App() {
               Назад
             </Button>
           ) : (
-            <WorkspaceSelector
-              activeId={activeWorkspaceId}
-              onSwitch={handleWorkspaceSwitch}
-              onChange={bumpWorkspace}
-            />
+            <WorkspaceSelector />
           )}
 
           <Box sx={{ flexGrow: 1 }} />
@@ -164,15 +143,11 @@ export default function App() {
 
       <Box component="main" sx={{ p: 2 }}>
         {view === "list" ? (
-          <Connections
-            key={activeWorkspaceId}
-            labels={labels}
-            onEdit={handleEdit}
-          />
+          <Connections labels={labels} onEdit={handleEdit} />
         ) : view === "about" ? (
           <About version={appVersion} onBack={() => setView("list")} />
         ) : view === "settings" ? (
-          <Settings labels={labels} onLabelsChange={handleLabelsChange} />
+          <Settings />
         ) : (
           <ConnectionForm
             initialConnection={editingConn}

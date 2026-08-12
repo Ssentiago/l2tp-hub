@@ -15,17 +15,18 @@ import {
 } from "@mui/material";
 import { Add, Edit, Delete } from "@mui/icons-material";
 import toast from "react-hot-toast";
-import { api } from "../core/api";
-import type { WorkspaceInfo } from "../typing/definitions";
+import { useStore } from "../store";
 
-interface Props {
-  activeId: string;
-  onSwitch: (id: string) => void;
-  onChange: () => void;
-}
-
-export function WorkspaceSelector({ activeId, onSwitch, onChange }: Props) {
-  const [workspaces, setWorkspaces] = useState<WorkspaceInfo[]>([]);
+export function WorkspaceSelector() {
+  const {
+    workspaces: storeWorkspaces,
+    activeWorkspaceId,
+    loadWorkspaces,
+    switchWorkspace,
+    createWorkspace,
+    renameWorkspace,
+    deleteWorkspace,
+  } = useStore();
   const [createOpen, setCreateOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [editId, setEditId] = useState<string | null>(null);
@@ -33,25 +34,17 @@ export function WorkspaceSelector({ activeId, onSwitch, onChange }: Props) {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const load = async () => {
-    setWorkspaces(await api.workspaces.list());
-  };
-
   useEffect(() => {
-    load();
-  }, [activeId]);
+    loadWorkspaces();
+  }, []);
 
   const handleCreate = async () => {
     if (!newName.trim()) return;
     setSubmitting(true);
     try {
-      const ws = await api.workspaces.create(newName.trim());
+      await createWorkspace(newName.trim());
       setNewName("");
       setCreateOpen(false);
-      await api.workspaces.switch(ws.id);
-      onSwitch(ws.id);
-      onChange();
-      load();
       toast.success("Пространство создано");
     } catch (e) {
       console.error("[handleCreate] ERROR:", e);
@@ -65,10 +58,8 @@ export function WorkspaceSelector({ activeId, onSwitch, onChange }: Props) {
     if (!editId || !editName.trim()) return;
     setSubmitting(true);
     try {
-      await api.workspaces.rename(editId, editName.trim());
+      await renameWorkspace(editId, editName.trim());
       setEditId(null);
-      onChange();
-      load();
       toast.success("Пространство переименовано");
     } catch (e) {
       console.error("[handleRename] ERROR:", e);
@@ -82,10 +73,8 @@ export function WorkspaceSelector({ activeId, onSwitch, onChange }: Props) {
     if (!deleteId) return;
     setSubmitting(true);
     try {
-      await api.workspaces.delete(deleteId);
+      await deleteWorkspace(deleteId);
       setDeleteId(null);
-      onChange();
-      load();
       toast.success("Пространство удалено");
     } catch (e) {
       console.error("[handleDelete] ERROR:", e);
@@ -98,9 +87,7 @@ export function WorkspaceSelector({ activeId, onSwitch, onChange }: Props) {
   const handleSwitch = async (id: string) => {
     setSubmitting(true);
     try {
-      await api.workspaces.switch(id);
-      onSwitch(id);
-      onChange();
+      await switchWorkspace(id);
     } catch (e) {
       console.error("[handleSwitch] ERROR:", e);
       toast.error(`Ошибка переключения пространства: ${String(e)}`);
@@ -109,20 +96,20 @@ export function WorkspaceSelector({ activeId, onSwitch, onChange }: Props) {
     }
   };
 
-  const activeIdx = workspaces.findIndex((w) => w.id === activeId);
+  const activeIdx = storeWorkspaces.findIndex((w) => w.id === activeWorkspaceId);
 
   return (
     <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
       <Tabs
         value={activeIdx >= 0 ? activeIdx : 0}
-        onChange={(_, v) => handleSwitch(workspaces[v].id)}
+        onChange={(_, v) => handleSwitch(storeWorkspaces[v].id)}
         sx={{
           minHeight: 36,
           pointerEvents: submitting ? "none" : "auto",
           opacity: submitting ? 0.5 : 1,
         }}
       >
-        {workspaces.map((ws) => (
+        {storeWorkspaces.map((ws) => (
           <Tab
             key={ws.id}
             label={
@@ -142,7 +129,7 @@ export function WorkspaceSelector({ activeId, onSwitch, onChange }: Props) {
                     <Edit fontSize="small" />
                   </IconButton>
                 </Tooltip>
-                {workspaces.length > 1 && (
+                {storeWorkspaces.length > 1 && (
                   <Tooltip title="Удалить">
                     <IconButton
                       size="small"
