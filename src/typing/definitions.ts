@@ -15,9 +15,6 @@ export interface Connection {
   username: string;
   keychain_key: string;
   shared_secret_key: string;
-  priority: number;
-  send_all_traffic: boolean;
-  service_hash: string | null;
   labels: Record<LabelID, LabelValue>;
   connect_count: number;
   connected_since: number | null;
