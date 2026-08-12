@@ -49,4 +49,5 @@ export type SortDir = "asc" | "desc";
 export interface WorkspaceInfo {
   id: string;
   name: string;
+  group_by: string[];
 }

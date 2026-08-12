@@ -37,6 +37,7 @@ export function Connections({ labels, onEdit }: Props) {
   const [connectingId, setConnectingId] = useState<string | null>(null);
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [groupBy, setGroupBy] = useState<string>("company");
 
   const connectionsRef = useRef<ConnectionWithStatus[]>([]);
   connectionsRef.current = connections;
@@ -220,6 +221,8 @@ export function Connections({ labels, onEdit }: Props) {
           loading={loading}
           filter={filter}
           onFilterChange={setFilter}
+          groupBy={groupBy}
+          onGroupByChange={setGroupBy}
           sortField={sortField}
           sortDir={sortDir}
           onSort={(field) => {

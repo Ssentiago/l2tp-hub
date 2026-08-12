@@ -6,6 +6,7 @@ use serde::Serialize;
 pub struct WorkspaceInfo {
     pub id: String,
     pub name: String,
+    pub group_by: Vec<String>,
 }
 
 #[tauri::command]
@@ -16,6 +17,7 @@ pub fn get_workspaces(app_handle: tauri::AppHandle) -> Vec<WorkspaceInfo> {
         .map(|w| WorkspaceInfo {
             id: w.id.clone(),
             name: w.name.clone(),
+            group_by: w.group_by.clone(),
         })
         .collect()
 }
@@ -32,6 +34,7 @@ pub fn create_workspace(app_handle: tauri::AppHandle, name: String) -> Result<Wo
     let info = WorkspaceInfo {
         id: ws.id.clone(),
         name: ws.name.clone(),
+        group_by: ws.group_by.clone(),
     };
     s.workspaces.push(ws);
     store::save(&s)?;

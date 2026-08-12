@@ -80,18 +80,24 @@ interface ConnectionListProps {
   connectingId: string | null;
   disconnectingId: string | null;
   deletingId: string | null;
+  groupBy: string;
+  onGroupByChange: (labelId: string) => void;
 }
 
 
-function groupByCompany(connections: ConnectionWithStatus[], labels: Label[]) {
-  const groups = new Map<string, ConnectionWithStatus[]>();
-
-  for (const c of connections) {
-    const company = c.labels["company"] ?? "";
-    if (!groups.has(company)) groups.set(company, []);
-    groups.get(company)!.push(c);
+function groupByLabel(
+  connections: ConnectionWithStatus[],
+  labelId: string
+): [string, ConnectionWithStatus[]][] {
+  if (!labelId) {
+    return [["", connections]];
   }
-
+  const groups = new Map<string, ConnectionWithStatus[]>();
+  for (const c of connections) {
+    const value = c.labels[labelId] ?? "";
+    if (!groups.has(value)) groups.set(value, []);
+    groups.get(value)!.push(c);
+  }
   return [...groups.entries()].sort(([a], [b]) => {
     if (!a && b) return 1;
     if (a && !b) return -1;
@@ -106,6 +112,8 @@ export function ConnectionList({
                                  loading,
                                  filter,
                                  onFilterChange,
+                                 groupBy,
+                                 onGroupByChange,
                                  connectingId,
                                  disconnectingId,
                                  deletingId,
@@ -223,6 +231,22 @@ export function ConnectionList({
               </FormControl>
             );
           })}
+
+          <FormControl size="small" sx={{ minWidth: 140 }}>
+            <InputLabel>Группировка</InputLabel>
+            <Select
+              label="Группировка"
+              value={groupBy}
+              onChange={(e) => onGroupByChange(e.target.value)}
+            >
+              <MenuItem value="">Нет</MenuItem>
+              {labels.map((label) => (
+                <MenuItem key={label.id} value={label.id}>
+                  {label.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
         </Box>
       </Box>
 
@@ -274,7 +298,8 @@ export function ConnectionList({
                   );
                 }
 
-                const groups = groupByCompany(connections, labels);
+                const groupLabel = labels.find((l) => l.id === groupBy)?.name ?? "группы";
+                const groups = groupByLabel(connections, groupBy);
 
                 if (groups.length === 1 && !groups[0][0]) {
                   return connections.map((c) => (
@@ -318,7 +343,7 @@ export function ConnectionList({
                               textTransform: "uppercase"
                             }}
                           >
-                            {company || "Без компании"}
+                            {company || `Без ${groupLabel}`}
                           </Typography>
                           <Typography variant="caption" color="text.disabled">
                             {conns.length}
