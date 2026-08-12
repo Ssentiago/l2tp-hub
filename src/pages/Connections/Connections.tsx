@@ -60,6 +60,7 @@ export function Connections({ labels, onEdit }: Props) {
             c.id === id ? { ...c, status } : c,
           ),
         }));
+        useStore.getState().invalidateCache();
       },
     );
     return () => {

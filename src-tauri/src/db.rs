@@ -240,6 +240,59 @@ pub async fn save_store(pool: &SqlitePool, store: &Store) -> Result<(), String> 
     Ok(())
 }
 
+pub async fn active_workspace_id(pool: &SqlitePool) -> Option<String> {
+    sqlx::query_scalar("SELECT value FROM settings WHERE key = 'active_workspace_id'")
+        .fetch_optional(pool)
+        .await
+        .ok()
+        .flatten()
+}
+
+pub async fn connections_for_workspace(
+    pool: &SqlitePool,
+    ws_id: &str,
+) -> Result<Vec<Connection>, String> {
+    let rows = sqlx::query_as::<_, ConnectionRow>(
+        "SELECT id, name, display_name, server, username, keychain_key, shared_secret_key, \
+         service_hash, labels, connect_count, connected_since, last_connected_at, last_disconnected_at \
+         FROM connections WHERE workspace_id = ?",
+    )
+    .bind(ws_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("query connections: {}", e))?;
+
+    Ok(rows
+        .into_iter()
+        .map(|c| {
+            let labels_map: std::collections::HashMap<String, String> =
+                serde_json::from_str(&c.labels).unwrap_or_default();
+            Connection {
+                id: c.id,
+                name: c.name,
+                display_name: c.display_name,
+                server: c.server,
+                username: c.username,
+                keychain_key: c.keychain_key,
+                shared_secret_key: c.shared_secret_key,
+                service_hash: c.service_hash,
+                labels: labels_map,
+                connect_count: c.connect_count as u32,
+                connected_since: c.connected_since,
+                last_connected_at: c.last_connected_at,
+                last_disconnected_at: c.last_disconnected_at,
+            }
+        })
+        .collect())
+}
+
+pub async fn workspace_infos(pool: &SqlitePool) -> Result<Vec<WorkspaceInfoRow>, String> {
+    sqlx::query_as::<_, WorkspaceInfoRow>("SELECT id, name, group_by FROM workspaces")
+        .fetch_all(pool)
+        .await
+        .map_err(|e| format!("query workspaces: {}", e))
+}
+
 pub async fn store_is_empty(pool: &SqlitePool) -> Result<bool, String> {
     let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM labels")
         .fetch_one(pool)
@@ -322,4 +375,11 @@ struct ConnectionRow {
     connected_since: Option<i64>,
     last_connected_at: Option<i64>,
     last_disconnected_at: Option<i64>,
+}
+
+#[derive(sqlx::FromRow)]
+pub struct WorkspaceInfoRow {
+    pub id: String,
+    pub name: String,
+    pub group_by: String,
 }

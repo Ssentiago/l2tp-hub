@@ -10,14 +10,16 @@ pub struct WorkspaceInfo {
 }
 
 #[tauri::command]
-pub fn get_workspaces(app_handle: tauri::AppHandle) -> Vec<WorkspaceInfo> {
-    let s = store::load(app_handle.config());
-    s.workspaces
-        .iter()
+pub async fn get_workspaces(app_handle: tauri::AppHandle) -> Vec<WorkspaceInfo> {
+    let pool = crate::DB_POOL.get().expect("DB pool not initialized");
+    crate::db::workspace_infos(pool)
+        .await
+        .unwrap_or_default()
+        .into_iter()
         .map(|w| WorkspaceInfo {
-            id: w.id.clone(),
-            name: w.name.clone(),
-            group_by: w.group_by.clone(),
+            id: w.id,
+            name: w.name,
+            group_by: serde_json::from_str(&w.group_by).unwrap_or_default(),
         })
         .collect()
 }

@@ -10,14 +10,14 @@ use uuid::Uuid;
 #[tauri::command]
 pub async fn get_connections(app_handle: tauri::AppHandle) -> Vec<Connection> {
     log!("[get_connections] called");
-    tokio::task::spawn_blocking(move || {
-        store::load(app_handle.config())
-            .active_workspace()
-            .connections
-            .clone()
-    })
-    .await
-    .unwrap_or_default()
+    let pool = crate::DB_POOL.get().expect("DB pool not initialized");
+    let ws_id = crate::db::active_workspace_id(pool).await.unwrap_or_default();
+    if ws_id.is_empty() {
+        return vec![];
+    }
+    crate::db::connections_for_workspace(pool, &ws_id)
+        .await
+        .unwrap_or_default()
 }
 
 #[tauri::command]
