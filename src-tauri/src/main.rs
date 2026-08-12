@@ -7,6 +7,7 @@ use tauri::Manager;
 
 pub mod backup;
 pub mod commands;
+pub mod db;
 pub mod keychain;
 pub mod l2tp;
 pub mod logger;
@@ -18,6 +19,7 @@ mod sudo;
 pub mod tray;
 
 pub static LOGGER: std::sync::OnceLock<Arc<Logger>> = std::sync::OnceLock::new();
+pub static DB_POOL: std::sync::OnceLock<sqlx::SqlitePool> = std::sync::OnceLock::new();
 
 #[macro_export]
 macro_rules! log {
@@ -55,6 +57,20 @@ fn main() {
         .setup(|app| {
             let logger = Arc::new(logger::Logger::new(app.handle().clone()));
             LOGGER.set(logger).ok();
+
+            let db_path = app
+                .path()
+                .resolve("l2tp-hub.db", tauri::path::BaseDirectory::AppData)
+                .expect("db path");
+            let pool = tauri::async_runtime::block_on(db::init_pool(&db_path))?;
+            if tauri::async_runtime::block_on(db::store_is_empty(&pool)).unwrap_or(false) {
+                let json_path = app
+                    .path()
+                    .resolve("connections.json", tauri::path::BaseDirectory::AppData)
+                    .expect("json path");
+                let _ = tauri::async_runtime::block_on(db::migrate_from_json(&pool, &json_path));
+            }
+            DB_POOL.set(pool).ok();
 
             let window = app
                 .get_webview_window("main")

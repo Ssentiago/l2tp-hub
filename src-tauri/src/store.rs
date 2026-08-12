@@ -1,9 +1,9 @@
+use crate::db;
 use crate::log;
 use crate::models::label::Label;
 use crate::models::workspace::Workspace;
-use crate::state::get_state;
 use serde::{Deserialize, Serialize};
-use std::fs;
+use sqlx::Executor;
 use std::path::PathBuf;
 use tauri::path::BaseDirectory;
 use tauri::Manager;
@@ -11,6 +11,7 @@ use tauri::Manager;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Store {
     pub workspaces: Vec<Workspace>,
+    #[serde(default)]
     pub active_workspace_id: String,
     pub labels: Vec<Label>,
 }
@@ -56,107 +57,92 @@ impl Store {
     }
 }
 
-fn store_path() -> PathBuf {
-    log!("[store_path] Resolving application handle");
-    let app = get_state().app.clone();
-
-    let path = app
-        .path()
-        .resolve("connections.json", BaseDirectory::AppData)
-        .expect("Не удалось вычислить путь");
-
-    log!("[store_path] Resolved path: {:?}", path);
-    path
+fn json_path() -> Option<PathBuf> {
+    let app = crate::state::get_state().app.clone();
+    match app.path().resolve("connections.json", BaseDirectory::AppData) {
+        Ok(p) => Some(p),
+        Err(e) => {
+            debug_log(&format!("[store] resolve failed: {}", e));
+            None
+        }
+    }
 }
 
-#[derive(Deserialize)]
-struct LegacyStore {
-    connections: Vec<crate::models::connection::Connection>,
-    labels: Vec<Label>,
+fn try_load_json() -> Option<Store> {
+    let path = json_path()?;
+    debug_log(&format!("[store] JSON path: {:?}, exists: {}", path, path.exists()));
+    if !path.exists() {
+        return None;
+    }
+    let data = std::fs::read_to_string(&path).ok()?;
+    debug_log(&format!("[store] read {} bytes from JSON", data.len()));
+
+    if let Ok(store) = serde_json::from_str::<Store>(&data) {
+        debug_log(&format!("[store] parsed {} workspaces", store.workspaces.len()));
+        return Some(store);
+    }
+
+    debug_log("[store] JSON parse failed");
+    None
+}
+
+fn debug_log(msg: &str) {
+    use std::io::Write;
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("/tmp/l2tp-hub-debug.log")
+    {
+        let _ = writeln!(f, "{}", msg);
+    }
+}
+
+const DB_VERSION: &str = "1";
+
+fn needs_migration() -> bool {
+    let pool = crate::DB_POOL.get().expect("DB pool not initialized");
+    let version: Option<String> = tauri::async_runtime::block_on(
+        sqlx::query_scalar("SELECT value FROM settings WHERE key = 'db_version'")
+            .fetch_optional(pool)
+    ).ok().flatten();
+    version.as_deref() != Some(DB_VERSION)
+}
+
+fn mark_migrated() {
+    let pool = crate::DB_POOL.get().expect("DB pool not initialized");
+    let _ = tauri::async_runtime::block_on(
+        sqlx::query("INSERT OR REPLACE INTO settings (key, value) VALUES ('db_version', ?)")
+            .bind(DB_VERSION)
+            .execute(pool)
+    );
 }
 
 pub fn load(_config: &tauri::Config) -> Store {
-    log!("[load] Starting to load store");
-    let path = store_path();
-
-    if !path.exists() {
-        log!("[load] Store file does not exist, returning default Store");
+    let pool = crate::DB_POOL.get().expect("DB pool not initialized");
+    
+    if needs_migration() {
+        debug_log("[store::load] DB version mismatch or empty, trying JSON migration");
+        if let Some(json_store) = try_load_json() {
+            let _ = tauri::async_runtime::block_on(db::save_store(pool, &json_store));
+            mark_migrated();
+            debug_log(&format!("[store::load] migrated {} workspaces from JSON", json_store.workspaces.len()));
+            return json_store;
+        }
+        debug_log("[store::load] no JSON, returning default");
         return Store::default();
     }
 
-    log!("[load] Reading file content");
-    match fs::read_to_string(&path) {
-        Ok(data) => {
-            log!("[load] File read successfully ({} bytes)", data.len());
-
-            // Try new format first
-            if let Ok(store) = serde_json::from_str::<Store>(&data) {
-                log!("[load] Parsed as Workspace store, workspaces: {}", store.workspaces.len());
-                return store;
-            }
-
-            // Try legacy format (flat connections)
-            if let Ok(legacy) = serde_json::from_str::<LegacyStore>(&data) {
-                log!("[load] Migrating legacy store, connections: {}", legacy.connections.len());
-                let ws = Workspace {
-                    id: uuid::Uuid::new_v4().to_string(),
-                    name: "Основной".into(),
-                    connections: legacy.connections,
-                    group_by: vec!["company".into(), "branch".into()],
-                };
-                let id = ws.id.clone();
-                let store = Store {
-                    workspaces: vec![ws],
-                    active_workspace_id: id,
-                    labels: legacy.labels,
-                };
-                // Save migrated store
-                if let Err(e) = save(&store) {
-                    log!("[load] Failed to save migrated store: {}", e);
-                }
-                return store;
-            }
-
-            log!("[load] Failed to parse JSON, returning default Store");
-            Store::default()
-        }
+    let db_result = tauri::async_runtime::block_on(db::load_store(pool));
+    match db_result {
+        Ok(store) => store,
         Err(e) => {
-            log!("[load] ERROR: Failed to read file: {}", e);
+            debug_log(&format!("[store::load] DB error: {}", e));
             Store::default()
         }
     }
 }
 
 pub fn save(store: &Store) -> Result<(), String> {
-    log!(
-        "[save] Starting save process. Workspaces: {}",
-        store.workspaces.len()
-    );
-    let path = store_path();
-
-    if let Some(parent) = path.parent() {
-        log!("[save] Ensuring directory exists: {:?}", parent);
-        fs::create_dir_all(parent).map_err(|e| {
-            let err = format!("[save] ERROR: Could not create directory: {}", e);
-            log!("{}", err);
-            e.to_string()
-        })?;
-    }
-
-    log!("[save] Serializing store to pretty JSON");
-    let data = serde_json::to_string_pretty(store).map_err(|e| {
-        let err = format!("[save] ERROR: Serialization failed: {}", e);
-        log!("{}", err);
-        e.to_string()
-    })?;
-
-    log!("[save] Writing data to {:?}", path);
-    fs::write(&path, data).map_err(|e| {
-        let err = format!("[save] ERROR: File write failed: {}", e);
-        log!("{}", err);
-        e.to_string()
-    })?;
-
-    log!("[save] Store saved successfully");
-    Ok(())
+    let pool = crate::DB_POOL.get().expect("DB pool not initialized");
+    tauri::async_runtime::block_on(db::save_store(pool, store))
 }
