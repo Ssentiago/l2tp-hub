@@ -71,6 +71,7 @@ export function Settings({ labels, onLabelsChange }: Props) {
       await api.labels.save(id, newName.trim());
       setNewName("");
       onLabelsChange();
+      toast.success("Метка добавлена");
     } catch (e) {
       console.error("[handleAdd label] ERROR:", e);
     } finally {
@@ -85,6 +86,7 @@ export function Settings({ labels, onLabelsChange }: Props) {
       await api.labels.save(id, editingName.trim());
       setEditingId(null);
       onLabelsChange();
+      toast.success("Метка переименована");
     } catch (e) {
       console.error("[handleRename label] ERROR:", e);
     } finally {
@@ -97,6 +99,7 @@ export function Settings({ labels, onLabelsChange }: Props) {
     try {
       await api.labels.delete(id);
       onLabelsChange();
+      toast.success("Метка удалена");
     } catch (e) {
       console.error("[handleDelete label] ERROR:", e);
     } finally {

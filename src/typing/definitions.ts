@@ -43,7 +43,7 @@ export interface FilterState {
   labels: Record<string, string>;
 }
 
-export type SortField = "name" | "priority" | "status";
+export type SortField = "name" | "status";
 export type SortDir = "asc" | "desc";
 
 export interface WorkspaceInfo {

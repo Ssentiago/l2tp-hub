@@ -19,12 +19,10 @@ import {
   Terminal,
 } from "@mui/icons-material";
 import { api } from "./core/api";
-import type { UpdateInfo } from "./core/api";
 import { ConnectionForm } from "./pages/ConnectionForm/ConnectionForm";
 import { Settings } from "./pages/Settings/Settings";
 import { About } from "./pages/About/About";
 import { LogDrawer } from "./components/LogDrawer";
-import { UpdateBanner } from "./components/UpdateBanner";
 import { WorkspaceSelector } from "./components/WorkspaceSelector";
 import { Connections } from "./pages/Connections/Connections";
 import { getVersion } from "@tauri-apps/api/app";
@@ -55,7 +53,6 @@ export default function App() {
   const [labels, setLabels] = useState<Label[]>([]);
   const [appVersion, setAppVersion] = useState("...");
   const [showLog, setShowLog] = useState(false);
-  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState("");
   const [workspaceVersion, setWorkspaceVersion] = useState(0);
 
@@ -74,13 +71,6 @@ export default function App() {
       const id = await api.workspaces.getActiveId();
       setActiveWorkspaceId(id);
       await loadLabels();
-
-      try {
-        const update = await api.update.check(appVersion);
-        if (update) setUpdateInfo(update);
-      } catch (e) {
-        console.error("Update check failed:", e);
-      }
     })();
   }, [loadLabels]);
 
@@ -173,12 +163,6 @@ export default function App() {
       </AppBar>
 
       <Box component="main" sx={{ p: 2 }}>
-        {view === "list" && updateInfo && (
-          <UpdateBanner
-            updateInfo={updateInfo}
-            onDismiss={() => setUpdateInfo(null)}
-          />
-        )}
         {view === "list" ? (
           <Connections
             key={activeWorkspaceId}

@@ -161,6 +161,7 @@ export function Connections({ labels, onEdit }: Props) {
       setDeletingId(id);
       await api.connections.delete(id);
       setConnections((prev) => prev.filter((c) => c.id !== id));
+      toast.success("Подключение удалено");
     } finally {
       setDeletingId(null);
     }

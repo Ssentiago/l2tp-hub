@@ -136,8 +136,9 @@ export function LogDrawer({ open, onClose }: Props) {
         paper: {
           sx: {
             width: 520,
-            bgcolor: "#0d1117",
-            borderLeft: "1px solid #30363d",
+            bgcolor: "background.default",
+            borderLeft: "1px solid",
+            borderColor: "divider",
             display: "flex",
             flexDirection: "column",
           },
@@ -151,7 +152,8 @@ export function LogDrawer({ open, onClose }: Props) {
           display: "flex",
           alignItems: "center",
           gap: 1,
-          borderBottom: "1px solid #30363d",
+          borderBottom: "1px solid",
+          borderColor: "divider",
           flexShrink: 0,
         }}
       >
@@ -159,7 +161,7 @@ export function LogDrawer({ open, onClose }: Props) {
           variant="subtitle2"
           sx={{
             fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-            color: "#8ab4f8",
+            color: "primary.main",
             letterSpacing: 1,
             flex: 1,
           }}
@@ -173,8 +175,8 @@ export function LogDrawer({ open, onClose }: Props) {
           sx={{
             fontSize: 11,
             height: 20,
-            bgcolor: "#21262d",
-            color: "#8b949e",
+            bgcolor: "action.selected",
+            color: "text.disabled",
           }}
         />
 
@@ -182,20 +184,20 @@ export function LogDrawer({ open, onClose }: Props) {
           <IconButton
             size="small"
             onClick={paused ? resumeAndScrollDown : () => setPaused(true)}
-            sx={{ color: paused ? "#fdd663" : "#8b949e" }}
+            sx={{ color: paused ? "#fdd663" : "text.disabled" }}
           >
             <Circle fontSize="small" sx={{ fontSize: 10 }} />
           </IconButton>
         </Tooltip>
 
         <Tooltip title="Очистить">
-          <IconButton size="small" onClick={clear} sx={{ color: "#8b949e" }}>
+          <IconButton size="small" onClick={clear} sx={{ color: "text.disabled" }}>
             <DeleteSweep fontSize="small" />
           </IconButton>
         </Tooltip>
 
         <Tooltip title="Закрыть">
-          <IconButton size="small" onClick={onClose} sx={{ color: "#8b949e" }}>
+          <IconButton size="small" onClick={onClose} sx={{ color: "text.disabled" }}>
             <Close fontSize="small" />
           </IconButton>
         </Tooltip>
@@ -209,13 +211,13 @@ export function LogDrawer({ open, onClose }: Props) {
           overflowY: "auto",
           "&::-webkit-scrollbar": { width: 6 },
           "&::-webkit-scrollbar-track": { bgcolor: "transparent" },
-          "&::-webkit-scrollbar-thumb": { bgcolor: "#30363d", borderRadius: 3 },
+          "&::-webkit-scrollbar-thumb": { bgcolor: "divider", borderRadius: 3 },
         }}
       >
         {entries.length === 0 ? (
           <Typography
             sx={{
-              color: "#484f58",
+              color: "text.disabled",
               fontFamily: "'JetBrains Mono', monospace",
               fontSize: 12,
               mt: 4,
@@ -249,14 +251,14 @@ export function LogDrawer({ open, onClose }: Props) {
                     alignItems: "center",
                     gap: 1.5,
                     px: 1.5,
-                    "&:hover": { bgcolor: "#161b22" },
+                    "&:hover": { bgcolor: "action.hover" },
                     borderRadius: 1,
                   }}
                 >
                   <Typography
                     component="span"
                     sx={{
-                      color: "#484f58",
+                      color: "text.disabled",
                       fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
                       fontSize: 11,
                       flexShrink: 0,
@@ -288,11 +290,11 @@ export function LogDrawer({ open, onClose }: Props) {
         )}
       </Box>
 
-      <Divider sx={{ borderColor: "#30363d" }} />
+      <Divider />
       <Box sx={{ px: 2, py: 1, flexShrink: 0 }}>
         <Typography
           sx={{
-            color: "#484f58",
+            color: "text.disabled",
             fontSize: 10,
             fontFamily: "'JetBrains Mono', monospace",
           }}

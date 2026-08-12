@@ -52,6 +52,7 @@ export function WorkspaceSelector({ activeId, onSwitch, onChange }: Props) {
       onSwitch(ws.id);
       onChange();
       load();
+      toast.success("Пространство создано");
     } catch (e) {
       console.error("[handleCreate] ERROR:", e);
       toast.error(`Ошибка создания пространства: ${String(e)}`);
@@ -68,6 +69,7 @@ export function WorkspaceSelector({ activeId, onSwitch, onChange }: Props) {
       setEditId(null);
       onChange();
       load();
+      toast.success("Пространство переименовано");
     } catch (e) {
       console.error("[handleRename] ERROR:", e);
       toast.error(`Ошибка переименования: ${String(e)}`);
@@ -84,6 +86,7 @@ export function WorkspaceSelector({ activeId, onSwitch, onChange }: Props) {
       setDeleteId(null);
       onChange();
       load();
+      toast.success("Пространство удалено");
     } catch (e) {
       console.error("[handleDelete] ERROR:", e);
       toast.error(`Ошибка удаления пространства: ${String(e)}`);
