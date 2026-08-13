@@ -70,30 +70,31 @@ fn ike_probe(server: &str) -> Result<bool, String> {
 pub async fn check_connection(app_handle: tauri::AppHandle, id: String) -> Result<HealthResult, String> {
     log!("[health] check_connection called for id={}", id);
 
-    let store = store::load(app_handle.config());
-    let conn = store
-        .workspaces
-        .iter()
-        .flat_map(|ws| ws.connections.iter())
-        .find(|c| c.id == id)
-        .ok_or("Подключение не найдено")?
-        .clone();
+    let app_clone = app_handle.clone();
+    tokio::task::spawn_blocking(move || {
+        let store = store::load(app_clone.config());
+        let conn = store
+            .workspaces
+            .iter()
+            .flat_map(|ws| ws.connections.iter())
+            .find(|c| c.id == id)
+            .ok_or("Подключение не найдено")?
+            .clone();
 
-    // Check if any VPN is active
-    for ws in &store.workspaces {
-        for c in &ws.connections {
-            let status = l2tp::get_vpn_status(&c.name);
-            if status == VpnStatus::Connected || status == VpnStatus::Connecting {
-                return Err(
-                    "Проверка недоступна во время активного VPN-подключения".into(),
-                );
+        // Check if any VPN is active
+        for ws in &store.workspaces {
+            for c in &ws.connections {
+                let status = l2tp::get_vpn_status(&c.name);
+                if status == VpnStatus::Connected || status == VpnStatus::Connecting {
+                    return Err(
+                        "Проверка недоступна во время активного VPN-подключения".into(),
+                    );
+                }
             }
         }
-    }
 
-    let server = conn.server.clone();
+        let server = conn.server.clone();
 
-    tokio::task::spawn_blocking(move || {
         let ping = icmp_ping(&server);
         log!("[health] ICMP ping {}: {}", server, if ping { "OK" } else { "FAIL" });
 

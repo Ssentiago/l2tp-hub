@@ -54,6 +54,7 @@ export default function App() {
   const {
     labels,
     loadLabels,
+    loadConnections,
     appVersion,
     loadAppVersion,
     loadWorkspaces,
@@ -74,6 +75,7 @@ export default function App() {
 
   const handleFormSave = async () => {
     await loadLabels();
+    await loadConnections();
     setView("list");
     setEditingConn(null);
   };

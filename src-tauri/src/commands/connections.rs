@@ -65,12 +65,12 @@ pub async fn save_connection(
 
         store::save(&store)?;
         log!("[save_connection] success");
+        let _ = tray::refresh_tray(&app_clone);
         Ok(conn)
     })
     .await
     .map_err(|e| e.to_string())?;
 
-    let _ = tray::refresh_tray(&app_handle);
     result
 }
 
@@ -93,12 +93,13 @@ pub async fn delete_connection(
             let _ = l2tp::delete_vpn_service(&sudo, &conn.name);
         }
         ws.connections.retain(|c| c.id != id);
-        store::save(&store)
+        store::save(&store)?;
+        let _ = tray::refresh_tray(&app_clone);
+        Ok(())
     })
     .await
     .map_err(|e| e.to_string())?;
 
-    let _ = tray::refresh_tray(&app_handle);
     result
 }
 
@@ -116,11 +117,12 @@ pub async fn delete_connection(app_handle: tauri::AppHandle, id: String) -> Resu
             let _ = l2tp::delete_vpn_service(&conn.name);
         }
         ws.connections.retain(|c| c.id != id);
-        store::save(&store)
+        store::save(&store)?;
+        let _ = tray::refresh_tray(&app_clone);
+        Ok(())
     })
     .await
     .map_err(|e| e.to_string())?;
 
-    let _ = tray::refresh_tray(&app_handle);
     result
 }

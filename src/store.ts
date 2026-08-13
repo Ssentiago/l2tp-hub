@@ -30,12 +30,10 @@ interface Store {
   loadAppVersion: () => Promise<void>;
 
   connections: ConnectionWithStatus[];
-  connectionsByWorkspace: Record<string, ConnectionWithStatus[]>;
   connectingId: string | null;
   disconnectingId: string | null;
   deletingId: string | null;
   loadConnections: () => Promise<void>;
-  invalidateCache: () => void;
   saveConnection: (payload: ConnectionPayload) => Promise<void>;
   deleteConnection: (id: string) => Promise<void>;
   connectVpn: (id: string) => Promise<void>;
@@ -111,17 +109,10 @@ export const useStore = create<Store>((set, get) => ({
   },
 
   connections: [],
-  connectionsByWorkspace: {},
   connectingId: null,
   disconnectingId: null,
   deletingId: null,
   loadConnections: async () => {
-    const { activeWorkspaceId, connectionsByWorkspace } = get();
-    const cached = activeWorkspaceId ? connectionsByWorkspace[activeWorkspaceId] : undefined;
-    if (cached) {
-      set({ connections: cached });
-      return;
-    }
     const conns = await api.connections.getAll();
     const withStatus = await Promise.all(
       conns.map(async (c) => ({
@@ -129,19 +120,10 @@ export const useStore = create<Store>((set, get) => ({
         status: await api.vpn.getStatus(c.id).catch(() => "unknown" as const),
       })),
     );
-    set({
-      connections: withStatus,
-      connectionsByWorkspace: { ...connectionsByWorkspace, [activeWorkspaceId]: withStatus },
-    });
-  },
-  invalidateCache: () => {
-    const { activeWorkspaceId, connectionsByWorkspace } = get();
-    const { [activeWorkspaceId]: _, ...rest } = connectionsByWorkspace;
-    set({ connectionsByWorkspace: rest });
+    set({ connections: withStatus });
   },
   saveConnection: async (payload) => {
     await api.connections.save(payload);
-    get().invalidateCache();
     await get().loadConnections();
   },
   deleteConnection: async (id) => {
@@ -150,11 +132,10 @@ export const useStore = create<Store>((set, get) => ({
       connections: s.connections.filter((c) => c.id !== id),
       deletingId: null,
     }));
-    get().invalidateCache();
   },
   connectVpn: async (id) => {
-    const { sudoReady } = get();
-    if (!sudoReady) return;
+    const { sudoReady, connectingId } = get();
+    if (!sudoReady || connectingId) return;
     set({ connectingId: id });
     set((s) => ({
       connections: s.connections.map((c) =>
@@ -182,14 +163,14 @@ export const useStore = create<Store>((set, get) => ({
       }));
       if (status === "connected" || status !== "connecting") {
         set({ connectingId: null });
-        get().invalidateCache();
         return;
       }
     }
     set({ connectingId: null });
-    get().invalidateCache();
   },
   disconnectVpn: async (id) => {
+    const { disconnectingId } = get();
+    if (disconnectingId) return;
     const prev = get().connections.find((c) => c.id === id);
     set({ disconnectingId: id });
     set((s) => ({
@@ -216,6 +197,5 @@ export const useStore = create<Store>((set, get) => ({
       ),
     }));
     set({ disconnectingId: null });
-    get().invalidateCache();
   },
 }));

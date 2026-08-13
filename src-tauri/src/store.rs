@@ -129,6 +129,7 @@ pub fn load(_config: &tauri::Config) -> Store {
             return json_store;
         }
         debug_log("[store::load] no JSON, returning default");
+        mark_migrated();
         return Store::default();
     }
 

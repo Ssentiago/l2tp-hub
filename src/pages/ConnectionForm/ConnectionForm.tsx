@@ -43,7 +43,7 @@ export function ConnectionForm({
     setSaving(true);
     try {
       await api.connections.save(formData);
-      onSave();
+      await onSave();
     } catch (e) {
       console.error("[save] ERROR:", e);
       toast.error(`Ошибка сохранения: ${String(e)}`);

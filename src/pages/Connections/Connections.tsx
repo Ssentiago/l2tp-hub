@@ -47,7 +47,11 @@ export function Connections({ labels, onEdit }: Props) {
 
   useEffect(() => {
     loadConnections().then(() => setLoading(false));
-    checkSudo();
+    checkSudo().then(() => {
+      if (!useStore.getState().sudoReady) {
+        setShowSudoModal(true);
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -60,7 +64,6 @@ export function Connections({ labels, onEdit }: Props) {
             c.id === id ? { ...c, status } : c,
           ),
         }));
-        useStore.getState().invalidateCache();
       },
     );
     return () => {

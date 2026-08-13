@@ -58,7 +58,6 @@ pub async fn connect_vpn(
     log!("[connect_vpn] (macos) called for id={}", id);
     let sudo = sudo.inner().clone();
     let app_clone = app_handle.clone();
-    let id_for_stats = id.clone();
     tokio::task::spawn_blocking(move || {
         let mut store = store::load(app_clone.config());
         let conn = store
@@ -94,19 +93,15 @@ pub async fn connect_vpn(
             std::thread::sleep(std::time::Duration::from_millis(1500));
         }
 
-        l2tp::connect_vpn(&conn.name)
+        l2tp::connect_vpn(&conn.name)?;
+
+        update_connect_stats(&mut store, &id);
+        store::save(&store)?;
+        let _ = tray::refresh_tray(&app_clone);
+        Ok(())
     })
     .await
-    .map_err(|e| e.to_string())?;
-
-    {
-        let mut store = store::load(app_handle.config());
-        update_connect_stats(&mut store, &id_for_stats);
-        let _ = store::save(&store);
-    }
-
-    let _ = tray::refresh_tray(&app_handle);
-    Ok(())
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -114,7 +109,6 @@ pub async fn connect_vpn(
 pub async fn connect_vpn(app_handle: tauri::AppHandle, id: String) -> Result<(), String> {
     log!("[connect_vpn] (windows) called for id={}", id);
     let app_clone = app_handle.clone();
-    let id_for_stats = id.clone();
     tokio::task::spawn_blocking(move || {
         let mut store = store::load(app_clone.config());
         let conn = store
@@ -148,28 +142,23 @@ pub async fn connect_vpn(app_handle: tauri::AppHandle, id: String) -> Result<(),
             std::thread::sleep(std::time::Duration::from_millis(1500));
         }
 
-        l2tp::connect_vpn(&conn.name, &conn.username, &password)
+        l2tp::connect_vpn(&conn.name, &conn.username, &password)?;
+
+        update_connect_stats(&mut store, &id);
+        store::save(&store)?;
+        let _ = tray::refresh_tray(&app_clone);
+        Ok(())
     })
     .await
-    .map_err(|e| e.to_string())?;
-
-    {
-        let mut store = store::load(app_handle.config());
-        update_connect_stats(&mut store, &id_for_stats);
-        let _ = store::save(&store);
-    }
-
-    let _ = tray::refresh_tray(&app_handle);
-    Ok(())
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
 pub async fn disconnect_vpn(id: String, app_handle: tauri::AppHandle) -> Result<(), String> {
     log!("[disconnect_vpn] called for id={}", id);
     let app_clone = app_handle.clone();
-    let id_for_stats = id.clone();
     tokio::task::spawn_blocking(move || {
-        let store = store::load(app_clone.config());
+        let mut store = store::load(app_clone.config());
         let conn = store
             .workspaces
             .iter()
@@ -177,19 +166,15 @@ pub async fn disconnect_vpn(id: String, app_handle: tauri::AppHandle) -> Result<
             .find(|c| c.id == id)
             .ok_or("Подключение не найдено")?
             .clone();
-        l2tp::disconnect_vpn(&conn.name)
+        l2tp::disconnect_vpn(&conn.name)?;
+
+        update_disconnect_stats(&mut store, &id);
+        store::save(&store)?;
+        let _ = tray::refresh_tray(&app_clone);
+        Ok(())
     })
     .await
-    .map_err(|e| e.to_string())?;
-
-    {
-        let mut store = store::load(app_handle.config());
-        update_disconnect_stats(&mut store, &id_for_stats);
-        let _ = store::save(&store);
-    }
-
-    let _ = tray::refresh_tray(&app_handle);
-    Ok(())
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
