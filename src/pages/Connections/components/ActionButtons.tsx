@@ -4,7 +4,7 @@ import {
 } from "../../../typing/definitions.ts";
 import { IconButton, Tooltip, CircularProgress } from "@mui/material";
 import { Delete, Edit, Info, NetworkCheck, PlayArrow, Stop } from "@mui/icons-material";
-import React from "react";
+import React, { useState } from "react";
 import toast from "react-hot-toast";
 import { api } from "../../../core/api";
 
@@ -90,6 +90,7 @@ export function ActionButtons({
     connectingId === connection.id ||
     disconnectingId === connection.id ||
     deletingId === connection.id;
+  const [checking, setChecking] = useState(false);
   return (
     <>
       <ConnectButton
@@ -130,17 +131,20 @@ export function ActionButtons({
       </Tooltip>
       <Tooltip
         title={
-          anyActive
-            ? "Проверка недоступна во время активного VPN-подключения"
-            : "Проверить доступность сервера"
+          checking
+            ? "Проверка..."
+            : anyActive
+              ? "Проверка недоступна во время активного VPN-подключения"
+              : "Проверить доступность сервера"
         }
       >
         <span>
           <IconButton
             size="small"
             color="default"
-            disabled={anyActive || busy}
+            disabled={anyActive || busy || checking}
             onClick={async () => {
+              setChecking(true);
               try {
                 const result = await api.vpn.check(connection.id);
                 if (result.ping && result.ipsec) {
@@ -154,10 +158,16 @@ export function ActionButtons({
                 }
               } catch (e) {
                 toast.error(String(e));
+              } finally {
+                setChecking(false);
               }
             }}
           >
-            <NetworkCheck fontSize="small" />
+            {checking ? (
+              <CircularProgress size={18} color="inherit" />
+            ) : (
+              <NetworkCheck fontSize="small" />
+            )}
           </IconButton>
         </span>
       </Tooltip>
