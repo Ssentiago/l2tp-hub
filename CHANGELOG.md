@@ -1,3 +1,8 @@
+## [0.8.0] - 2026-08-13
+
+### Features
+- show spinner on health-check button while running ([`ad7b55c`](https://github.com/Ssentiago/l2tp-hub/commit/ad7b55cf5159136df014c4a76be4e0d6d15145d7))
+
 ## [0.7.0] - 2026-08-13
 
 ### Features
