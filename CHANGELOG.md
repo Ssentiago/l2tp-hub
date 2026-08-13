@@ -12,6 +12,30 @@
 - add full loading states to all async operations ([`0809ba9`](https://github.com/Ssentiago/l2tp-hub/commit/0809ba99c026b4f46a8626910e0ad16778d5af5a))
 
 ### Bug Fixes
+- resolve block_on deadlocks, restore SudoModal on startup, remove frontend cache ([`7fce5a7`](https://github.com/Ssentiago/l2tp-hub/commit/7fce5a7350af9ae0bbba0c66d809b8828db418f5))
+- config import — file picker first, then password dialog ([`0522cee`](https://github.com/Ssentiago/l2tp-hub/commit/0522cee6cf0631a79f6cb516b86550f95b9d12d0))
+- minor UX polish — empty states, form hint, CSP ([`18cac1b`](https://github.com/Ssentiago/l2tp-hub/commit/18cac1b63f4e8a040b11cf829174496d4713c6ea))
+- remaining consistency fixes ([`befcced`](https://github.com/Ssentiago/l2tp-hub/commit/befcced4169cfe5f7cc882da4c3a18475f6d1bf7))
+- accessibility improvements — userSelect, aria-labels ([`159502b`](https://github.com/Ssentiago/l2tp-hub/commit/159502b91404916952d3014f74e6f3fcaf6362af))
+- add error handling with toast notifications to all async handlers ([`c54f935`](https://github.com/Ssentiago/l2tp-hub/commit/c54f9358f729b706a83dde4aca37ceca683e3ea2))
+
+### Refactoring
+- migrate to zustand state manager ([`8b07763`](https://github.com/Ssentiago/l2tp-hub/commit/8b07763bed9d6283f1f610dfbdc9b694d5d24205))
+
+## [0.7.0] - 2026-08-13
+
+### Features
+- migrate from JSON file storage to SQLite via sqlx ([`954c486`](https://github.com/Ssentiago/l2tp-hub/commit/954c486132da78cc797ff32af4af4dbd003997bc))
+- connection history and live uptime stats ([`0a0c49e`](https://github.com/Ssentiago/l2tp-hub/commit/0a0c49e634f736bd0d6187e29b8b6a430ebf44fb))
+- health-check now combines ISAKMP probe + ICMP ping ([`c564b02`](https://github.com/Ssentiago/l2tp-hub/commit/c564b02ae9a7c08f336a2cc8c94b21dae6f0c3a3))
+- L2TP health-check via ISAKMP SA_INIT probe ([`25dc7c8`](https://github.com/Ssentiago/l2tp-hub/commit/25dc7c85041c2347c76caf104edeec6390483eff))
+- instant tray-to-UI status sync ([`555f9dd`](https://github.com/Ssentiago/l2tp-hub/commit/555f9dd23a5b5627a314ba274ef9dc2dc19e6cf0))
+- configurable connection grouping in table ([`3985b4e`](https://github.com/Ssentiago/l2tp-hub/commit/3985b4e120dc3cfae2a07239a45e4e10290c919d))
+- real-time VPN status via Tauri events instead of polling ([`26fba93`](https://github.com/Ssentiago/l2tp-hub/commit/26fba93c942800e39b8703f1ec821fb351c65bcd))
+- add status and label filter dropdowns to connection list ([`6875ded`](https://github.com/Ssentiago/l2tp-hub/commit/6875dedd4f580e885ad528c54dff7af3c58d0505))
+- add full loading states to all async operations ([`0809ba9`](https://github.com/Ssentiago/l2tp-hub/commit/0809ba99c026b4f46a8626910e0ad16778d5af5a))
+
+### Bug Fixes
 - resolve block_on deadlocks, restore SudoModal on startup, remove frontend cache ([`74bb0f2`](https://github.com/Ssentiago/l2tp-hub/commit/74bb0f2eb7aff80703efd2d4d94b58fa8cef04fd))
 - config import — file picker first, then password dialog ([`0522cee`](https://github.com/Ssentiago/l2tp-hub/commit/0522cee6cf0631a79f6cb516b86550f95b9d12d0))
 - minor UX polish — empty states, form hint, CSP ([`18cac1b`](https://github.com/Ssentiago/l2tp-hub/commit/18cac1b63f4e8a040b11cf829174496d4713c6ea))
