@@ -218,9 +218,13 @@ if [ "$SKIP_SSL" = false ]; then
     done
 
     # Install headers + universal libs
-    echo "  Installing universal OpenSSL..."
-    cd "$BUILD_DIR/build-ssl-arm64"
-    make install_sw DESTDIR="" 2>&1 | tail -1
+    if [ -f "$OPENSSL_PREFIX/lib/libcrypto.3.dylib" ] && [ -f "$OPENSSL_PREFIX/include/openssl/opensslv.h" ]; then
+        echo "  ✓ OpenSSL already installed to $OPENSSL_PREFIX"
+    else
+        echo "  Installing universal OpenSSL..."
+        cd "$BUILD_DIR/build-ssl-arm64"
+        make install_sw 2>&1 | tail -3
+    fi
 
     # Replace arch-specific libs with universal
     for lib in libcrypto.3.dylib libssl.3.dylib; do
