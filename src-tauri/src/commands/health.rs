@@ -1,10 +1,11 @@
 use crate::l2tp::VpnStatus;
-use crate::{l2tp, log, store};
+use crate::{log, store};
 use rand::Rng;
 use std::io;
 use std::net::UdpSocket;
 use std::process::Command;
 use std::time::Duration;
+use tauri::Manager;
 
 const IKE_SA_INIT_PAYLOAD: &[u8] = include_bytes!("../../../ike-sa-init-payload.bin");
 
@@ -67,9 +68,11 @@ fn ike_probe(server: &str) -> Result<bool, String> {
 }
 
 #[tauri::command]
-pub async fn check_connection(app_handle: tauri::AppHandle, id: String) -> Result<HealthResult, String> {
+pub async fn check_connection(app_handle: tauri::AppHandle, id: String, #[cfg(target_os = "macos")] sudo: tauri::State<'_, crate::sudo::SudoSession>) -> Result<HealthResult, String> {
     log!("[health] check_connection called for id={}", id);
 
+    #[cfg(target_os = "macos")]
+    let _sudo_clone = sudo.inner().clone();
     let app_clone = app_handle.clone();
     tokio::task::spawn_blocking(move || {
         let store = store::load(app_clone.config());
@@ -82,9 +85,10 @@ pub async fn check_connection(app_handle: tauri::AppHandle, id: String) -> Resul
             .clone();
 
         // Check if any VPN is active
+        let manager = app_handle.state::<crate::l2tp::manager::L2tpManager>();
         for ws in &store.workspaces {
             for c in &ws.connections {
-                let status = l2tp::get_vpn_status(&c.name);
+                let status = manager.status(&c.id);
                 if status == VpnStatus::Connected || status == VpnStatus::Connecting {
                     return Err(
                         "Проверка недоступна во время активного VPN-подключения".into(),

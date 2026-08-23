@@ -64,9 +64,7 @@ pub async fn import(password: String) -> Result<bool, String> {
             .await
             .map_err(|e| e.to_string())??;
 
-            let app_clone = get_state().app.clone();
-
-            let _ = tray::refresh_tray(&app_clone);
+            let _ = tray::refresh_tray();
             log!("[import_config_dialog] done");
             Ok(true)
         }
@@ -118,8 +116,7 @@ pub async fn import_file(file_path: String, password: String) -> Result<bool, St
     .await
     .map_err(|e| e.to_string())??;
 
-    let app_clone = crate::state::get_state().app.clone();
-    let _ = tray::refresh_tray(&app_clone);
+    let _ = tray::refresh_tray();
     log!("[import_file] done");
     Ok(true)
 }
@@ -176,7 +173,7 @@ pub async fn reset(
     let sudo = sudo.inner().clone();
 
     let app_clone = app_handle.clone();
-    tokio::task::spawn_blocking(move || {
+    let _ = tokio::task::spawn_blocking(move || {
         let vpn_services = l2tp::list_vpn_services();
 
         for service in vpn_services {
@@ -209,6 +206,6 @@ pub async fn reset(
     .await
     .map_err(|e| e.to_string())?;
 
-    let _ = tray::refresh_tray(&app_handle);
+    let _ = tray::refresh_tray();
     Ok(())
 }

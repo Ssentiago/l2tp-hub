@@ -24,12 +24,13 @@ export const api = {
     connect: (id: string) => invoke<void>("connect_vpn", { id }),
     disconnect: (id: string) => invoke<void>("disconnect_vpn", { id }),
     getStatus: (id: string) => invoke<VpnStatus>("get_vpn_status", { id }),
+    getAllStatuses: () => invoke<Record<string, VpnStatus>>("get_all_vpn_statuses"),
     check: (id: string) =>
       invoke<{ ping: boolean; ipsec: boolean }>("check_connection", { id }),
   },
   sudo: {
-    authenticate: (password: string) =>
-      invoke<void>("authenticate_sudo", { password }),
+    authenticate: () =>
+      invoke<void>("authenticate_sudo"),
     checkSession: () => invoke<boolean>("check_sudo_session"),
   },
   labels: {
@@ -40,6 +41,9 @@ export const api = {
   },
   app: {
     openUrl: (url: string) => invoke<void>("open_url", { url }),
+  },
+  system: {
+    checkKeychainAccess: () => invoke<boolean>("check_keychain_access"),
   },
   config: {
     import: (password: string) => invoke<boolean>("import", { password }),

@@ -147,13 +147,15 @@ export function ConnectionRow({
           break;
         case "disconnected":
         case "unknown":
-          onConnect(c.id);
+          if (!anyActive) {
+            onConnect(c.id);
+          }
           break;
         default:
           console.log("[onDoubleClick] no action for status=", c.status);
       }
     },
-    [c.status, c.id, onDisconnect, onConnect]
+    [c.status, c.id, onDisconnect, onConnect, anyActive]
   );
 
   return (

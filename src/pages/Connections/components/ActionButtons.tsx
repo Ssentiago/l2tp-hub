@@ -14,12 +14,14 @@ export function ConnectButton({
   onDisconnect,
   connectingId,
   disconnectingId,
+  anyActive,
 }: {
   connection: ConnectionWithStatus;
   onConnect: (id: string) => void;
   onDisconnect: (id: string) => void;
   connectingId: string | null;
   disconnectingId: string | null;
+  anyActive: boolean;
 }) {
   if (connection.status === "connected") {
     return (
@@ -49,7 +51,8 @@ export function ConnectButton({
           onClick={() => onConnect(connection.id)}
           disabled={
             connection.status === "connecting" ||
-            connectingId === connection.id
+            connectingId === connection.id ||
+            anyActive
           }
           aria-label="Подключить"
         >
@@ -99,6 +102,7 @@ export function ActionButtons({
         onDisconnect={onDisconnect}
         connectingId={connectingId}
         disconnectingId={disconnectingId}
+        anyActive={anyActive}
       />
       <Tooltip title="Редактировать">
         <span>

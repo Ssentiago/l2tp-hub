@@ -24,6 +24,7 @@ import { About } from "./pages/About/About";
 import { LogDrawer } from "./components/LogDrawer";
 import { WorkspaceSelector } from "./components/WorkspaceSelector";
 import { Connections } from "./pages/Connections/Connections";
+import { SudoModal } from "./pages/Connections/components/SudoModal";
 import { useStore } from "./store";
 import type { Connection } from "./typing/definitions";
 import { Toaster } from "react-hot-toast";
@@ -46,7 +47,10 @@ const theme = createTheme({
   },
 });
 
-export default function App() {
+// ---------------------------------------------------------------------------
+// Main app — only mounts AFTER sudo is authenticated
+// ---------------------------------------------------------------------------
+function AppContent() {
   const [view, setView] = useState<View>("list");
   const [editingConn, setEditingConn] = useState<Connection | null>(null);
   const [showLog, setShowLog] = useState(false);
@@ -58,14 +62,14 @@ export default function App() {
     appVersion,
     loadAppVersion,
     loadWorkspaces,
-    checkSudo,
+    initVpnEventListener,
   } = useStore();
 
   useEffect(() => {
+    initVpnEventListener();
     loadAppVersion();
     loadLabels();
     loadWorkspaces();
-    checkSudo();
   }, []);
 
   const handleEdit = (conn: Connection) => {
@@ -81,8 +85,7 @@ export default function App() {
   };
 
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
+    <>
       <LogDrawer open={showLog} onClose={() => setShowLog(false)} />
 
       <AppBar
@@ -144,22 +147,42 @@ export default function App() {
       </AppBar>
 
       <Box component="main" sx={{ p: 2 }}>
-        {view === "list" ? (
-          <Connections labels={labels} onEdit={handleEdit} />
-        ) : view === "about" ? (
-          <About version={appVersion} onBack={() => setView("list")} />
-        ) : view === "settings" ? (
-          <Settings />
-        ) : (
-          <ConnectionForm
-            initialConnection={editingConn}
-            labels={labels}
-            onSave={handleFormSave}
-            onCancel={() => setView("list")}
-          />
-        )}
+        <Connections labels={labels} onEdit={() => {}} />
       </Box>
       <Toaster />
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Root — SudoModal gate, nothing else renders until authenticated
+// ---------------------------------------------------------------------------
+export default function App() {
+  const { sudoReady, authenticateSudo, checkSudo, keychainReady, checkKeychain, requestKeychainAccess } = useStore();
+
+  const handleSudoAuth = async () => {
+    await authenticateSudo();
+  };
+
+  const handleKeychainAuth = async () => {
+    await requestKeychainAccess();
+  };
+
+  const ready = sudoReady && keychainReady;
+
+  return (
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      {!ready ? (
+        <SudoModal
+          sudoReady={sudoReady}
+          keychainReady={keychainReady}
+          onAuthSudo={handleSudoAuth}
+          onAuthKeychain={handleKeychainAuth}
+        />
+      ) : (
+        <AppContent />
+      )}
     </ThemeProvider>
   );
 }

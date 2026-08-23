@@ -5,7 +5,6 @@ use crate::models::workspace::Workspace;
 use crate::store::Store;
 use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
 use std::path::PathBuf;
-use uuid::Uuid;
 
 pub async fn init_pool(db_path: &PathBuf) -> Result<SqlitePool, String> {
     if let Some(parent) = db_path.parent() {

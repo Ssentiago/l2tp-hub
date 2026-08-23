@@ -2,85 +2,141 @@ import { useState } from "react";
 import {
   Alert,
   Button,
+  Checkbox,
   CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  TextField,
+  FormControlLabel,
+  Stack,
   Typography,
 } from "@mui/material";
-import { Lock, Terminal } from "@mui/icons-material";
+import { Lock, VpnKey, CheckCircle, RadioButtonUnchecked } from "@mui/icons-material";
 
 export function SudoModal({
-  onAuth,
-  onClose,
+  sudoReady,
+  keychainReady,
+  onAuthSudo,
+  onAuthKeychain,
 }: {
-  onAuth: (p: string) => Promise<void>;
-  onClose: () => void;
+  sudoReady: boolean;
+  keychainReady: boolean;
+  onAuthSudo: () => Promise<void>;
+  onAuthKeychain: () => Promise<void>;
 }) {
-  const [pass, setPass] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(false);
+  const [sudoLoading, setSudoLoading] = useState(false);
+  const [sudoError, setSudoError] = useState<string | null>(null);
+  const [keychainLoading, setKeychainLoading] = useState(false);
+  const [keychainError, setKeychainError] = useState<string | null>(null);
 
-  const handle = async () => {
-    setLoading(true);
-    setError(false);
+  const handleSudo = async () => {
+    setSudoLoading(true);
+    setSudoError(null);
     try {
-      await onAuth(pass);
-    } catch {
-      setError(true);
-      setLoading(false);
+      await onAuthSudo();
+    } catch (e) {
+      setSudoError(String(e));
+    } finally {
+      setSudoLoading(false);
+    }
+  };
+
+  const handleKeychain = async () => {
+    setKeychainLoading(true);
+    setKeychainError(null);
+    try {
+      await onAuthKeychain();
+    } catch (e) {
+      setKeychainError(String(e));
+    } finally {
+      setKeychainLoading(false);
     }
   };
 
   return (
-    <Dialog open maxWidth="xs" fullWidth>
+    <Dialog
+      open
+      maxWidth="xs"
+      fullWidth
+      onClose={(_, reason) => {
+        if (reason === "backdropClick" || reason === "escapeKeyDown") return;
+      }}
+    >
       <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1 }}>
         <Lock fontSize="small" />
-        Требуется авторизация
+        Требуется настройка
       </DialogTitle>
       <DialogContent>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Для управления VPN-подключениями приложение использует системные
-          утилиты <code>networksetup</code> и <code>scutil</code>, которые
-          требуют прав администратора.
+          Для работы приложения необходимо два условия:
         </Typography>
 
-        <Alert
-          severity="info"
-          icon={<Terminal fontSize="small" />}
-          sx={{ mb: 2 }}
-        >
-          Пароль используется только для выполнения команд через
-          <code>sudo</code> и хранится в памяти до закрытия приложения.
-        </Alert>
+        <Stack spacing={1} sx={{ mb: 2 }}>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={sudoReady}
+                disabled
+                icon={<RadioButtonUnchecked />}
+                checkedIcon={<CheckCircle color="success" />}
+              />
+            }
+            label="Права администратора (sudo)"
+          />
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={keychainReady}
+                disabled
+                icon={<RadioButtonUnchecked />}
+                checkedIcon={<CheckCircle color="success" />}
+              />
+            }
+            label="Доступ к связке ключей"
+          />
+        </Stack>
 
-        <TextField
-          type="password"
-          label="Пароль системного пользователя"
-          size="small"
-          fullWidth
-          autoFocus
-          value={pass}
-          onChange={(e) => setPass(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && !loading && handle()}
-          error={error}
-          helperText={error ? "Неверный пароль" : ""}
-        />
+        {!sudoReady && (
+          <>
+            <Button
+              variant="contained"
+              onClick={handleSudo}
+              disabled={sudoLoading}
+              fullWidth
+              sx={{ mb: 1 }}
+              startIcon={
+                sudoLoading ? <CircularProgress size={16} /> : <Lock fontSize="small" />
+              }
+            >
+              {sudoLoading ? "Ожидание..." : "Авторизоваться (sudo)"}
+            </Button>
+            {sudoError && (
+              <Alert severity="error" sx={{ mb: 1 }}>{sudoError}</Alert>
+            )}
+          </>
+        )}
+
+        {!keychainReady && (
+          <>
+            <Button
+              variant="contained"
+              onClick={handleKeychain}
+              disabled={keychainLoading}
+              fullWidth
+              sx={{ mb: 1 }}
+              startIcon={
+                keychainLoading ? <CircularProgress size={16} /> : <VpnKey fontSize="small" />
+              }
+            >
+              {keychainLoading ? "Ожидание..." : "Разрешить доступ к связке ключей"}
+            </Button>
+            {keychainError && (
+              <Alert severity="error" sx={{ mb: 1 }}>{keychainError}</Alert>
+            )}
+          </>
+        )}
       </DialogContent>
-      <DialogActions sx={{ justifyContent: "space-between", px: 3 }}>
-        <Button
-          variant="contained"
-          onClick={handle}
-          disabled={loading || !pass}
-          startIcon={
-            loading ? <CircularProgress size={16} /> : <Lock fontSize="small" />
-          }
-        >
-          Авторизоваться
-        </Button>
-      </DialogActions>
     </Dialog>
   );
 }

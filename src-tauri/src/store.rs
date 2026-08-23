@@ -1,9 +1,7 @@
 use crate::db;
-use crate::log;
 use crate::models::label::Label;
 use crate::models::workspace::Workspace;
 use serde::{Deserialize, Serialize};
-use sqlx::Executor;
 use std::path::PathBuf;
 use tauri::path::BaseDirectory;
 use tauri::Manager;

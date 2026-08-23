@@ -33,18 +33,8 @@ macro_rules! log {
 fn main() {
     let _ = fix_path_env::fix();
 
-    #[cfg(target_os = "macos")]
-    {
-        if let Err(msg) = startup::macos::check_os_version() {
-            startup::macos::show_alert(&msg);
-            std::process::exit(1);
-        }
-
-        if let Err(msg) = startup::macos::check_macosvpn() {
-            startup::macos::show_alert(&msg);
-            std::process::exit(1);
-        }
-    }
+    // Глобальная очистка при старте — убить сиротские процессы от прошлого запуска
+    state::cleanup_all_vpn_state();
 
     let tray_state = state::TrayState {
         tray: std::sync::Mutex::new(None),
@@ -57,6 +47,11 @@ fn main() {
         .setup(|app| {
             let logger = Arc::new(logger::Logger::new(app.handle().clone()));
             LOGGER.set(logger).ok();
+
+            // Регистрируем L2tpManager — централизованный VPN-менеджер
+            let sudo = app.state::<sudo::SudoSession>().inner().clone();
+            let manager = l2tp::manager::L2tpManager::new(sudo, app.handle().clone());
+            app.manage(manager);
 
             let db_path = app
                 .path()
@@ -78,7 +73,7 @@ fn main() {
 
             state::init_state(app.handle().clone(), window);
 
-            match tray::create_tray(app.handle()) {
+            match tray::create_tray() {
                 Ok(tray) => {
                     let tray_state = app.state::<state::TrayState>();
                     *tray_state.tray.lock().unwrap() = Some(tray);
@@ -95,6 +90,7 @@ fn main() {
             commands::connect_vpn,
             commands::disconnect_vpn,
             commands::get_vpn_status,
+            commands::get_all_vpn_statuses,
             commands::check_connection,
             commands::authenticate_sudo,
             commands::check_sudo_session,
@@ -108,6 +104,7 @@ fn main() {
             commands::reset,
             commands::check_update,
             commands::apply_update,
+            commands::check_keychain_access,
             commands::get_workspaces,
             commands::get_active_workspace_id,
             commands::create_workspace,
@@ -117,6 +114,26 @@ fn main() {
         ])
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            match event {
+                tauri::RunEvent::Exit => {
+                    // Штатное отключение через L2tpManager (с кешированными sudo credentials)
+                    if let Some(active_id) = app.try_state::<l2tp::manager::L2tpManager>()
+                        .map(|m| m.active_connection())
+                        .flatten()
+                    {
+                        eprintln!("[exit] active connection found: {}, disconnecting...", active_id);
+                        let manager = app.state::<l2tp::manager::L2tpManager>();
+                        if let Err(e) = manager.disconnect(&active_id) {
+                            eprintln!("[exit] disconnect failed: {}", e);
+                        }
+                    }
+                    // Глобальная очистка при выходе — убить все VPN-процессы
+                    state::cleanup_all_vpn_state();
+                }
+                _ => {}
+            }
+        });
 }

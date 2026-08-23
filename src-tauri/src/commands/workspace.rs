@@ -10,7 +10,7 @@ pub struct WorkspaceInfo {
 }
 
 #[tauri::command]
-pub async fn get_workspaces(app_handle: tauri::AppHandle) -> Vec<WorkspaceInfo> {
+pub async fn get_workspaces(_app_handle: tauri::AppHandle) -> Vec<WorkspaceInfo> {
     let pool = crate::DB_POOL.get().expect("DB pool not initialized");
     crate::db::workspace_infos(pool)
         .await

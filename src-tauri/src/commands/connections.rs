@@ -8,7 +8,7 @@ use tauri::State;
 use uuid::Uuid;
 
 #[tauri::command]
-pub async fn get_connections(app_handle: tauri::AppHandle) -> Vec<Connection> {
+pub async fn get_connections(_app_handle: tauri::AppHandle) -> Vec<Connection> {
     log!("[get_connections] called");
     let pool = crate::DB_POOL.get().expect("DB pool not initialized");
     let ws_id = crate::db::active_workspace_id(pool).await.unwrap_or_default();
@@ -65,7 +65,7 @@ pub async fn save_connection(
 
         store::save(&store)?;
         log!("[save_connection] success");
-        let _ = tray::refresh_tray(&app_clone);
+        let _ = tray::refresh_tray();
         Ok(conn)
     })
     .await
@@ -94,7 +94,7 @@ pub async fn delete_connection(
         }
         ws.connections.retain(|c| c.id != id);
         store::save(&store)?;
-        let _ = tray::refresh_tray(&app_clone);
+        let _ = tray::refresh_tray();
         Ok(())
     })
     .await
@@ -118,7 +118,7 @@ pub async fn delete_connection(app_handle: tauri::AppHandle, id: String) -> Resu
         }
         ws.connections.retain(|c| c.id != id);
         store::save(&store)?;
-        let _ = tray::refresh_tray(&app_clone);
+        let _ = tray::refresh_tray();
         Ok(())
     })
     .await

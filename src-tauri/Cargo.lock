@@ -2333,7 +2333,7 @@ dependencies = [
 
 [[package]]
 name = "l2tp-hub"
-version = "0.6.0"
+version = "0.8.0"
 dependencies = [
  "aes-gcm",
  "fix-path-env",

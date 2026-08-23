@@ -1,9 +1,11 @@
 import { create } from "zustand";
+import { listen } from "@tauri-apps/api/event";
 import { api } from "./core/api";
 import type {
   ConnectionWithStatus,
   ConnectionPayload,
   Label,
+  VpnStatus,
   WorkspaceInfo,
 } from "./typing/definitions";
 
@@ -24,7 +26,11 @@ interface Store {
 
   sudoReady: boolean;
   checkSudo: () => Promise<void>;
-  authenticateSudo: (password: string) => Promise<void>;
+  authenticateSudo: () => Promise<void>;
+
+  keychainReady: boolean;
+  checkKeychain: () => Promise<void>;
+  requestKeychainAccess: () => Promise<void>;
 
   appVersion: string;
   loadAppVersion: () => Promise<void>;
@@ -38,7 +44,13 @@ interface Store {
   deleteConnection: (id: string) => Promise<void>;
   connectVpn: (id: string) => Promise<void>;
   disconnectVpn: (id: string) => Promise<void>;
+
+  /** Инициализирует event listener для vpn-status-changed. Вызвать один раз при старте. */
+  initVpnEventListener: () => void;
 }
+
+// Глобальный ref для unlisten, чтобы не дублировать listener
+let vpnEventUnlisten: (() => void) | null = null;
 
 export const useStore = create<Store>((set, get) => ({
   labels: [],
@@ -95,10 +107,28 @@ export const useStore = create<Store>((set, get) => ({
     const ready = await api.sudo.checkSession();
     set({ sudoReady: ready });
   },
-  authenticateSudo: async (password) => {
-    await api.sudo.authenticate(password);
+  authenticateSudo: async () => {
+    await api.sudo.authenticate();
     const ready = await api.sudo.checkSession();
     set({ sudoReady: ready });
+  },
+
+  keychainReady: false,
+  checkKeychain: async () => {
+    try {
+      const ok = await api.system.checkKeychainAccess();
+      set({ keychainReady: ok });
+    } catch {
+      set({ keychainReady: false });
+    }
+  },
+  requestKeychainAccess: async () => {
+    try {
+      const ok = await api.system.checkKeychainAccess();
+      set({ keychainReady: ok });
+    } catch {
+      set({ keychainReady: false });
+    }
   },
 
   appVersion: "...",
@@ -114,12 +144,11 @@ export const useStore = create<Store>((set, get) => ({
   deletingId: null,
   loadConnections: async () => {
     const conns = await api.connections.getAll();
-    const withStatus = await Promise.all(
-      conns.map(async (c) => ({
-        ...c,
-        status: await api.vpn.getStatus(c.id).catch(() => "unknown" as const),
-      })),
-    );
+    const statuses = await api.vpn.getAllStatuses().catch(() => ({} as Record<string, VpnStatus>));
+    const withStatus = conns.map((c) => ({
+      ...c,
+      status: (statuses[c.id] ?? "unknown") as VpnStatus,
+    }));
     set({ connections: withStatus });
   },
   saveConnection: async (payload) => {
@@ -134,8 +163,12 @@ export const useStore = create<Store>((set, get) => ({
     }));
   },
   connectVpn: async (id) => {
-    const { sudoReady, connectingId } = get();
+    // Re-validate sudo — cache may have expired since last check
+    await get().checkSudo();
+    const { sudoReady, connectingId, connections } = get();
     if (!sudoReady || connectingId) return;
+    // Блокируем если другое соединение уже активно
+    if (connections.some((c) => c.id !== id && (c.status === "connected" || c.status === "connecting"))) return;
     set({ connectingId: id });
     set((s) => ({
       connections: s.connections.map((c) =>
@@ -143,35 +176,24 @@ export const useStore = create<Store>((set, get) => ({
       ),
     }));
     try {
+      // connect блокирует до полного установления VPN (~15 сек)
+      // Статус обновится через vpn-status-changed event от бэкенда
       await api.vpn.connect(id);
     } catch (e) {
+      // Ошибка — event "disconnected" уже пришёл от бэкенда, но на всякий случай:
+      set((s) => ({
+        connections: s.connections.map((c) =>
+          c.id === id ? { ...c, status: "disconnected" as const } : c,
+        ),
+      }));
       set({ connectingId: null });
-      set((s) => ({
-        connections: s.connections.map((c) =>
-          c.id === id ? { ...c, status: "unknown" as const } : c,
-        ),
-      }));
-      return;
     }
-    for (let i = 0; i < 20; i++) {
-      await new Promise((r) => setTimeout(r, 500));
-      const status = await api.vpn.getStatus(id).catch(() => "unknown" as const);
-      set((s) => ({
-        connections: s.connections.map((c) =>
-          c.id === id ? { ...c, status } : c,
-        ),
-      }));
-      if (status === "connected" || status !== "connecting") {
-        set({ connectingId: null });
-        return;
-      }
-    }
-    set({ connectingId: null });
+    // connectingId сбрасывается event listener'ом при получении "connected"
+    // НЕ вызываем loadConnections() — event listener обновит статус
   },
   disconnectVpn: async (id) => {
     const { disconnectingId } = get();
     if (disconnectingId) return;
-    const prev = get().connections.find((c) => c.id === id);
     set({ disconnectingId: id });
     set((s) => ({
       connections: s.connections.map((c) =>
@@ -181,21 +203,31 @@ export const useStore = create<Store>((set, get) => ({
     try {
       await api.vpn.disconnect(id);
     } catch (e) {
-      set({ disconnectingId: null });
+      // Ошибка — статус уже выставлен в "disconnected" оптимистично
+    }
+    // disconnectingId сбрасывается event listener'ом при получении "disconnected"
+    // НЕ вызываем loadConnections() — event listener обновит статус
+  },
+
+  initVpnEventListener: () => {
+    if (vpnEventUnlisten) return; // уже инициализирован
+    listen<{ id: string; status: VpnStatus; connected_since?: number }>("vpn-status-changed", (event) => {
+      const { id, status, connected_since } = event.payload;
+      console.log("[store] vpn-status-changed event:", id, status, connected_since);
       set((s) => ({
         connections: s.connections.map((c) =>
-          c.id === id ? { ...c, status: prev?.status ?? "unknown" as const } : c,
+          c.id === id ? { ...c, status, ...(connected_since !== undefined ? { connected_since } : {}) } : c,
         ),
       }));
-      return;
-    }
-    await new Promise((r) => setTimeout(r, 2000));
-    const status = await api.vpn.getStatus(id).catch(() => "unknown" as const);
-    set((s) => ({
-      connections: s.connections.map((c) =>
-        c.id === id ? { ...c, status } : c,
-      ),
-    }));
-    set({ disconnectingId: null });
+      // Сбрасываем pending state при получении финального статуса
+      if (status === "connected") {
+        set({ connectingId: null });
+      }
+      if (status === "disconnected") {
+        set({ disconnectingId: null });
+      }
+    }).then((unlisten) => {
+      vpnEventUnlisten = unlisten;
+    });
   },
 }));
