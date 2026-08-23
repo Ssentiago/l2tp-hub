@@ -418,8 +418,43 @@ echo "============================================"
 echo " BUILD COMPLETE"
 echo "============================================"
 echo ""
-echo "Resources:"
-ls -lh "$RESOURCES_DIR/ipsec/" "$RESOURCES_DIR/xl2tpd/"
+echo "  Pinned dependencies:"
+echo "    OpenSSL      ${OPENSSL_VERSION}  (${OPENSSL_SHA256:0:16}...)"
+echo "    strongSwan   ${STRONGSWAN_VERSION}  (${STRONGSWAN_SHA256:0:16}...)"
+echo "    xl2tpd       ${XL2TPD_COMMIT}  (xelerance/xl2tpd)"
 echo ""
-echo "Universal binaries:"
-file "$RESOURCES_DIR/ipsec/charon" "$RESOURCES_DIR/ipsec/swanctl" "$RESOURCES_DIR/xl2tpd/xl2tpd"
+echo "  Output binaries (universal arm64+x86_64):"
+echo ""
+
+fmt="    %-35s %8s  %s\n"
+printf "$fmt" "FILE" "SIZE" "PATH"
+printf "$fmt" "----" "----" "----"
+
+for f in \
+    "$RESOURCES_DIR/ipsec/charon" \
+    "$RESOURCES_DIR/ipsec/swanctl" \
+    "$RESOURCES_DIR/ipsec/libcharon.0.dylib" \
+    "$RESOURCES_DIR/ipsec/libcrypto.3.dylib" \
+    "$RESOURCES_DIR/ipsec/libssl.3.dylib" \
+    "$RESOURCES_DIR/ipsec/libstrongswan.0.dylib" \
+    "$RESOURCES_DIR/ipsec/libvici.0.dylib" \
+    "$RESOURCES_DIR/xl2tpd/xl2tpd"; do
+    name=$(basename "$f")
+    size=$(ls -lh "$f" | awk '{print $5}')
+    printf "$fmt" "$name" "$size" "$f"
+done
+
+echo ""
+echo "  Config & scripts:"
+printf "$fmt" "ipsec" "159B" "$RESOURCES_DIR/ipsec/ipsec"
+printf "$fmt" "strongswan.conf" "$(ls -lh "$RESOURCES_DIR/etc/strongswan.conf" 2>/dev/null | awk '{print $5}')" "$RESOURCES_DIR/etc/strongswan.conf"
+printf "$fmt" "route-guardian.sh" "$(ls -lh "$RESOURCES_DIR/route-guardian.sh" 2>/dev/null | awk '{print $5}')" "$RESOURCES_DIR/route-guardian.sh"
+
+echo ""
+echo "  Architecture verification:"
+for f in "$RESOURCES_DIR/ipsec/charon" "$RESOURCES_DIR/ipsec/swanctl" "$RESOURCES_DIR/xl2tpd/xl2tpd"; do
+    name=$(basename "$f")
+    arches=$(file "$f" | head -1 | sed 's/.*: //')
+    echo "    $name: $arches"
+done
+echo ""
