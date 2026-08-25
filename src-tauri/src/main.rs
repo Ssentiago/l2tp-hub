@@ -3,16 +3,18 @@
 use crate::logger::Logger;
 use fix_path_env;
 use std::sync::Arc;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 pub mod backup;
 pub mod commands;
 pub mod db;
+pub mod helper;
 pub mod keychain;
 pub mod l2tp;
 pub mod logger;
 pub mod models;
 pub mod startup;
+mod sleep_wake;
 mod state;
 mod store;
 mod sudo;
@@ -42,14 +44,16 @@ fn main() {
     };
 
     tauri::Builder::default()
-        .manage(sudo::SudoSession::new())
         .manage(tray_state)
         .setup(|app| {
             let logger = Arc::new(logger::Logger::new(app.handle().clone()));
             LOGGER.set(logger).ok();
 
+            // SudoSession — управление privileged helper
+            let sudo = sudo::SudoSession::new();
+            app.manage(sudo.clone());
+
             // Регистрируем L2tpManager — централизованный VPN-менеджер
-            let sudo = app.state::<sudo::SudoSession>().inner().clone();
             let manager = l2tp::manager::L2tpManager::new(sudo, app.handle().clone());
             app.manage(manager);
 
@@ -81,6 +85,22 @@ fn main() {
                 Err(e) => eprintln!("Failed to create tray: {}", e),
             }
 
+            // Sleep/Wake — проверяем VPN после пробуждения
+            let wake_app = app.handle().clone();
+            sleep_wake::subscribe_sleep_wake(
+                || {
+                    crate::log!("[sleep-wake] system going to sleep");
+                },
+                move || {
+                    crate::log!("[sleep-wake] system woke up");
+                    let app = wake_app.clone();
+                    // Даём сети время подняться после wake
+                    std::thread::sleep(std::time::Duration::from_secs(3));
+                    // Проверяем и переподключаем VPN если нужно
+                    on_system_wake(&app);
+                },
+            );
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -94,6 +114,8 @@ fn main() {
             commands::check_connection,
             commands::authenticate_sudo,
             commands::check_sudo_session,
+            commands::check_helper_status,
+            commands::get_helper_status_text,
             commands::get_labels,
             commands::open_url,
             commands::save_label,
@@ -136,4 +158,91 @@ fn main() {
                 _ => {}
             }
         });
+}
+
+/// Обработчик wake — проверяет IPSec SA и переподключает если нужно.
+/// Debounce: если проверка уже идёт — игнорируем повторный wake.
+fn on_system_wake(app: &tauri::AppHandle) {
+    static WAKE_IN_PROGRESS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+    if WAKE_IN_PROGRESS.compare_exchange(false, true,
+        std::sync::atomic::Ordering::SeqCst,
+        std::sync::atomic::Ordering::SeqCst).is_err() {
+        crate::log!("[sleep-wake] wake check already in progress, skipping");
+        return;
+    }
+
+    let result = do_wake_check(app);
+    WAKE_IN_PROGRESS.store(false, std::sync::atomic::Ordering::SeqCst);
+
+    if let Err(e) = result {
+        crate::log!("[sleep-wake] wake check error: {}", e);
+    }
+}
+
+fn do_wake_check(app: &tauri::AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+
+    let manager = app.try_state::<l2tp::manager::L2tpManager>()
+        .ok_or("no L2tpManager")?
+        .inner()
+        .clone();
+
+    let active_id = match manager.active_connection() {
+        Some(id) => id,
+        None => {
+            crate::log!("[sleep-wake] no active connection, nothing to check");
+            return Ok(());
+        }
+    };
+
+    crate::log!("[sleep-wake] checking SA for active connection: {}", active_id);
+
+    // Получаем имя подключения для проверки SA
+    let store = store::load(app.config());
+    let conn_name = store.workspaces.iter()
+        .flat_map(|ws| ws.connections.iter())
+        .find(|c| c.id == active_id)
+        .map(|c| c.name.clone())
+        .ok_or("connection not found")?;
+
+    // Проверяем SA через helper
+    let sudo = app.state::<sudo::SudoSession>().inner().clone();
+    let sa_alive = l2tp::check_ipsec_sa_alive(&sudo, &conn_name);
+
+    if sa_alive {
+        crate::log!("[sleep-wake] SA still alive after wake, no action needed");
+    } else {
+        crate::log!("[sleep-wake] SA dead after wake, reconnecting {}", active_id);
+        // Эмитим "reconnecting" для UI
+        let _ = app.emit("vpn-status-changed", serde_json::json!({
+            "id": active_id,
+            "status": "reconnecting"
+        }));
+        // Отключаем мёртвое состояние
+        if let Err(e) = manager.disconnect(&active_id) {
+            crate::log!("[sleep-wake] disconnect failed: {}", e);
+        }
+        // Пауза перед переподключением
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        // Переподключаем
+        match manager.connect(&active_id) {
+            Ok(()) => {
+                crate::log!("[sleep-wake] reconnect success");
+                let _ = app.emit("vpn-status-changed", serde_json::json!({
+                    "id": active_id,
+                    "status": "connected"
+                }));
+            }
+            Err(e) => {
+                crate::log!("[sleep-wake] reconnect failed: {}", e);
+                let _ = app.emit("vpn-status-changed", serde_json::json!({
+                    "id": active_id,
+                    "status": "disconnected"
+                }));
+            }
+        }
+    }
+
+    Ok(())
 }

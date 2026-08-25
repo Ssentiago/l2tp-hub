@@ -4,23 +4,17 @@
 # =============================================================================
 # Запускается через sudo с process_group(0) — живёт независимо от Tauri.
 # Если Tauri крашнется или пользователь закроет приложение — watchdog обнаружит
-# что pppd/charon/xl2tpd умерли и ПОЛНОСТЬЮ откатит всё:
-#   1. Восстановит default route
-#   2. Убьёт всех сиротских процессов (charon, xl2tpd, pppd)
-#   3. Удалит LaunchDaemon plists
-#   4. Удалит VICI/pid файлы
-#   5. Удалит временные файлы и логи
-#   6. Удалит route.state
+# что pppd/charon/xl2tpd умерли и ПОЛНОСТЬЮ откатит всё.
 #
-# Аргументы: $1=original_gateway $2=vpn_server $3=check_interval $4=max_lifetime_hours
+# Аргументы: $1=original_interface $2=original_gateway $3=vpn_server $4=check_interval $5=max_lifetime_hours
 #
-# Идемпотентен — безопасен при штатном disconnect (route уже правильный →
-# ничего не делает, кроме убийства сирот).
+# Идемпотентен — безопасен при штатном disconnect.
 
-ORIGINAL_GW="$1"
-SERVER_IP="$2"
-CHECK_INTERVAL="${3:-5}"
-MAX_HOURS="${4:-24}"
+ORIG_IFACE="$1"
+ORIGINAL_GW="$2"
+SERVER_IP="$3"
+CHECK_INTERVAL="${4:-5}"
+MAX_HOURS="${5:-24}"
 LOG="/tmp/l2tp/route-guardian.log"
 
 CHARON_LABEL="com.sentiago.l2tp-hub.charon"
@@ -33,24 +27,78 @@ log() {
 }
 
 # =============================================================================
+# Умное определение gateway для восстановления route
+# Сначала проверяет исходный интерфейс, потом ищет любой активный
+# =============================================================================
+resolve_gateway() {
+    local orig_iface="$1"
+
+    # Шаг 1: жив ли исходный физический интерфейс?
+    if [ -n "$orig_iface" ] && ifconfig "$orig_iface" 2>/dev/null | grep -q "status: active"; then
+        local gw
+        gw=$(route -n get -ifscope "$orig_iface" default 2>/dev/null | awk '/gateway/{print $2}')
+        if [ -n "$gw" ]; then
+            log "resolved gateway via original iface $orig_iface: $gw"
+            echo "$gw"
+            return
+        fi
+    fi
+
+    # Шаг 2: исходный интерфейс не активен — ищем любой активный физический
+    log "original iface $orig_iface not active, searching alternatives..."
+    for iface in en0 en1 en2 en3 en4; do
+        if ifconfig "$iface" 2>/dev/null | grep -q "status: active"; then
+            local gw
+            gw=$(route -n get -ifscope "$iface" default 2>/dev/null | awk '/gateway/{print $2}')
+            if [ -n "$gw" ]; then
+                log "resolved gateway via alternative iface $iface: $gw"
+                echo "$gw"
+                return
+            fi
+        fi
+    done
+
+    # Шаг 3: fallback — scutil --nwi
+    local primary_iface
+    primary_iface=$(scutil --nwi 2>/dev/null | awk '/IPv4 default interface/{print $NF}')
+    if [ -n "$primary_iface" ]; then
+        local gw
+        gw=$(route -n get -ifscope "$primary_iface" default 2>/dev/null | awk '/gateway/{print $2}')
+        if [ -n "$gw" ]; then
+            log "resolved gateway via scutil nwi ($primary_iface): $gw"
+            echo "$gw"
+            return
+        fi
+    fi
+
+    log "WARNING: could not resolve any gateway"
+}
+
+# =============================================================================
 # Full cleanup — вызывается при обнаружении краша или при штатном выходе
 # =============================================================================
 full_cleanup() {
     log "=== FULL CLEANUP START ==="
 
-    # 1. Восстановить default route (идемпотентно)
-    if [ -n "$ORIGINAL_GW" ]; then
-        log "restoring default route to $ORIGINAL_GW"
+    # 1. Умное восстановление default route
+    RESTORE_GW=$(resolve_gateway "$ORIG_IFACE")
+
+    if [ -n "$RESTORE_GW" ]; then
+        log "restoring default route to $RESTORE_GW (iface=$ORIG_IFACE)"
         /sbin/route delete -host "$SERVER_IP" 2>/dev/null
         /sbin/route delete default 2>/dev/null
-        /sbin/route add default "$ORIGINAL_GW" 2>> "$LOG"
+        /sbin/route add default "$RESTORE_GW" 2>> "$LOG"
         # Верификация
         GW_NOW=$(route -n get default 2>/dev/null | awk '/gateway:/{print $2}')
-        if [ "$GW_NOW" = "$ORIGINAL_GW" ]; then
+        if [ "$GW_NOW" = "$RESTORE_GW" ]; then
             log "route verified: default gw = $GW_NOW ✓"
         else
-            log "WARNING: route restore may have failed. expected=$ORIGINAL_GW got=$GW_NOW"
+            log "WARNING: route restore mismatch. expected=$RESTORE_GW got=$GW_NOW"
         fi
+    else
+        log "WARNING: no gateway resolved — deleting VPN default, user may need manual fix"
+        /sbin/route delete -host "$SERVER_IP" 2>/dev/null
+        /sbin/route delete default 2>/dev/null
     fi
 
     # 2. Убить всех VPN-процессов (SIGTERM → пауза → SIGKILL)
@@ -102,12 +150,12 @@ full_cleanup() {
 # =============================================================================
 # Pre-flight
 # =============================================================================
-if [ -z "$ORIGINAL_GW" ] || [ -z "$SERVER_IP" ]; then
-    log "ERROR: missing args. Usage: $0 <original_gateway> <server_ip> [check_interval] [max_hours]"
+if [ -z "$SERVER_IP" ]; then
+    log "ERROR: missing args. Usage: $0 <original_interface> <original_gateway> <server_ip> [check_interval] [max_hours]"
     exit 1
 fi
 
-log "started: gw=$ORIGINAL_GW server=$SERVER_IP interval=${CHECK_INTERVAL}s max=${MAX_HOURS}h pid=$$"
+log "started: iface=$ORIG_IFACE gw=$ORIGINAL_GW server=$SERVER_IP interval=${CHECK_INTERVAL}s max=${MAX_HOURS}h pid=$$"
 
 # Сохраняем свой PID для cleanup
 echo $$ > /tmp/l2tp/route-guardian.pid
@@ -152,14 +200,8 @@ while [ "$ITERATION" -lt "$MAX_ITERATIONS" ]; do
     fi
 
     # Если charon мёртв но pppd жив — VPN в деградированном состоянии
-    # pppd скоро умрёт сам (IPSec туннель разорван), но на всякий случай
-    # проверяем route
     if [ "$CHARON_ALIVE" = "false" ]; then
         log "WARNING: charon dead but pppd alive — checking route integrity"
-        CURRENT_GW=$(route -n get default 2>/dev/null | awk '/gateway:/{print $2}')
-        if [ "$CURRENT_GW" != "$ORIGINAL_GW" ] && [ "$CURRENT_GW" != "$SERVER_IP" ]; then
-            log "route suspicious: gw=$CURRENT_GW (expected $ORIGINAL_GW or $SERVER_IP)"
-        fi
     fi
 
     # Heartbeat каждые 60 итераций (~5 мин при interval=5)

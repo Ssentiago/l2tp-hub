@@ -158,6 +158,25 @@ pub async fn load_store(pool: &SqlitePool) -> Result<Store, String> {
             .unwrap_or_default()
     });
 
+    // Гарантируем что хотя бы один workspace существует
+    if result_workspaces.is_empty() {
+        let ws = Workspace::new("Основной");
+        let id = ws.id.clone();
+        result_workspaces.push(ws);
+        // Сохраняем дефолтный workspace в БД
+        let _ = sqlx::query("INSERT INTO workspaces (id, name, group_by) VALUES (?, ?, ?)")
+            .bind(&id)
+            .bind("Основной")
+            .bind("[]")
+            .execute(pool)
+            .await;
+        return Ok(Store {
+            workspaces: result_workspaces,
+            active_workspace_id: id,
+            labels,
+        });
+    }
+
     Ok(Store {
         workspaces: result_workspaces,
         active_workspace_id,

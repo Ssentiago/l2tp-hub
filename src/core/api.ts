@@ -32,6 +32,8 @@ export const api = {
     authenticate: () =>
       invoke<void>("authenticate_sudo"),
     checkSession: () => invoke<boolean>("check_sudo_session"),
+    checkHelper: () => invoke<boolean>("check_helper_status"),
+    getHelperStatusText: () => invoke<string>("get_helper_status_text"),
   },
   labels: {
     getAll: () => invoke<Label[]>("get_labels"),

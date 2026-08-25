@@ -42,7 +42,11 @@ pub async fn connect_vpn(
         }
         Err(e) => {
             log!("[connect_vpn] failed: {}, emitting disconnected event", e);
-            let _ = app.emit("vpn-status-changed", serde_json::json!({ "id": id, "status": "disconnected" }));
+            let _ = app.emit("vpn-status-changed", serde_json::json!({
+                "id": id,
+                "status": "disconnected",
+                "error": e
+            }));
         }
     }
     result

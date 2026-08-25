@@ -22,10 +22,11 @@ export interface Connection {
   last_disconnected_at: number | null;
 }
 
-export type VpnStatus = "connected" | "connecting" | "disconnected" | "unknown";
+export type VpnStatus = "connected" | "connecting" | "reconnecting" | "disconnected" | "unknown";
 
 export interface ConnectionWithStatus extends Connection {
   status: VpnStatus;
+  error?: string;
 }
 
 export interface ConnectionPayload {

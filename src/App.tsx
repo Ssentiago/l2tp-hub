@@ -17,6 +17,8 @@ import {
   Settings as SettingsIcon,
   Info,
   Terminal,
+  CheckCircle,
+  Error as ErrorIcon,
 } from "@mui/icons-material";
 import { ConnectionForm } from "./pages/ConnectionForm/ConnectionForm";
 import { Settings } from "./pages/Settings/Settings";
@@ -63,6 +65,8 @@ function AppContent() {
     loadAppVersion,
     loadWorkspaces,
     initVpnEventListener,
+    helperReady,
+    checkHelper,
   } = useStore();
 
   useEffect(() => {
@@ -70,6 +74,10 @@ function AppContent() {
     loadAppVersion();
     loadLabels();
     loadWorkspaces();
+    checkHelper();
+    // Poll helper status каждые 5 сек
+    const interval = setInterval(checkHelper, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleEdit = (conn: Connection) => {
@@ -111,6 +119,15 @@ function AppContent() {
 
           {view === "list" && (
             <>
+              <Tooltip title={helperReady ? "Сервис активен" : "Сервис не отвечает"}>
+                <Box sx={{ display: "flex", alignItems: "center", mr: 1 }}>
+                  {helperReady ? (
+                    <CheckCircle fontSize="small" color="success" />
+                  ) : (
+                    <ErrorIcon fontSize="small" color="error" />
+                  )}
+                </Box>
+              </Tooltip>
               <Tooltip title="Лог / отладка">
                 <IconButton color="inherit" onClick={() => setShowLog(true)} aria-label="Лог / отладка">
                   <Terminal />
@@ -147,7 +164,23 @@ function AppContent() {
       </AppBar>
 
       <Box component="main" sx={{ p: 2 }}>
-        <Connections labels={labels} onEdit={() => {}} />
+        {view === "form" ? (
+          <ConnectionForm
+            initialConnection={editingConn}
+            labels={labels}
+            onSave={handleFormSave}
+            onCancel={() => {
+              setView("list");
+              setEditingConn(null);
+            }}
+          />
+        ) : view === "settings" ? (
+          <Settings />
+        ) : view === "about" ? (
+          <About version={appVersion} onBack={() => setView("list")} />
+        ) : (
+          <Connections labels={labels} onEdit={handleEdit} />
+        )}
       </Box>
       <Toaster />
     </>
@@ -155,10 +188,19 @@ function AppContent() {
 }
 
 // ---------------------------------------------------------------------------
-// Root — SudoModal gate, nothing else renders until authenticated
+// Root — SudoModal gate (macOS only), nothing else renders until authenticated
 // ---------------------------------------------------------------------------
 export default function App() {
-  const { sudoReady, authenticateSudo, checkSudo, keychainReady, checkKeychain, requestKeychainAccess } = useStore();
+  const { sudoReady, authenticateSudo, keychainReady, requestKeychainAccess, helperStatusText, pollHelperStatus } = useStore();
+
+  const isMac = navigator.userAgent.includes("Mac");
+
+  // Poll helper status пока не ready (показывает "Ожидание сервиса (1/3)..." и т.д.)
+  useEffect(() => {
+    if (!isMac || (sudoReady && keychainReady)) return;
+    const interval = setInterval(pollHelperStatus, 1000);
+    return () => clearInterval(interval);
+  }, [isMac, sudoReady, keychainReady]);
 
   const handleSudoAuth = async () => {
     await authenticateSudo();
@@ -168,15 +210,17 @@ export default function App() {
     await requestKeychainAccess();
   };
 
-  const ready = sudoReady && keychainReady;
+  // Windows — сразу ready, без авторизации
+  const ready = isMac ? (sudoReady && keychainReady) : true;
 
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      {!ready ? (
+      {isMac && !ready ? (
         <SudoModal
           sudoReady={sudoReady}
           keychainReady={keychainReady}
+          helperStatusText={helperStatusText}
           onAuthSudo={handleSudoAuth}
           onAuthKeychain={handleKeychainAuth}
         />

@@ -328,6 +328,10 @@ export function Settings() {
                   />
                 )}
               </ListItem>
+            </Box>
+          ))}
+        </List>
+
       {/* Update dialog */}
       <Dialog
         open={updateDialogOpen}
@@ -363,9 +367,6 @@ export function Settings() {
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
-          ))}
-        </List>
 
         <Divider sx={{ my: 2 }} />
 

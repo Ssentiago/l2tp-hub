@@ -1,5 +1,4 @@
-#!/bin/bash
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-export DYLD_LIBRARY_PATH="$SCRIPT_DIR:${DYLD_LIBRARY_PATH:-}"
-export STRONGSWAN_CONF="${STRONGSWAN_CONF:-$SCRIPT_DIR/../etc/strongswan.conf}"
-exec "$SCRIPT_DIR/charon" "$@"
+#!/bin/sh
+DIR="$(cd "$(dirname "$0")" && pwd)"
+export DYLD_LIBRARY_PATH="$DIR"
+exec "$DIR/charon" "$@"

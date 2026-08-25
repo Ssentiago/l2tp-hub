@@ -432,7 +432,42 @@ cp "$BUILD_DIR/universal-swanctl/swanctl"                  "$RESOURCES_DIR/ipsec
 cp "$BUILD_DIR/universal-xl2tpd/xl2tpd"                    "$RESOURCES_DIR/xl2tpd/"
 cp "$BUILD_DIR/../src-tauri/resources/etc/strongswan.conf" "$RESOURCES_DIR/etc/" 2>/dev/null || true
 
-ok "Deployed to src-tauri/resources/"
+# ---------------------------------------------------------------------------
+# Step 5b: Fix dylib paths — @loader_path вместо абсолютных путей
+# Без этого бинарники не найдут библиотеки при запуске из app bundle
+# ---------------------------------------------------------------------------
+step "Fixing dylib install names..."
+
+IPSEC="$RESOURCES_DIR/ipsec"
+
+# Симлинки для @rpath-ссылок (swanctl → @rpath/libcrypto.dylib)
+ln -sf libcrypto.3.dylib "$IPSEC/libcrypto.dylib"
+ln -sf libssl.3.dylib "$IPSEC/libssl.dylib"
+
+# swanctl: абсолютные пути → @loader_path/
+install_name_tool -change "/usr/local/lib/ipsec/libvici.0.dylib" "@loader_path/libvici.0.dylib" "$IPSEC/swanctl"
+install_name_tool -change "/usr/local/lib/ipsec/libstrongswan.0.dylib" "@loader_path/libstrongswan.0.dylib" "$IPSEC/swanctl"
+install_name_tool -add_rpath "@executable_path" "$IPSEC/swanctl" 2>/dev/null || true
+
+# charon: абсолютные пути → @loader_path/
+install_name_tool -change "/usr/local/lib/ipsec/libstrongswan.0.dylib" "@loader_path/libstrongswan.0.dylib" "$IPSEC/charon"
+install_name_tool -change "/usr/local/lib/ipsec/libcharon.0.dylib" "@loader_path/libcharon.0.dylib" "$IPSEC/charon"
+install_name_tool -change "/usr/local/opt/openssl@3/lib/libcrypto.3.dylib" "@loader_path/libcrypto.3.dylib" "$IPSEC/charon"
+
+# Библиотеки: id + зависимости → @loader_path/
+install_name_tool -id "@loader_path/libcharon.0.dylib" "$IPSEC/libcharon.0.dylib"
+install_name_tool -id "@loader_path/libstrongswan.0.dylib" "$IPSEC/libstrongswan.0.dylib"
+install_name_tool -id "@loader_path/libvici.0.dylib" "$IPSEC/libvici.0.dylib"
+install_name_tool -id "@loader_path/libcrypto.3.dylib" "$IPSEC/libcrypto.3.dylib"
+install_name_tool -id "@loader_path/libssl.3.dylib" "$IPSEC/libssl.3.dylib"
+install_name_tool -change "/usr/local/opt/openssl@3/lib/libcrypto.3.dylib" "@loader_path/libcrypto.3.dylib" "$IPSEC/libstrongswan.0.dylib"
+
+# Re-sign (install_name_tool ломает подпись)
+for f in "$IPSEC"/*; do
+    file "$f" | grep -q "Mach-O" && codesign --force --sign - "$f" 2>/dev/null
+done
+
+ok "Dylib paths fixed (@loader_path)"
 
 # ---------------------------------------------------------------------------
 # Summary

@@ -17,11 +17,13 @@ import { Lock, VpnKey, CheckCircle, RadioButtonUnchecked } from "@mui/icons-mate
 export function SudoModal({
   sudoReady,
   keychainReady,
+  helperStatusText,
   onAuthSudo,
   onAuthKeychain,
 }: {
   sudoReady: boolean;
   keychainReady: boolean;
+  helperStatusText: string;
   onAuthSudo: () => Promise<void>;
   onAuthKeychain: () => Promise<void>;
 }) {
@@ -109,7 +111,10 @@ export function SudoModal({
                 sudoLoading ? <CircularProgress size={16} /> : <Lock fontSize="small" />
               }
             >
-              {sudoLoading ? "Ожидание..." : "Авторизоваться (sudo)"}
+              {sudoLoading
+                ? (helperStatusText || "Ожидание...")
+                : "Авторизоваться (сервис)"
+              }
             </Button>
             {sudoError && (
               <Alert severity="error" sx={{ mb: 1 }}>{sudoError}</Alert>

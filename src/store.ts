@@ -25,8 +25,12 @@ interface Store {
   deleteWorkspace: (id: string) => Promise<void>;
 
   sudoReady: boolean;
+  helperReady: boolean;
+  helperStatusText: string;
   checkSudo: () => Promise<void>;
   authenticateSudo: () => Promise<void>;
+  checkHelper: () => Promise<void>;
+  pollHelperStatus: () => Promise<void>;
 
   keychainReady: boolean;
   checkKeychain: () => Promise<void>;
@@ -103,6 +107,8 @@ export const useStore = create<Store>((set, get) => ({
   },
 
   sudoReady: false,
+  helperReady: false,
+  helperStatusText: "",
   checkSudo: async () => {
     const ready = await api.sudo.checkSession();
     set({ sudoReady: ready });
@@ -111,6 +117,22 @@ export const useStore = create<Store>((set, get) => ({
     await api.sudo.authenticate();
     const ready = await api.sudo.checkSession();
     set({ sudoReady: ready });
+  },
+  checkHelper: async () => {
+    try {
+      const ok = await api.sudo.checkHelper();
+      set({ helperReady: ok });
+    } catch {
+      set({ helperReady: false });
+    }
+  },
+  pollHelperStatus: async () => {
+    try {
+      const text = await api.sudo.getHelperStatusText();
+      set({ helperStatusText: text });
+    } catch {
+      set({ helperStatusText: "" });
+    }
   },
 
   keychainReady: false,
@@ -211,12 +233,17 @@ export const useStore = create<Store>((set, get) => ({
 
   initVpnEventListener: () => {
     if (vpnEventUnlisten) return; // уже инициализирован
-    listen<{ id: string; status: VpnStatus; connected_since?: number }>("vpn-status-changed", (event) => {
-      const { id, status, connected_since } = event.payload;
-      console.log("[store] vpn-status-changed event:", id, status, connected_since);
+    listen<{ id: string; status: VpnStatus; connected_since?: number; error?: string }>("vpn-status-changed", (event) => {
+      const { id, status, connected_since, error } = event.payload;
+      console.log("[store] vpn-status-changed event:", id, status, connected_since, error);
       set((s) => ({
         connections: s.connections.map((c) =>
-          c.id === id ? { ...c, status, ...(connected_since !== undefined ? { connected_since } : {}) } : c,
+          c.id === id ? {
+            ...c,
+            status,
+            error: error || undefined,
+            ...(connected_since !== undefined ? { connected_since } : {}),
+          } : c,
         ),
       }));
       // Сбрасываем pending state при получении финального статуса

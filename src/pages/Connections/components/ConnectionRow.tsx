@@ -14,12 +14,14 @@ const STATUS_COLOR: Record<
 > = {
   connected: "success",
   connecting: "warning",
+  reconnecting: "warning",
   disconnected: "default",
   unknown: "error"
 };
 export const STATUS_LABEL: Record<string, string> = {
   connected: "Подключён",
   connecting: "Подключение...",
+  reconnecting: "Восстановление...",
   disconnected: "Отключён",
   unknown: "Неизвестно"
 };
@@ -205,6 +207,11 @@ export function ConnectionRow({
             </Typography>
           )}
         </Typography>
+        {c.status === "disconnected" && c.error && (
+          <Typography variant="caption" color="error" sx={{ display: "block", fontSize: 11, mt: 0.25 }}>
+            {c.error}
+          </Typography>
+        )}
       </TableCell>
       <TableCell sx={{ width: 150, whiteSpace: "nowrap" }}>
         <Chip

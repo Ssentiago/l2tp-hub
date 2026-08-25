@@ -2,10 +2,75 @@ use crate::l2tp::VpnStatus;
 use crate::log;
 use crate::state;
 use crate::sudo::SudoSession;
+use serde::Serialize;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 use tauri::{AppHandle, Manager};
+
+// ---------------------------------------------------------------------------
+// ConnectError — классификация ошибок подключения для UI
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "kind", content = "message")]
+pub enum ConnectError {
+    #[serde(rename = "server_unreachable")]
+    ServerUnreachable,
+    #[serde(rename = "auth_failed")]
+    AuthenticationFailed,
+    #[serde(rename = "no_proposal")]
+    NoProposalChosen,
+    #[serde(rename = "ppp_auth_failed")]
+    PppAuthFailed,
+    #[serde(rename = "unknown")]
+    Unknown(String),
+}
+
+impl ConnectError {
+    pub fn user_message(&self) -> &str {
+        match self {
+            ConnectError::ServerUnreachable => "Сервер не отвечает. Проверьте адрес сервера и подключение к интернету.",
+            ConnectError::AuthenticationFailed => "Неверный общий ключ (PSK). Проверьте настройки подключения.",
+            ConnectError::NoProposalChosen => "Сервер не поддерживает используемые алгоритмы шифрования. Обратитесь к администратору сети.",
+            ConnectError::PppAuthFailed => "Неверное имя пользователя или пароль.",
+            ConnectError::Unknown(_) => "Не удалось подключиться. Проверьте логи для подробностей.",
+        }
+    }
+}
+
+/// Классифицирует ошибку подключения по логам charon и pppd
+pub fn classify_connect_failure(charon_log: &str, pppd_log: &str) -> ConnectError {
+    if charon_log.contains("NO_PROPOSAL_CHOSEN")
+        || charon_log.contains("no proposal found")
+        || charon_log.contains("no acceptable proposal found")
+    {
+        return ConnectError::NoProposalChosen;
+    }
+    if charon_log.contains("AUTHENTICATION_FAILED")
+        || (charon_log.contains("authentication of") && charon_log.contains("failed"))
+        || charon_log.contains("INVALID_ID_INFORMATION")
+    {
+        return ConnectError::AuthenticationFailed;
+    }
+    if pppd_log.contains("CHAP authentication failed")
+        || pppd_log.contains("PAP authentication failed")
+    {
+        return ConnectError::PppAuthFailed;
+    }
+    if charon_log.contains("giving up after")
+        || charon_log.contains("retransmit")
+        || !charon_log.contains("received packet")
+    {
+        return ConnectError::ServerUnreachable;
+    }
+    ConnectError::Unknown(format!("charon: {}\npppd: {}", charon_log, pppd_log))
+}
+
+/// Читает лог-файл (best effort)
+fn read_log_tail(path: &str) -> String {
+    fs::read_to_string(path).unwrap_or_default()
+}
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -92,7 +157,7 @@ fn plist_path(label: &str) -> PathBuf {
 }
 
 // ---------------------------------------------------------------------------
-// Route state management — жёсткий route management через Rust, не ip-down
+// Route state management — умное восстановление через физический интерфейс
 // ---------------------------------------------------------------------------
 
 /// Путь к файлу с сохранённым состоянием маршрутизации
@@ -100,11 +165,41 @@ fn route_state_path() -> PathBuf {
     PathBuf::from("/private/var/root/l2tp-hub/route.state")
 }
 
-/// Сохранить original gateway и VPN server на диск (для crash recovery)
-fn save_route_state(sudo: &SudoSession, server: &str, original_gateway: &str) -> Result<(), String> {
-    let content = format!("{}\n{}\n", server, original_gateway);
+/// Захватить текущий физический маршрут ДО поднятия VPN.
+/// Сохраняет (interface, gateway) — не просто gateway, т.к. при full-tunnel
+/// VPN забирает default route и `route -n get default` будет врать.
+fn capture_physical_route() -> Result<(String, String), String> {
+    let output = Command::new("route")
+        .args(["-n", "get", "default"])
+        .output()
+        .map_err(|e| format!("route -n get default: {}", e))?;
+
+    let text = String::from_utf8_lossy(&output.stdout);
+    let interface = parse_route_field(&text, "interface")?;
+    let gateway = parse_route_field(&text, "gateway")?;
+
+    log!("[route] captured physical route: iface={}, gw={}", interface, gateway);
+    Ok((interface, gateway))
+}
+
+/// Парсит поле из вывода `route -n get default`
+fn parse_route_field(text: &str, field: &str) -> Result<String, String> {
+    for line in text.lines() {
+        let line = line.trim();
+        if line.starts_with(field) {
+            let val = line.split_whitespace().last()
+                .ok_or_else(|| format!("empty {} in route output", field))?;
+            return Ok(val.to_string());
+        }
+    }
+    Err(format!("{} not found in route output", field))
+}
+
+/// Сохранить состояние маршрутизации на диск (для crash recovery)
+/// Формат: server\ninterface\ngateway\n
+fn save_route_state(sudo: &SudoSession, server: &str, iface: &str, gateway: &str) -> Result<(), String> {
+    let content = format!("{}\n{}\n{}\n", server, iface, gateway);
     let path = route_state_path();
-    // Пишем через sudo — директория принадлежит root
     let tmp = "/tmp/l2tp-route.state";
     fs::write(tmp, &content).map_err(|e| format!("write route state: {}", e))?;
     sudo.run_sudo(&["mkdir", "-p", &path.parent().unwrap().to_string_lossy()])?;
@@ -112,21 +207,28 @@ fn save_route_state(sudo: &SudoSession, server: &str, original_gateway: &str) ->
     sudo.run_sudo(&["chmod", "600", &path.to_string_lossy()])?;
     sudo.run_sudo(&["chown", "root:wheel", &path.to_string_lossy()])?;
     let _ = fs::remove_file(tmp);
-    log!("[route] saved state: server={}, gateway={}", server, original_gateway);
+    log!("[route] saved state: server={}, iface={}, gw={}", server, iface, gateway);
     Ok(())
 }
 
 /// Загрузить сохранённое состояние маршрутизации с диска
-fn load_route_state(sudo: &SudoSession) -> Option<(String, String)> {
+fn load_route_state(sudo: &SudoSession) -> Option<(String, String, String)> {
     let path = route_state_path();
     let output = sudo.run_sudo(&["cat", &path.to_string_lossy()]).ok()?;
     let mut lines = output.lines();
     let server = lines.next()?.trim().to_string();
+    let iface = lines.next()?.trim().to_string();
     let gateway = lines.next()?.trim().to_string();
     if server.is_empty() || gateway.is_empty() {
         return None;
     }
-    Some((server, gateway))
+    // Обратная совместимость: старый формат (server\ngateway\n) — iface отсутствует
+    if iface.contains('.') || iface.contains(':') {
+        // iface выглядит как IP — значит это старый формат, gateway попал на строку iface
+        Some((server, String::new(), iface))
+    } else {
+        Some((server, iface, gateway))
+    }
 }
 
 /// Удалить файл состояния маршрутизации
@@ -135,28 +237,111 @@ fn clear_route_state(sudo: &SudoSession) {
     log!("[route] state cleared");
 }
 
-/// Явное восстановление route — вызывается из disconnect и из cleanup при старте.
-/// Не зависит от ip-down скрипта, не зависит от pppd.
-/// Идемпотентно: delete + add вместо change (change требует существующей записи).
-fn restore_routes(sudo: &SudoSession, server: &str, original_gateway: &str) {
-    log!("[route] restoring: delete host route to {}, set default to {}", server, original_gateway);
+/// Умное восстановление route: проверяет жив ли исходный интерфейс,
+/// берёт актуальный gateway, ищет альтернативный интерфейс если сеть сменилась.
+fn resolve_restore_gateway(original_iface: &str, _original_gw: &str) -> Option<String> {
+    // Шаг 1: жив ли физический интерфейс?
+    let iface_active = if !original_iface.is_empty() {
+        Command::new("ifconfig")
+            .arg(original_iface)
+            .output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).contains("status: active"))
+            .unwrap_or(false)
+    } else {
+        false
+    };
 
-    // 1. Удаляем host route к VPN-серверу
+    if iface_active {
+        // Берём ТЕКУЩИЙ gateway на этом интерфейсе (мог смениться роутер)
+        if let Some(gw) = get_gateway_for_interface(original_iface) {
+            log!("[route] original iface {} still active, gw={}", original_iface, gw);
+            return Some(gw);
+        }
+    }
+
+    // Шаг 2: исходный интерфейс не активен — сеть сменилась, ищем любой активный
+    log!("[route] original iface {} not active, searching for alternative", original_iface);
+    find_any_active_physical_gateway()
+}
+
+/// Получить gateway для конкретного интерфейса через -ifscope
+fn get_gateway_for_interface(iface: &str) -> Option<String> {
+    let output = Command::new("route")
+        .args(["-n", "get", "-ifscope", iface, "default"])
+        .output()
+        .ok()?;
+    let text = String::from_utf8_lossy(&output.stdout);
+    parse_route_field(&text, "gateway").ok()
+}
+
+/// Найти gateway на любом активном физическом интерфейсе (не ppp, не utun, не lo)
+fn find_any_active_physical_gateway() -> Option<String> {
+    // Перебираем типичные физические интерфейсы macOS
+    for iface in &["en0", "en1", "en2", "en3", "en4"] {
+        let active = Command::new("ifconfig")
+            .arg(iface)
+            .output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).contains("status: active"))
+            .unwrap_or(false);
+
+        if active {
+            if let Some(gw) = get_gateway_for_interface(iface) {
+                log!("[route] found active physical iface {} with gw={}", iface, gw);
+                return Some(gw);
+            }
+        }
+    }
+
+    // Fallback: scutil --nwi для определения primary interface
+    if let Ok(output) = Command::new("scutil").args(["--nwi"]).output() {
+        let text = String::from_utf8_lossy(&output.stdout);
+        for line in text.lines() {
+            if line.contains("IPv4 default") {
+                // Парсим "IPv4 default interface : en0"
+                if let Some(iface) = line.split(':').last().map(|s| s.trim()) {
+                    if let Some(gw) = get_gateway_for_interface(iface) {
+                        log!("[route] scutil nwi: primary iface {} gw={}", iface, gw);
+                        return Some(gw);
+                    }
+                }
+            }
+        }
+    }
+
+    log!("[route] WARNING: no active physical interface found");
+    None
+}
+
+/// Восстановить route — умная версия
+fn restore_routes(sudo: &SudoSession, server: &str, original_iface: &str, original_gw: &str) {
+    log!("[route] restoring: server={}, original_iface={}, original_gw={}", server, original_iface, original_gw);
+
+    // 1. Удаляем host route к VPN-серверу (безопасно всегда)
     let r1 = sudo.run_sudo(&["route", "delete", "-host", server]);
     log!("[route] route delete -host {}: {:?}", server, r1);
 
-    // 2. Удаляем текущий default (если есть) — игнорируем ошибку если нет
-    let r_del = sudo.run_sudo(&["route", "delete", "default"]);
-    log!("[route] route delete default: {:?}", r_del);
+    // 2. Определяем актуальный gateway для восстановления
+    match resolve_restore_gateway(original_iface, original_gw) {
+        Some(ref gw) => {
+            // 3. Удаляем текущий default (VPN-туннель)
+            let r_del = sudo.run_sudo(&["route", "delete", "default"]);
+            log!("[route] route delete default: {:?}", r_del);
 
-    // 3. Добавляем default route заново — гарантированно работает
-    let r_add = sudo.run_sudo(&["route", "add", "default", original_gateway]);
-    log!("[route] route add default {}: {:?}", original_gateway, r_add);
+            // 4. Добавляем default route через актуальный gateway
+            let r_add = sudo.run_sudo(&["route", "add", "default", gw]);
+            log!("[route] route add default {}: {:?}", gw, r_add);
 
-    // 4. Верификация
-    match get_default_gateway() {
-        Ok(gw) => log!("[route] current default gateway: {}", gw),
-        Err(e) => log!("[route] WARNING: can't get default gateway after restore: {}", e),
+            // 5. Верификация
+            match get_default_gateway() {
+                Ok(gw) => log!("[route] current default gateway after restore: {}", gw),
+                Err(e) => log!("[route] WARNING: can't verify gateway after restore: {}", e),
+            }
+        }
+        None => {
+            log!("[route] WARNING: cannot resolve restore gateway — network may have changed, route NOT restored");
+            // Всё равно удаляем VPN default, чтобы система могла сама выбрать маршрут
+            let _ = sudo.run_sudo(&["route", "delete", "default"]);
+        }
     }
 }
 
@@ -180,7 +365,7 @@ fn kill_route_guardian(sudo: &SudoSession) {
 
 /// Запустить detached watchdog — живёт независимо от Tauri-процесса.
 /// Если Tauri крашнется, watchdog восстановит route когда pppd умрёт.
-fn spawn_route_guardian(sudo: &SudoSession, server: &str, original_gateway: &str) -> Result<(), String> {
+fn spawn_route_guardian(sudo: &SudoSession, server: &str, original_iface: &str, original_gateway: &str) -> Result<(), String> {
     let script = route_guardian_script();
     if !script.exists() {
         log!("[guardian] WARNING: route-guardian.sh not found at {}", script.display());
@@ -192,10 +377,10 @@ fn spawn_route_guardian(sudo: &SudoSession, server: &str, original_gateway: &str
     let script_str = script.to_string_lossy();
     // Запускаем через sudo с process_group(0) — detached от Tauri
     // Используем bash -c для запуска скрипта с аргументами
-    let cmd = format!("{} {} {} 5 24", script_str, original_gateway, server);
+    let cmd = format!("{} {} {} {} 5 24", script_str, original_iface, original_gateway, server);
     match sudo.run_sudo(&["bash", "-c", &cmd]) {
         Ok(_) => {
-            log!("[guardian] spawned: gw={}, server={}", original_gateway, server);
+            log!("[guardian] spawned: iface={}, gw={}, server={}", original_iface, original_gateway, server);
         }
         Err(e) => {
             log!("[guardian] WARNING: failed to spawn: {}", e);
@@ -592,8 +777,15 @@ pub async fn connect_vpn(
 ) -> Result<(), String> {
     log!("[l2tp] connect_vpn: {} (server={}, gw={})", name, server, original_gateway);
 
+    // Захватываем физический маршрут ДО поднятия VPN
+    let (original_iface, original_gw) = capture_physical_route()
+        .unwrap_or_else(|e| {
+            log!("[route] WARNING: capture_physical_route failed: {}, using fallback", e);
+            (String::new(), original_gateway.to_string())
+        });
+
     // Сохраняем route state на ДИСК — для crash recovery
-    save_route_state(sudo, server, original_gateway)?;
+    save_route_state(sudo, server, &original_iface, &original_gw)?;
 
     // Очищаем логи предыдущего сеанса
     let _ = fs::remove_file(format!("/tmp/l2tp/{}-xl2tpd.log", sanitize_name(name)));
@@ -658,15 +850,15 @@ pub async fn connect_vpn(
     // -------------------------------------------------------------------------
     // 3. Загружаем конфигурацию через swanctl --load-all
     // -------------------------------------------------------------------------
-    let lib_dir = charon_lib_dir();
     let strongswan_conf = active.join("strongswan.conf");
     let swanctl = swanctl_bin();
     let swanctl_str = swanctl.to_string_lossy();
     let swanctl_conf = active.join("swanctl.conf");
 
+    // DYLD_LIBRARY_PATH не нужен — библиотеки резолвятся через @loader_path
+    // sudo стирает DYLD_* переменные (SIP), но STRONGSWAN_CONF проходит
     let load_output = sudo.run_sudo(&[
         "env",
-        &format!("DYLD_LIBRARY_PATH={}", lib_dir.to_string_lossy()),
         &format!("STRONGSWAN_CONF={}", strongswan_conf.to_string_lossy()),
         &swanctl_str,
         "--load-all",
@@ -707,8 +899,12 @@ pub async fn connect_vpn(
     // 5. Проверки
     // -------------------------------------------------------------------------
     if !pppd_ready {
-        log!("[l2tp] ERROR: pppd not running after 30s — connection failed");
-        return Err("pppd не запустился за 30 секунд — подключение не установлено".into());
+        // Классифицируем ошибку по логам charon и pppd
+        let charon_log = read_log_tail(&format!("/tmp/l2tp/{}-charon", sanitize_name(name)));
+        let pppd_log = read_log_tail(&format!("/tmp/l2tp/{}-pppd.log", sanitize_name(name)));
+        let error = classify_connect_failure(&charon_log, &pppd_log);
+        log!("[l2tp] connection failed: {:?} — {}", error, error.user_message());
+        return Err(format!("{}: {}", error.user_message(), format!("{:?}", error)));
     }
 
     // -------------------------------------------------------------------------
@@ -741,7 +937,6 @@ pub async fn connect_vpn(
     // Проверяем IPSec SA
     let list_result = sudo.run_sudo(&[
         "env",
-        &format!("DYLD_LIBRARY_PATH={}", lib_dir.to_string_lossy()),
         &format!("STRONGSWAN_CONF={}", strongswan_conf.to_string_lossy()),
         &swanctl_str,
         "--list-sas",
@@ -762,7 +957,7 @@ pub async fn connect_vpn(
     // 6. Запуск detached watchdog — переживает краш Tauri
     // -------------------------------------------------------------------------
     if is_process_running_global("pppd") {
-        let _ = spawn_route_guardian(sudo, server, original_gateway);
+        let _ = spawn_route_guardian(sudo, server, &original_iface, &original_gw);
     }
 
     log!("[l2tp] connect_vpn done");
@@ -777,7 +972,6 @@ pub async fn disconnect_vpn(sudo: &SudoSession, name: &str) -> Result<(), String
     kill_route_guardian(sudo);
 
     let active = active_dir();
-    let lib_dir = charon_lib_dir();
     let strongswan_conf = active.join("strongswan.conf");
     let swanctl = swanctl_bin();
 
@@ -787,7 +981,6 @@ pub async fn disconnect_vpn(sudo: &SudoSession, name: &str) -> Result<(), String
     // Terminating IPSec SA
     let _ = sudo.run_sudo(&[
         "env",
-        &format!("DYLD_LIBRARY_PATH={}", lib_dir.to_string_lossy()),
         &format!("STRONGSWAN_CONF={}", strongswan_conf.to_string_lossy()),
         &swanctl.to_string_lossy(),
         "--terminate",
@@ -815,17 +1008,13 @@ pub async fn disconnect_vpn(sudo: &SudoSession, name: &str) -> Result<(), String
     sudo.run_sudo(&["pkill", "-9", "-f", "pppd"]).ok();
 
     // -------------------------------------------------------------------------
-    // ЯВНОЕ восстановление route — ГАРАНТИРОВАННО, не зависит от ip-down
+    // ЯВНОЕ восстановление route — умная логика через физический интерфейс
     // -------------------------------------------------------------------------
-    if let Some((server, gateway)) = route_state {
-        restore_routes(sudo, &server, &gateway);
+    if let Some((server, iface, gateway)) = route_state {
+        restore_routes(sudo, &server, &iface, &gateway);
         clear_route_state(sudo);
     } else {
         log!("[l2tp] WARNING: no route state on disk — cannot restore routes!");
-        // Fallback: пытаемся восстановить default route через текущий интерфейс
-        if let Ok(gw) = get_default_gateway() {
-            log!("[l2tp] current default gateway: {} (may be wrong if VPN was full-tunnel)", gw);
-        }
     }
 
     // Cleanup
@@ -893,17 +1082,23 @@ pub fn cleanup_all_vpn_state() {
         {
             let content = String::from_utf8_lossy(&output.stdout);
             let mut lines = content.lines();
-            if let (Some(server), Some(gateway)) = (lines.next(), lines.next()) {
+            if let Some(server) = lines.next() {
                 let server = server.trim();
-                let gateway = gateway.trim();
+                let iface = lines.next().map(|s| s.trim()).unwrap_or("");
+                let gateway = lines.next().map(|s| s.trim()).unwrap_or("");
+                // Обратная совместимость: старый формат (server\ngateway) — iface=IP
+                let (iface, gateway) = if iface.contains('.') || iface.contains(':') {
+                    ("", iface) // старый формат, iface на самом деле gateway
+                } else {
+                    (iface, gateway)
+                };
                 if !server.is_empty() && !gateway.is_empty() {
-                    eprintln!("[cleanup] restoring route: server={}, gateway={}", server, gateway);
+                    eprintln!("[cleanup] restoring route: server={}, iface={}, gateway={}", server, iface, gateway);
                     let _ = Command::new("sudo")
                         .args(["-n", "route", "delete", "-host", server])
                         .stdout(std::process::Stdio::null())
                         .stderr(std::process::Stdio::null())
                         .status();
-                    // Идемпотентно: delete + add вместо change
                     let _ = Command::new("sudo")
                         .args(["-n", "route", "delete", "default"])
                         .stdout(std::process::Stdio::null())
@@ -1079,4 +1274,40 @@ fn find_ppp_interface() -> Option<String> {
         }
     }
     None
+}
+
+/// Проверяет, жив ли IPSec SA для данного подключения.
+/// Возвращает true если SA ESTABLISHED и pppd работает.
+pub fn check_ipsec_sa_alive(sudo: &crate::sudo::SudoSession, name: &str) -> bool {
+    // Проверяем что процессы живы
+    if !is_process_running_global("charon") || !is_process_running_global("pppd") {
+        log!("[sleep-wake] VPN processes dead (charon={}, pppd={})",
+            is_process_running_global("charon"), is_process_running_global("pppd"));
+        return false;
+    }
+
+    // Проверяем IPSec SA через swanctl
+    let active = active_dir();
+    let strongswan_conf = active.join("strongswan.conf");
+    let swanctl = swanctl_bin();
+
+    let list_result = sudo.run_sudo(&[
+        "env",
+        &format!("STRONGSWAN_CONF={}", strongswan_conf.to_string_lossy()),
+        &swanctl.to_string_lossy(),
+        "--list-sas",
+        "--raw",
+    ]);
+
+    match list_result {
+        Ok(stdout) => {
+            let alive = stdout.contains("ESTABLISHED");
+            log!("[sleep-wake] SA check: ESTABLISHED={}, output: {}", alive, stdout.trim());
+            alive
+        }
+        Err(stderr) => {
+            log!("[sleep-wake] SA check failed: {}", stderr);
+            false
+        }
+    }
 }

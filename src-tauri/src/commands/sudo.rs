@@ -1,3 +1,4 @@
+use crate::helper;
 use crate::log;
 use crate::sudo::SudoSession;
 use tauri::State;
@@ -21,6 +22,18 @@ pub fn check_sudo_session(sudo: State<'_, SudoSession>) -> bool {
 }
 
 #[tauri::command]
+#[cfg(target_os = "macos")]
+pub fn get_helper_status_text(sudo: State<'_, SudoSession>) -> String {
+    sudo.status_text()
+}
+
+#[tauri::command]
+#[cfg(target_os = "macos")]
+pub fn check_helper_status() -> bool {
+    helper::is_helper_running()
+}
+
+#[tauri::command]
 #[cfg(target_os = "windows")]
 pub async fn authenticate_sudo() -> Result<(), String> {
     Ok(())
@@ -29,5 +42,17 @@ pub async fn authenticate_sudo() -> Result<(), String> {
 #[tauri::command]
 #[cfg(target_os = "windows")]
 pub fn check_sudo_session() -> bool {
+    true
+}
+
+#[tauri::command]
+#[cfg(target_os = "windows")]
+pub fn get_helper_status_text() -> String {
+    String::new()
+}
+
+#[tauri::command]
+#[cfg(target_os = "windows")]
+pub fn check_helper_status() -> bool {
     true
 }

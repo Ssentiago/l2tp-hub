@@ -1,0 +1,231 @@
+---
+# Установка 3x-ui
+#
+# Что делает:
+#   1. Ставит certbot, выпускает сертификат на domain через standalone (порт 80)
+#   2. Кладёт серты в /etc/ssl/domain/{fullchain.pem,privkey.pem}
+#   3. Ставит 3x-ui через официальный install.sh в non-interactive режиме
+#      (XUI_SSL_MODE=none — TLS через инсталлятор НЕ настраивается,
+#      т.к. "Custom SSL Certificate" в non-interactive режиме не поддерживается
+#      апстримом вообще: XUI_SSL_MODE принимает только domain/ip/none,
+#      см. install.sh, функция prompt_and_setup_ssl)
+#   4. Применяет наши серты через `x-ui cert -webCert -webCertKey`
+#   5. Меняет логин/пароль админа через `x-ui setting -username -password`
+#   6. Читает реальные port/webBasePath из `x-ui setting -show true`
+#      и формирует ссылку сам — дефолтный вывод инсталлятора не используется
+#
+# Запуск:
+#   ansible-playbook -i inventory install-3x-ui.yml
+#
+# Все параметры задаются ниже, в блоке vars. Ничего передавать через -e не нужно.
+
+- name: Установка 3x-ui
+  hosts: xui_servers
+  become: true
+  become_method: ansible.builtin.sudo
+  become_user: root
+  vars:
+    # ============================================================
+    # === ПАРАМЕТРЫ — правишь здесь перед запуском ===
+    # ============================================================
+    domain: "access-telemetry.dinord.ru" # домен, на который выпускается сертификат
+    xui_admin_user: "itego-admin-nfdkfdkjfopcrpjg" # логин админа панели
+    xui_admin_pass: "T9aM@WhW-rsH5b)~" # пароль админа панели
+    xui_db_type: "sqlite" # sqlite | postgres
+    xui_db_dsn:
+      "" # обязателен только если xui_db_type == postgres (внешняя БД), формат:
+      # postgres://user:pass@host:port/db?sslmode=disable
+    certbot_email: "test@test.com" # опционально, для аккаунта Let's Encrypt
+    # ============================================================
+
+    # Прочее (обычно не трогать)
+    xui_cert_dir: "/etc/ssl/{{ domain }}"
+    xui_main_folder: "/usr/local/x-ui"
+
+  pre_tasks:
+    - name: Проверка обязательных параметров
+      ansible.builtin.assert:
+        that:
+          - domain | length > 0
+          - xui_admin_user | length > 0
+          - xui_admin_pass | length > 0
+          - xui_db_type in ['sqlite', 'postgres']
+        fail_msg: "Обязательны: domain, xui_admin_user, xui_admin_pass. xui_db_type должен быть sqlite или postgres."
+
+    - name: Проверка DSN для postgres
+      ansible.builtin.assert:
+        that:
+          - xui_db_dsn | length > 0
+        fail_msg: "xui_db_type=postgres требует xui_db_dsn (postgres://user:pass@host:port/db?sslmode=disable)"
+      when: xui_db_type == "postgres"
+
+    # ---------- Guard: домен действительно указывает на этот сервер ----------
+    # Проверяем ДО certbot, чтобы не жечь rate-limit Let's Encrypt зря,
+    # если A-запись домена не совпадает с реальным IP хоста из inventory.
+    - name: Узнать внешний IP этого сервера
+      ansible.builtin.uri:
+        url: https://api.ipify.org
+        return_content: true
+      register: server_public_ip
+      retries: 3
+      delay: 2
+      until: server_public_ip is succeeded
+
+    - name: Разрезолвить A-запись домена
+      ansible.builtin.command: "getent ahostsv4 {{ domain }}"
+      register: domain_lookup
+      changed_when: false
+      failed_when: false
+
+    - name: Проверить, что домен резолвится
+      ansible.builtin.assert:
+        that:
+          - domain_lookup.rc == 0
+          - domain_lookup.stdout | length > 0
+        fail_msg: >-
+          Домен {{ domain }} не резолвится (getent завершился с ошибкой).
+          Проверь A-запись перед запуском.
+
+    - name: Извлечь IP-адреса из ответа DNS
+      ansible.builtin.set_fact:
+        domain_resolved_ips: "{{ domain_lookup.stdout_lines | map('regex_search', '^(\\S+)', '\\1') | map('first') | unique }}"
+
+    - name: Guard — домен должен указывать на этот сервер
+      ansible.builtin.assert:
+        that:
+          - server_public_ip.content | trim in domain_resolved_ips
+        fail_msg: >-
+          Домен {{ domain }} резолвится в {{ domain_resolved_ips | join(', ') }},
+          а внешний IP этого сервера — {{ server_public_ip.content | trim }}.
+          A-запись не указывает на текущий хост — проверь DNS перед выпуском сертификата.
+        success_msg: "Домен {{ domain }} корректно указывает на этот сервер ({{ server_public_ip.content | trim }})."
+
+  tasks:
+    # ---------- Шаг 1: certbot ----------
+    - name: Установить certbot
+      ansible.builtin.apt:
+        name: certbot
+        state: present
+        update_cache: true
+      when: ansible_os_family == "Debian"
+
+    - name: Проверить, выпущен ли уже сертификат
+      ansible.builtin.stat:
+        path: "/etc/letsencrypt/live/{{ domain }}/fullchain.pem"
+      register: existing_cert
+
+    - name: Освободить порт 80 (остановить x-ui, если уже стоит — на случай повторного запуска)
+      ansible.builtin.systemd:
+        name: x-ui
+        state: stopped
+      failed_when: false
+      when: not existing_cert.stat.exists
+
+    - name: Выпустить сертификат через certbot standalone
+      ansible.builtin.command:
+        cmd: >-
+          certbot certonly --standalone --non-interactive --agree-tos
+          {{ ('--email ' + certbot_email) if certbot_email else '--register-unsafely-without-email' }}
+          -d {{ domain }}
+      when: not existing_cert.stat.exists
+
+    # ---------- Шаг 2: серты в /etc/ssl/domain/ ----------
+    - name: Создать каталог под серты
+      ansible.builtin.file:
+        path: "{{ xui_cert_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Скопировать fullchain.pem
+      ansible.builtin.copy:
+        src: "/etc/letsencrypt/live/{{ domain }}/fullchain.pem"
+        dest: "{{ xui_cert_dir }}/fullchain.pem"
+        remote_src: true
+        mode: "0644"
+
+    - name: Скопировать privkey.pem
+      ansible.builtin.copy:
+        src: "/etc/letsencrypt/live/{{ domain }}/privkey.pem"
+        dest: "{{ xui_cert_dir }}/privkey.pem"
+        remote_src: true
+        mode: "0600"
+
+    # ---------- Шаг 3: установка 3x-ui (non-interactive) ----------
+    - name: Проверить, установлен ли уже 3x-ui
+      ansible.builtin.stat:
+        path: "{{ xui_main_folder }}/x-ui"
+      register: xui_installed
+
+    - name: Скачать install.sh
+      ansible.builtin.get_url:
+        url: https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.sh
+        dest: /tmp/install-3x-ui.sh
+        mode: "0755"
+      when: not xui_installed.stat.exists
+
+    - name: Запустить install.sh неинтерактивно
+      ansible.builtin.command: bash /tmp/install-3x-ui.sh
+      environment:
+        XUI_NONINTERACTIVE: "1"
+        XUI_SSL_MODE: "none" # TLS настраиваем сами шагом ниже — см. комментарий в шапке файла
+        XUI_DB_TYPE: "{{ xui_db_type }}"
+        XUI_DB_DSN: "{{ xui_db_dsn if xui_db_type == 'postgres' else omit }}"
+      when: not xui_installed.stat.exists
+
+    - name: Дождаться готовности x-ui.service
+      ansible.builtin.systemd:
+        name: x-ui
+        state: started
+      register: xui_service_state
+      retries: 5
+      delay: 3
+      until: xui_service_state is succeeded
+
+    # ---------- Шаг 4: применить кастомные серты ----------
+    - name: Применить сертификат к панели
+      ansible.builtin.command: >-
+        {{ xui_main_folder }}/x-ui cert
+        -webCert {{ xui_cert_dir }}/fullchain.pem
+        -webCertKey {{ xui_cert_dir }}/privkey.pem
+
+    # ---------- Шаг 5: сменить логин и пароль ----------
+    - name: Сменить логин и пароль админа
+      ansible.builtin.command: >-
+        {{ xui_main_folder }}/x-ui setting
+        -username {{ xui_admin_user }}
+        -password {{ xui_admin_pass }}
+      no_log: true # пароль не светим в выводе/логах ansible
+
+    - name: Перезапустить x-ui, чтобы применить серты и логин/пароль
+      ansible.builtin.systemd:
+        name: x-ui
+        state: restarted
+
+    - name: Дать панели подняться после рестарта
+      ansible.builtin.pause:
+        seconds: 3
+
+    # ---------- Шаг 6: вытащить port/webBasePath и собрать ссылку сами ----------
+    # Дефолтный вывод инсталлятора глючит с отдачей ссылки — не полагаемся на него,
+    # читаем актуальные значения напрямую из `x-ui setting -show`.
+    - name: Прочитать текущие настройки панели
+      ansible.builtin.command: "{{ xui_main_folder }}/x-ui setting -show true"
+      register: xui_settings
+      changed_when: false
+
+    - name: Извлечь port
+      ansible.builtin.set_fact:
+        xui_port: "{{ xui_settings.stdout | regex_search('port:\\s*(\\S+)', '\\1') | first }}"
+
+    - name: Извлечь webBasePath
+      ansible.builtin.set_fact:
+        xui_web_base_path: "{{ xui_settings.stdout | regex_search('webBasePath:\\s*(\\S+)', '\\1') | first }}"
+
+    - name: Собрать ссылку на панель
+      ansible.builtin.set_fact:
+        xui_access_url: "https://{{ domain }}:{{ xui_port }}{{ xui_web_base_path if xui_web_base_path.startswith('/') else '/' + xui_web_base_path }}"
+
+    - name: Вывести ссылку на панель
+      ansible.builtin.debug:
+        msg: "Панель 3x-ui доступна по адресу: {{ xui_access_url }}"
+

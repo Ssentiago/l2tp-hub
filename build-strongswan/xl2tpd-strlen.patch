@@ -1,0 +1,63 @@
+diff --git a/file.h b/file.h
+index a2707c2..bdd2328 100644
+--- a/file.h
++++ b/file.h
+@@ -16,7 +16,7 @@
+ #ifndef _FILE_H
+ #define _FILE_H
+ 
+-#define STRLEN 100              /* Length of a string */
++#define STRLEN 512              /* Length of a string */
+ 
+ /* Definition of a keyword */
+ struct keyword
+diff --git a/md5.c b/md5.c
+index 368066f..d8df888 100644
+--- a/md5.c
++++ b/md5.c
+@@ -3,12 +3,18 @@
+ #elif defined(OPENBSD) || defined(NETBSD)
+ # define __BSD_VISIBLE 0
+ # include <machine/endian.h>
++#elif defined(DARWIN)
++# include <machine/endian.h>
+ #elif defined(LINUX)
+ # include <endian.h>
+ #elif defined(SOLARIS)
+ # include <sys/isa_defs.h>
+ #endif
+-#if __BYTE_ORDER == __BIG_ENDIAN
++#if defined(DARWIN)
++# if __DARWIN_BYTE_ORDER == __DARWIN_BIG_ENDIAN
++#  define HIGHFIRST 1
++# endif
++#elif __BYTE_ORDER == __BIG_ENDIAN
+ #define HIGHFIRST 1
+ #endif
+ 
+diff --git a/osport.h b/osport.h
+index c42f5da..d5d426c 100644
+--- a/osport.h
++++ b/osport.h
+@@ -35,7 +35,7 @@
+ 
+ #endif /* defined(SOLARIS) */
+ 
+-#if !defined(LINUX)
++#if !defined(LINUX) && !defined(DARWIN)
+ 
+ /* Declare empty structure to make code portable and keep simple */
+ struct in_pktinfo {
+diff --git a/pty.c b/pty.c
+index d353a28..a3cec62 100644
+--- a/pty.c
++++ b/pty.c
+@@ -42,7 +42,7 @@
+ #define PTY01 "0123456789abcdef"
+ #endif
+ 
+-#if defined(FREEBSD) || defined(NETBSD)
++#if defined(FREEBSD) || defined(NETBSD) || defined(DARWIN)
+ #define PTY00 "/dev/ptyXX"
+ #define PTY10 "p"
+ #define PTY01 "0123456789abcdefghijklmnopqrstuv"

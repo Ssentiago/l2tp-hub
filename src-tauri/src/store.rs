@@ -42,16 +42,16 @@ impl Store {
         self.workspaces
             .iter()
             .find(|w| w.id == self.active_workspace_id)
-            .unwrap_or(&self.workspaces[0])
+            .or_else(|| self.workspaces.first())
+            .expect("Store must have at least one workspace")
     }
 
     pub fn active_workspace_mut(&mut self) -> &mut Workspace {
-        let idx = self
-            .workspaces
-            .iter()
-            .position(|w| w.id == self.active_workspace_id)
-            .unwrap_or(0);
-        &mut self.workspaces[idx]
+        if let Some(idx) = self.workspaces.iter().position(|w| w.id == self.active_workspace_id) {
+            return &mut self.workspaces[idx];
+        }
+        // Fallback: если active_workspace_id не найден, берём первый
+        self.workspaces.first_mut().expect("Store must have at least one workspace")
     }
 }
 
@@ -127,8 +127,11 @@ pub fn load(_config: &tauri::Config) -> Store {
             return json_store;
         }
         debug_log("[store::load] no JSON, returning default");
+        let default_store = Store::default();
+        // Сохраняем дефолтный store в БД, чтобы следующий load не вернул пустые workspaces
+        let _ = tauri::async_runtime::block_on(db::save_store(pool, &default_store));
         mark_migrated();
-        return Store::default();
+        return default_store;
     }
 
     let db_result = tauri::async_runtime::block_on(db::load_store(pool));
