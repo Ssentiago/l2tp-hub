@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Box, CircularProgress } from "@mui/material";
 import { ConnectionList } from "./components/ConnectionList";
+import { SwitchConfirmDialog } from "./components/ActionButtons";
 import { useStore } from "../../store";
 import type {
   Connection,
@@ -39,6 +40,7 @@ export function Connections({ labels, onEdit }: Props) {
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [loading, setLoading] = useState(true);
   const [groupBy, setGroupBy] = useState<string>("company");
+  const [switchTarget, setSwitchTarget] = useState<string | null>(null);
 
   useEffect(() => {
     loadConnections().then(() => setLoading(false));
@@ -62,6 +64,25 @@ export function Connections({ labels, onEdit }: Props) {
   const handleDelete = async (id: string) => {
     await deleteConnection(id);
   };
+
+  const handleSwitch = (id: string) => {
+    setSwitchTarget(id);
+  };
+
+  const handleSwitchConfirm = async () => {
+    if (!switchTarget) return;
+    const targetId = switchTarget;
+    setSwitchTarget(null);
+    // Disconnect current, then connect target
+    const activeConn = connections.find((c) => c.status === "connected");
+    if (activeConn) {
+      await disconnectVpn(activeConn.id);
+    }
+    await connectVpn(targetId);
+  };
+
+  const activeConn = connections.find((c) => c.status === "connected") ?? null;
+  const switchTargetConn = switchTarget ? connections.find((c) => c.id === switchTarget) : null;
 
   const filtered = connections
     .filter((c) => {
@@ -96,6 +117,13 @@ export function Connections({ labels, onEdit }: Props) {
 
   return (
     <>
+      <SwitchConfirmDialog
+        open={switchTarget !== null}
+        targetName={switchTargetConn?.name ?? ""}
+        currentName={activeConn?.name ?? ""}
+        onConfirm={handleSwitchConfirm}
+        onCancel={() => setSwitchTarget(null)}
+      />
       {loading ? (
         <Box sx={{ display: "flex", justifyContent: "center", mt: 8 }}>
           <CircularProgress />
@@ -122,6 +150,7 @@ export function Connections({ labels, onEdit }: Props) {
           }}
           onConnect={handleConnect}
           onDisconnect={handleDisconnect}
+          onSwitch={handleSwitch}
           onEdit={onEdit}
           onDelete={handleDelete}
           connectingId={connectingId}

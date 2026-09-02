@@ -2,8 +2,8 @@ import {
   Connection,
   ConnectionWithStatus,
 } from "../../../typing/definitions.ts";
-import { IconButton, Tooltip, CircularProgress } from "@mui/material";
-import { Delete, Edit, Info, NetworkCheck, PlayArrow, Stop } from "@mui/icons-material";
+import { Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, IconButton, Tooltip, CircularProgress } from "@mui/material";
+import { Delete, Edit, Info, NetworkCheck, Stop, SwapHoriz } from "@mui/icons-material";
 import React, { useState } from "react";
 import toast from "react-hot-toast";
 import { api } from "../../../core/api";
@@ -12,6 +12,7 @@ export function ConnectButton({
   connection,
   onConnect,
   onDisconnect,
+  onSwitch,
   connectingId,
   disconnectingId,
   anyActive,
@@ -19,51 +20,106 @@ export function ConnectButton({
   connection: ConnectionWithStatus;
   onConnect: (id: string) => void;
   onDisconnect: (id: string) => void;
+  onSwitch: (id: string) => void;
   connectingId: string | null;
   disconnectingId: string | null;
   anyActive: boolean;
 }) {
+  const isThisConnecting = connectingId === connection.id;
+  const isThisDisconnecting = disconnectingId === connection.id;
+
+  // Active connection — show Disconnect
   if (connection.status === "connected") {
     return (
-      <Tooltip title="Отключить">
-        <IconButton
-          size="small"
-          color="error"
-          onClick={() => onDisconnect(connection.id)}
-          disabled={disconnectingId === connection.id}
-          aria-label="Отключить"
-        >
-          {disconnectingId === connection.id ? (
-            <CircularProgress size={18} color="inherit" />
-          ) : (
-            <Stop fontSize="small" />
-          )}
-        </IconButton>
-      </Tooltip>
+      <Button
+        size="small"
+        variant="outlined"
+        color="error"
+        startIcon={isThisDisconnecting ? <CircularProgress size={14} color="inherit" /> : <Stop sx={{ fontSize: 14 }} />}
+        onClick={() => onDisconnect(connection.id)}
+        disabled={isThisDisconnecting}
+        sx={{ textTransform: "none", fontSize: 12, py: 0, px: 1.5, minWidth: 0 }}
+      >
+        Отключить
+      </Button>
     );
   }
+
+  // Connecting state
+  if (connection.status === "connecting" || isThisConnecting) {
+    return (
+      <Button
+        size="small"
+        variant="outlined"
+        disabled
+        startIcon={<CircularProgress size={14} color="inherit" />}
+        sx={{ textTransform: "none", fontSize: 12, py: 0, px: 1.5, minWidth: 0 }}
+      >
+        Подключение...
+      </Button>
+    );
+  }
+
+  // Disconnected, nothing active — show Connect
+  if (!anyActive) {
+    return (
+      <Button
+        size="small"
+        variant="outlined"
+        color="success"
+        onClick={() => onConnect(connection.id)}
+        sx={{ textTransform: "none", fontSize: 12, py: 0, px: 1.5, minWidth: 0 }}
+      >
+        Подключить
+      </Button>
+    );
+  }
+
+  // Disconnected, something else active — show Switch
   return (
-    <Tooltip title="Подключить">
-      <span>
-        <IconButton
-          size="small"
-          color="success"
-          onClick={() => onConnect(connection.id)}
-          disabled={
-            connection.status === "connecting" ||
-            connectingId === connection.id ||
-            anyActive
-          }
-          aria-label="Подключить"
-        >
-          {connectingId === connection.id ? (
-            <CircularProgress size={18} color="inherit" />
-          ) : (
-            <PlayArrow fontSize="small" />
-          )}
-        </IconButton>
-      </span>
-    </Tooltip>
+    <Button
+      size="small"
+      variant="outlined"
+      color="warning"
+      startIcon={<SwapHoriz sx={{ fontSize: 14 }} />}
+      onClick={() => onSwitch(connection.id)}
+      sx={{ textTransform: "none", fontSize: 12, py: 0, px: 1.5, minWidth: 0 }}
+    >
+      Переключить
+    </Button>
+  );
+}
+
+export function SwitchConfirmDialog({
+  open,
+  targetName,
+  currentName,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  targetName: string;
+  currentName: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <Dialog open={open} onClose={onCancel} maxWidth="xs" fullWidth>
+      <DialogTitle>Переключиться?</DialogTitle>
+      <DialogContent>
+        <DialogContentText>
+          Подключение к «{currentName}» будет отключено.
+          <br />
+          Затем будет установлено подключение к «{targetName}».
+        </DialogContentText>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onCancel}>Отмена</Button>
+        <Button color="warning" variant="contained" onClick={onConfirm} startIcon={<SwapHoriz />}>
+          Переключиться
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }
 
@@ -71,6 +127,7 @@ export function ActionButtons({
   connection,
   onConnect,
   onDisconnect,
+  onSwitch,
   onEdit,
   onDelete,
   connectingId,
@@ -81,6 +138,7 @@ export function ActionButtons({
   connection: ConnectionWithStatus;
   onConnect: (id: string) => void;
   onDisconnect: (id: string) => void;
+  onSwitch: (id: string) => void;
   onEdit: (c: Connection) => void;
   onDelete: (id: string) => void;
   connectingId: string | null;
@@ -100,6 +158,7 @@ export function ActionButtons({
         connection={connection}
         onConnect={onConnect}
         onDisconnect={onDisconnect}
+        onSwitch={onSwitch}
         connectingId={connectingId}
         disconnectingId={disconnectingId}
         anyActive={anyActive}

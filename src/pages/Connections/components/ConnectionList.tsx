@@ -30,6 +30,7 @@ import {
   SortField
 } from "../../../typing/definitions";
 import { ConnectionRow, STATUS_LABEL } from "./ConnectionRow.tsx";
+import { ActiveBanner } from "./ActiveBanner.tsx";
 import { ChevronRight, ExpandMore } from "@mui/icons-material";
 
 function useDeleteConfirm(onDelete: (id: string) => void) {
@@ -75,6 +76,7 @@ interface ConnectionListProps {
   onSort: (field: SortField) => void;
   onConnect: (id: string) => void;
   onDisconnect: (id: string) => void;
+  onSwitch: (id: string) => void;
   onEdit: (c: Connection) => void;
   onDelete: (id: string) => void;
   connectingId: string | null;
@@ -163,6 +165,7 @@ export function ConnectionList({
     labels,
     onConnect: props.onConnect,
     onDisconnect: props.onDisconnect,
+    onSwitch: props.onSwitch,
     onEdit: props.onEdit,
     onDelete: requestDelete,
     connectingId,
@@ -171,9 +174,18 @@ export function ConnectionList({
     anyActive,
   };
 
+  const activeConn = allConnections.find((c) => c.status === "connected") ?? null;
+  const connectingConn = allConnections.find((c) => c.status === "connecting") ?? null;
+
   return (
     <Box>
       {deleteDialog}
+
+      <ActiveBanner
+        active={activeConn}
+        connecting={connectingConn}
+        onDisconnect={props.onDisconnect}
+      />
 
       <Box sx={{ mb: 2 }}>
         <TextField
@@ -312,6 +324,7 @@ export function ConnectionList({
 
                 return groups.flatMap(([company, conns]) => {
                   const isCollapsed = collapsedGroups.has(company);
+                  const activeInGroup = conns.find((c) => c.status === "connected");
 
                   return [
                     <TableRow
@@ -349,18 +362,24 @@ export function ConnectionList({
                             {company || `Без ${groupLabel}`}
                           </Typography>
                           <Typography variant="caption" color="text.disabled">
-                            {conns.length}
+                            · {conns.length}
                           </Typography>
+                          {activeInGroup && (
+                            <Typography variant="caption" sx={{ color: "success.main", fontWeight: 500 }}>
+                              · 🟢 {activeInGroup.name}
+                            </Typography>
+                          )}
                         </Box>
                       </TableCell>
                     </TableRow>,
                     ...(!isCollapsed
-                      ? conns.map((c) => (
+                      ? conns.map((c, i) => (
                         <ConnectionRow
                           key={c.id}
                           connection={c}
                           {...rowProps}
                           hideCompanyLabel
+                          isLast={i === conns.length - 1}
                         />
                       ))
                       : [])

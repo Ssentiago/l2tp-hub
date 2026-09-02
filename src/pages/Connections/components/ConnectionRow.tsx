@@ -89,9 +89,11 @@ export interface ConnectionRowProps {
   labels: Label[];
   onConnect: (id: string) => void;
   onDisconnect: (id: string) => void;
+  onSwitch: (id: string) => void;
   onEdit: (c: Connection) => void;
   onDelete: (id: string) => void;
   hideCompanyLabel?: boolean;
+  isLast?: boolean;
   connectingId: string | null;
   disconnectingId: string | null;
   deletingId: string | null;
@@ -103,9 +105,11 @@ export function ConnectionRow({
                                 labels,
                                 onConnect,
                                 onDisconnect,
+                                onSwitch,
                                 onEdit,
                                 onDelete,
                                 hideCompanyLabel = false,
+                                isLast = false,
                                 connectingId,
                                 disconnectingId,
                                 deletingId,
@@ -172,6 +176,8 @@ export function ConnectionRow({
     }
   }, [c.error]);
 
+  const isActive = c.status === "connected";
+
   return (
     <TableRow
       hover
@@ -179,9 +185,35 @@ export function ConnectionRow({
       sx={{
         opacity: isBusy ? 0.6 : 1,
         transition: "opacity 0.2s",
+        ...(isActive && {
+          bgcolor: "action.selected",
+          borderLeft: "3px solid",
+          borderLeftColor: "success.main",
+          "& .MuiTableCell-root": {
+            borderBottomColor: "success.dark",
+          },
+        }),
       }}
     >
-      <TableCell sx={{ position: "relative" }}>
+      <TableCell sx={{ position: "relative", ...(hideCompanyLabel && { pl: 3.5 }) }}>
+        {hideCompanyLabel && (
+          <Box
+            sx={{
+              position: "absolute",
+              left: 8,
+              top: "50%",
+              transform: "translateY(-50%)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              color: "text.disabled",
+              fontSize: 10,
+            }}
+          >
+            <Box sx={{ width: 8, height: 1, bgcolor: "currentColor" }} />
+            <Box sx={{ width: 1, height: isLast ? 8 : 16, bgcolor: "currentColor" }} />
+          </Box>
+        )}
         {isBusy && (
           <LinearProgress
             sx={{
@@ -283,6 +315,7 @@ export function ConnectionRow({
             connection={c}
             onConnect={onConnect}
             onDisconnect={onDisconnect}
+            onSwitch={onSwitch}
             onEdit={onEdit}
             onDelete={onDelete}
             connectingId={connectingId}
