@@ -96,9 +96,23 @@ impl L2tpManager {
             store::save(&store)?;
         }
 
-        tauri::async_runtime::block_on(
-            l2tp::connect_vpn(&self.sudo, &conn.name, &conn.server, &original_gateway)
-        )?;
+        let connect_result = tauri::async_runtime::block_on(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(60),
+                l2tp::connect_vpn(&self.sudo, &conn.name, &conn.server, &original_gateway),
+            )
+        );
+
+        match connect_result {
+            Ok(inner) => inner?,
+            Err(_) => {
+                log!("[manager] connect timed out after 60s");
+                // Cleanup guardian + heartbeat on timeout
+                crate::l2tp::macos::stop_heartbeat_thread();
+                crate::l2tp::macos::deactivate_guardian();
+                return Err("Превышен таймаут подключения (60 сек)".to_string());
+            }
+        }
 
         let mut store = store::load(self.app.config());
         update_connect_stats(&mut store, id);

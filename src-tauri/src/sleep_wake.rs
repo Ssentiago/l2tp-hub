@@ -35,6 +35,7 @@ where
     type io_connect_t = u32;
     type io_object_t = u32;
 
+    #[link(name = "IOKit", kind = "framework")]
     unsafe extern "C" {
         fn IORegisterForSystemPower(
             refcon: *mut c_void,

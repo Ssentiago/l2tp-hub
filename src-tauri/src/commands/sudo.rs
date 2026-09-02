@@ -23,14 +23,16 @@ pub fn check_sudo_session(sudo: State<'_, SudoSession>) -> bool {
 
 #[tauri::command]
 #[cfg(target_os = "macos")]
-pub fn get_helper_status_text(sudo: State<'_, SudoSession>) -> String {
-    sudo.status_text()
+pub async fn get_helper_status_text(sudo: State<'_, SudoSession>) -> Result<String, ()> {
+    Ok(sudo.status_text())
 }
 
 #[tauri::command]
 #[cfg(target_os = "macos")]
-pub fn check_helper_status() -> bool {
-    helper::is_helper_running()
+pub async fn check_helper_status() -> bool {
+    tokio::task::spawn_blocking(|| helper::is_helper_running())
+        .await
+        .unwrap_or(false)
 }
 
 #[tauri::command]
@@ -47,8 +49,8 @@ pub fn check_sudo_session() -> bool {
 
 #[tauri::command]
 #[cfg(target_os = "windows")]
-pub fn get_helper_status_text() -> String {
-    String::new()
+pub async fn get_helper_status_text() -> Result<String, ()> {
+    Ok(String::new())
 }
 
 #[tauri::command]

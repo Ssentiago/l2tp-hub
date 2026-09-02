@@ -14,7 +14,8 @@
     "build:deps:skip-ssl": "bash ./build.sh --skip-ssl",
     "build:deps:clean": "bash ./build.sh --clean",
     "build:helper": "cd helper && cargo build --release && mkdir -p ../src-tauri/resources/helper && cp target/release/l2tp-hub-helper ../src-tauri/resources/helper/ && cp com.sentiago.l2tp-hub.helper.plist ../src-tauri/resources/helper/",
-    "build:all": "npm run build:helper && bash ./build.sh && tsc && vite build && tauri build"
+    "build:guardian": "cd route-guardian && cargo build --release && mkdir -p ../src-tauri/resources/guardian && cp target/release/l2tp-hub-guardian ../src-tauri/resources/guardian/ && cp com.sentiago.l2tp-hub.guardian.plist ../src-tauri/resources/guardian/",
+    "build:all": "npm run build:helper && npm run build:guardian && bash ./build.sh && tsc && vite build && tauri build"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

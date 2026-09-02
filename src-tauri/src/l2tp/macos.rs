@@ -6,7 +6,11 @@ use serde::Serialize;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{AppHandle, Manager};
+
+/// Heartbeat thread control — sends heartbeat to guardian every 3 seconds
+static HEARTBEAT_RUNNING: AtomicBool = AtomicBool::new(false);
 
 // ---------------------------------------------------------------------------
 // ConnectError — классификация ошибок подключения для UI
@@ -138,10 +142,6 @@ fn xl2tpd_bin() -> PathBuf {
     find_resource("xl2tpd/xl2tpd")
 }
 
-fn route_guardian_script() -> PathBuf {
-    find_resource("route-guardian.sh")
-}
-
 fn charon_lib_dir() -> PathBuf {
     charon_bin().parent().unwrap().to_path_buf()
 }
@@ -239,7 +239,7 @@ fn clear_route_state(sudo: &SudoSession) {
 
 /// Умное восстановление route: проверяет жив ли исходный интерфейс,
 /// берёт актуальный gateway, ищет альтернативный интерфейс если сеть сменилась.
-fn resolve_restore_gateway(original_iface: &str, _original_gw: &str) -> Option<String> {
+fn resolve_restore_gateway(original_iface: &str, original_gw: &str) -> Option<String> {
     // Шаг 1: жив ли физический интерфейс?
     let iface_active = if !original_iface.is_empty() {
         Command::new("ifconfig")
@@ -259,8 +259,24 @@ fn resolve_restore_gateway(original_iface: &str, _original_gw: &str) -> Option<S
         }
     }
 
-    // Шаг 2: исходный интерфейс не активен — сеть сменилась, ищем любой активный
-    log!("[route] original iface {} not active, searching for alternative", original_iface);
+    // Шаг 2: интерфейс не активен — пробуем сохранённый gateway (может ещё роутер жив)
+    if !original_gw.is_empty() {
+        log!("[route] original iface {} not active, trying saved gw={}", original_iface, original_gw);
+        // Проверяем что saved gateway пингуется
+        let ping_ok = Command::new("ping")
+            .args(["-c", "1", "-t", "2", original_gw])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        if ping_ok {
+            log!("[route] saved gateway {} is reachable", original_gw);
+            return Some(original_gw.to_string());
+        }
+        log!("[route] saved gateway {} is unreachable", original_gw);
+    }
+
+    // Шаг 3: ищем любой активный физический интерфейс
+    log!("[route] searching for alternative active interface");
     find_any_active_physical_gateway()
 }
 
@@ -345,49 +361,90 @@ fn restore_routes(sudo: &SudoSession, server: &str, original_iface: &str, origin
     }
 }
 
-// ---------------------------------------------------------------------------
-// Route guardian watchdog — detached процесс, переживает краш приложения
-// ---------------------------------------------------------------------------
+const GUARDIAN_LABEL: &str = "com.sentiago.l2tp-hub.guardian";
 
-/// Убить предыдущий watchdog (если есть)
-fn kill_route_guardian(sudo: &SudoSession) {
-    // Убиваем по PID файлу
-    if let Ok(pid) = fs::read_to_string("/tmp/l2tp/route-guardian.pid") {
-        if let Ok(pid) = pid.trim().parse::<u32>() {
-            let _ = sudo.run_sudo(&["kill", &pid.to_string()]);
-            log!("[guardian] killed previous watchdog pid={}", pid);
-        }
-    }
-    // На всякий случай — по имени
-    sudo.run_sudo(&["pkill", "-f", "route-guardian.sh"]).ok();
-    let _ = fs::remove_file("/tmp/l2tp/route-guardian.pid");
+fn guardian_bin() -> PathBuf {
+    find_resource("guardian/l2tp-hub-guardian")
 }
 
-/// Запустить detached watchdog — живёт независимо от Tauri-процесса.
-/// Если Tauri крашнется, watchdog восстановит route когда pppd умрёт.
-fn spawn_route_guardian(sudo: &SudoSession, server: &str, original_iface: &str, original_gateway: &str) -> Result<(), String> {
-    let script = route_guardian_script();
-    if !script.exists() {
-        log!("[guardian] WARNING: route-guardian.sh not found at {}", script.display());
-        return Ok(()); // не фатально — есть route.state + явный restore
+fn guardian_plist_resource() -> PathBuf {
+    find_resource("guardian/com.sentiago.l2tp-hub.guardian.plist")
+}
+
+// ---------------------------------------------------------------------------
+// Route guardian — постоянный daemon, общаемся через socket
+// ---------------------------------------------------------------------------
+
+/// Установить guardian LaunchDaemon (один раз, как helper).
+/// Вызывается при первом запуске или обновлении.
+pub fn install_guardian_daemon(sudo: &SudoSession) -> Result<(), String> {
+    let bin = guardian_bin();
+    if !bin.exists() {
+        return Err(format!("guardian binary not found at {}", bin.display()));
     }
 
-    kill_route_guardian(sudo);
+    let dest_bin = "/Library/PrivilegedHelperTools/l2tp-hub-guardian";
+    sudo.run_sudo(&["cp", &bin.to_string_lossy(), dest_bin])?;
+    sudo.run_sudo(&["chmod", "555", dest_bin])?;
+    sudo.run_sudo(&["chown", "root:wheel", dest_bin])?;
 
-    let script_str = script.to_string_lossy();
-    // Запускаем через sudo с process_group(0) — detached от Tauri
-    // Используем bash -c для запуска скрипта с аргументами
-    let cmd = format!("{} {} {} {} 5 24", script_str, original_iface, original_gateway, server);
-    match sudo.run_sudo(&["bash", "-c", &cmd]) {
-        Ok(_) => {
-            log!("[guardian] spawned: iface={}, gw={}, server={}", original_iface, original_gateway, server);
-        }
-        Err(e) => {
-            log!("[guardian] WARNING: failed to spawn: {}", e);
-            // Не фатально — есть route.state + явный restore
-        }
-    }
+    let plist_src = guardian_plist_resource();
+    let plist_dst = plist_path(GUARDIAN_LABEL);
+    sudo.run_sudo(&["cp", &plist_src.to_string_lossy(), &plist_dst.to_string_lossy()])?;
+    sudo.run_sudo(&["chmod", "644", &plist_dst.to_string_lossy()])?;
+    sudo.run_sudo(&["chown", "root:wheel", &plist_dst.to_string_lossy()])?;
+
+    // bootout если уже зарегистрирован
+    let _ = sudo.run_sudo(&["launchctl", "bootout", &format!("system/{}", GUARDIAN_LABEL)]);
+    std::thread::sleep(std::time::Duration::from_millis(500));
+
+    // bootstrap
+    sudo.run_sudo(&["launchctl", "bootstrap", "system", &plist_dst.to_string_lossy()])?;
+    log!("[guardian] daemon installed and bootstrapped");
     Ok(())
+}
+
+/// Активировать мониторинг guardian — шлём set_state через socket
+fn activate_guardian(server: &str, iface: &str, gateway: &str) {
+    match crate::guardian::set_state(server, iface, gateway) {
+        Ok(resp) => log!("[guardian] set_state: ok, mode={:?}", resp.mode),
+        Err(e) => log!("[guardian] WARNING: set_state failed: {}", e),
+    }
+}
+
+/// Деактивировать мониторинг guardian — шлём clear_state через socket
+pub fn deactivate_guardian() {
+    match crate::guardian::clear_state() {
+        Ok(_) => log!("[guardian] clear_state: ok"),
+        Err(e) => log!("[guardian] WARNING: clear_state failed: {}", e),
+    }
+}
+
+/// Запустить heartbeat-поток — шлёт heartbeat guardian каждые 3 сек
+fn start_heartbeat_thread() {
+    HEARTBEAT_RUNNING.store(true, Ordering::SeqCst);
+    std::thread::spawn(|| {
+        log!("[heartbeat] thread started");
+        while HEARTBEAT_RUNNING.load(Ordering::SeqCst) {
+            match crate::guardian::heartbeat() {
+                Ok(resp) => {
+                    if let Some(false) = resp.vpn_alive {
+                        log!("[heartbeat] guardian reports VPN dead!");
+                    }
+                }
+                Err(_) => {
+                    // Guardian может быть ещё не запущен — это нормально
+                }
+            }
+            std::thread::sleep(std::time::Duration::from_secs(3));
+        }
+        log!("[heartbeat] thread stopped");
+    });
+}
+
+/// Остановить heartbeat-поток
+pub fn stop_heartbeat_thread() {
+    HEARTBEAT_RUNNING.store(false, Ordering::SeqCst);
 }
 
 /// Получить текущий default gateway физического интерфейса
@@ -686,29 +743,24 @@ password "{password}"
     .map_err(|e| format!("strongswan.conf: {}", e))?;
 
     // ip-up — pppd вызывает при подключении PPP-сессии
+    // ЗАГЛУШКА: route management целиком из Rust, не из pppd скриптов
     fs::write(
         dir.join("ip-up"),
-        format!(
-            r#"#!/bin/bash
-# L2TP Hub: full-tunnel routing
-/sbin/route add -host {server} {gateway}
-/sbin/route change default -interface $1
-"#
-        , server = server, gateway = original_gateway),
+        r#"#!/bin/bash
+# L2TP Hub: route management handled by app — this is a no-op stub
+exit 0
+"#,
     )
     .map_err(|e| format!("ip-up: {}", e))?;
 
     // ip-down — pppd вызывает при отключении
+    // ЗАГЛУШКА: route management целиком из Rust, не из pppd скриптов
     fs::write(
         dir.join("ip-down"),
-        format!(
-            r#"#!/bin/bash
-# L2TP Hub: откат маршрутизации (идемпотентно)
-/sbin/route delete -host {server}
-/sbin/route delete default 2>/dev/null
-/sbin/route add default {gateway}
-"#
-        , server = server, gateway = original_gateway),
+        r#"#!/bin/bash
+# L2TP Hub: route management handled by app — this is a no-op stub
+exit 0
+"#,
     )
     .map_err(|e| format!("ip-down: {}", e))?;
 
@@ -837,14 +889,23 @@ pub async fn connect_vpn(
     install_daemon(sudo, CHARON_LABEL, &generate_charon_plist())?;
     start_daemon(sudo, CHARON_LABEL)?;
 
-    // Ждём VICI socket
-    log!("[l2tp] waiting 3s for charon VICI socket...");
-    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+    // Ждём VICI socket — polling вместо слепого sleep
+    log!("[l2tp] waiting for charon VICI socket...");
+    let vici_path = std::path::Path::new("/var/run/charon.vici");
+    let vici_deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(15);
+    let mut vici_ready = false;
+    while tokio::time::Instant::now() < vici_deadline {
+        if vici_path.exists() {
+            vici_ready = true;
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    }
 
-    if !std::path::Path::new("/var/run/charon.vici").exists() {
-        log!("[l2tp] WARNING: /var/run/charon.vici does not exist after 3s!");
-    } else {
+    if vici_ready {
         log!("[l2tp] VICI socket exists ✓");
+    } else {
+        log!("[l2tp] WARNING: /var/run/charon.vici does not exist after 15s!");
     }
 
     // -------------------------------------------------------------------------
@@ -922,6 +983,30 @@ pub async fn connect_vpn(
                 // Default route через PPP
                 let r2 = sudo.run_sudo(&["route", "change", "default", "-interface", iface]);
                 log!("[l2tp] route change default -interface {}: {:?}", iface, r2);
+
+                // Route safety: ping через новый default чтобы убедиться что инет есть
+                log!("[l2tp] verifying connectivity through new default route...");
+                let ping_ok = Command::new("ping")
+                    .args(["-c", "1", "-t", "3", "8.8.8.8"])
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .status()
+                    .map(|s| s.success())
+                    .unwrap_or(false);
+
+                if ping_ok {
+                    log!("[l2tp] connectivity verified through VPN ✓");
+                } else {
+                    log!("[l2tp] WARNING: ping through VPN failed — rolling back route!");
+                    // Откатываем route обратно на физический gateway
+                    let _ = sudo.run_sudo(&["route", "delete", "default"]);
+                    let _ = sudo.run_sudo(&["route", "add", "default", original_gateway]);
+                    let _ = sudo.run_sudo(&["route", "delete", "-host", server]);
+                    // Не фейлим connect — VPN может работать, просто route не через default
+                    // Но логируем для диагностики
+                    log!("[l2tp] route rolled back to physical gateway: {}", original_gateway);
+                }
+
                 // Проверяем
                 match get_default_gateway() {
                     Ok(gw) => log!("[l2tp] current default gateway: {}", gw),
@@ -954,10 +1039,13 @@ pub async fn connect_vpn(
     }
 
     // -------------------------------------------------------------------------
-    // 6. Запуск detached watchdog — переживает краш Tauri
+    // 6. Активируем guardian + heartbeat — мониторит VPN и Tauri
     // -------------------------------------------------------------------------
     if is_process_running_global("pppd") {
-        let _ = spawn_route_guardian(sudo, server, &original_iface, &original_gw);
+        // Пишем PID Tauri для guardian
+        let _ = fs::write("/tmp/l2tp/tauri.pid", std::process::id().to_string());
+        activate_guardian(server, &original_iface, &original_gw);
+        start_heartbeat_thread();
     }
 
     log!("[l2tp] connect_vpn done");
@@ -968,8 +1056,9 @@ pub async fn connect_vpn(
 pub async fn disconnect_vpn(sudo: &SudoSession, name: &str) -> Result<(), String> {
     log!("[l2tp] disconnect_vpn: {}", name);
 
-    // Убить watchdog — disconnect штатный, route восстановим сами
-    kill_route_guardian(sudo);
+    // Останавливаем heartbeat и деактивируем guardian
+    stop_heartbeat_thread();
+    deactivate_guardian();
 
     let active = active_dir();
     let strongswan_conf = active.join("strongswan.conf");
@@ -1013,6 +1102,21 @@ pub async fn disconnect_vpn(sudo: &SudoSession, name: &str) -> Result<(), String
     if let Some((server, iface, gateway)) = route_state {
         restore_routes(sudo, &server, &iface, &gateway);
         clear_route_state(sudo);
+
+        // Route safety: ping через восстановленный default
+        log!("[l2tp] verifying restored connectivity...");
+        let ping_ok = Command::new("ping")
+            .args(["-c", "1", "-t", "3", "8.8.8.8"])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if ping_ok {
+            log!("[l2tp] restored connectivity verified ✓");
+        } else {
+            log!("[l2tp] WARNING: ping after route restore failed — network may be down");
+        }
     } else {
         log!("[l2tp] WARNING: no route state on disk — cannot restore routes!");
     }
@@ -1069,6 +1173,10 @@ pub fn configs_exist(name: &str) -> bool {
 
 pub fn cleanup_all_vpn_state() {
     eprintln!("[cleanup] cleaning up all VPN state (launchd)...");
+
+    // Деактивируем guardian мониторинг (не убиваем — он постоянный)
+    let _ = crate::guardian::clear_state();
+    stop_heartbeat_thread();
 
     // -------------------------------------------------------------------------
     // Crash recovery: если есть route.state — восстанавливаем route ПЕРЕД cleanup
@@ -1140,8 +1248,8 @@ pub fn cleanup_all_vpn_state() {
             .status();
     }
 
-    // Kill orphans
-    for proc in &["charon", "xl2tpd", "pppd", "route-guardian"] {
+    // Kill orphans (НЕ убиваем guardian — он постоянный daemon)
+    for proc in &["charon", "xl2tpd", "pppd"] {
         let _ = Command::new("sudo")
             .args(["-n", "pkill", "-9", "-f", proc])
             .stdout(std::process::Stdio::null())

@@ -36,6 +36,14 @@ pub fn query_helper_version() -> Result<String, String> {
     }
 }
 
+/// Запустить guardian-скрипт в фоне через helper (не блокирует helper).
+/// Использует специальную команду guardian_start которую helper обрабатывает отдельно.
+pub fn send_guardian_start(script_path: &str, args: &[&str]) -> Result<HelperResponse, String> {
+    let mut cmd_args: Vec<&str> = vec!["guardian_start", script_path];
+    cmd_args.extend_from_slice(args);
+    send_command(&cmd_args)
+}
+
 /// Отправить команду хелперу и получить результат
 pub fn send_command(args: &[&str]) -> Result<HelperResponse, String> {
     let stream = UnixStream::connect(SOCKET_PATH)

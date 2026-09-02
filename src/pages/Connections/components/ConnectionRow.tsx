@@ -5,7 +5,8 @@ import {
 } from "../../../typing/definitions.ts";
 import { getDisplayTitle } from "../../../core/display";
 import React, { useCallback, useState, useEffect, useRef } from "react";
-import { Box, Chip, LinearProgress, TableCell, TableRow, Typography } from "@mui/material";
+import { Box, Chip, LinearProgress, TableCell, TableRow, Tooltip, Typography } from "@mui/material";
+import { ErrorOutlined } from "@mui/icons-material";
 import { ActionButtons } from "./ActionButtons.tsx";
 
 const STATUS_COLOR: Record<
@@ -160,6 +161,17 @@ export function ConnectionRow({
     [c.status, c.id, onDisconnect, onConnect, anyActive]
   );
 
+  const [errorDismissed, setErrorDismissed] = useState(false);
+  const [errorKey, setErrorKey] = useState(0);
+
+  // Сброс dismissed при появлении новой ошибки
+  useEffect(() => {
+    if (c.error) {
+      setErrorDismissed(false);
+      setErrorKey((k) => k + 1);
+    }
+  }, [c.error]);
+
   return (
     <TableRow
       hover
@@ -207,10 +219,51 @@ export function ConnectionRow({
             </Typography>
           )}
         </Typography>
-        {c.status === "disconnected" && c.error && (
-          <Typography variant="caption" color="error" sx={{ display: "block", fontSize: 11, mt: 0.25 }}>
-            {c.error}
-          </Typography>
+        {c.status === "disconnected" && c.error && !errorDismissed && (
+          <Tooltip
+            key={errorKey}
+            title={
+              <Box>
+                <Typography variant="body2" sx={{ fontWeight: 500, mb: 0.5 }}>
+                  Ошибка подключения
+                </Typography>
+                <Typography variant="caption" sx={{ opacity: 0.9 }}>
+                  {c.error}
+                </Typography>
+              </Box>
+            }
+            arrow
+            onClose={() => setErrorDismissed(true)}
+            slotProps={{
+              tooltip: { sx: { maxWidth: 320, bgcolor: "error.dark" } },
+            }}
+          >
+            <Box
+              component="span"
+              onMouseEnter={(e: React.MouseEvent) => {
+                (e.currentTarget as HTMLElement).style.animationPlayState = "paused";
+                (e.currentTarget as HTMLElement).style.transform = "scale(1.2)";
+              }}
+              onMouseLeave={(e: React.MouseEvent) => {
+                (e.currentTarget as HTMLElement).style.animationPlayState = "running";
+                (e.currentTarget as HTMLElement).style.transform = "scale(1)";
+              }}
+              sx={{
+                display: "inline-flex",
+                alignItems: "center",
+                ml: 0.5,
+                cursor: "pointer",
+                animation: "errorBounce 1.5s ease-in-out infinite",
+                transition: "transform 0.15s ease",
+                "@keyframes errorBounce": {
+                  "0%, 100%": { transform: "translateY(0)" },
+                  "50%": { transform: "translateY(-3px)" },
+                },
+              }}
+            >
+              <ErrorOutlined sx={{ fontSize: 16, color: "error.main" }} />
+            </Box>
+          </Tooltip>
         )}
       </TableCell>
       <TableCell sx={{ width: 150, whiteSpace: "nowrap" }}>

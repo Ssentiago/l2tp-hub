@@ -8,6 +8,7 @@ use tauri::{Emitter, Manager};
 pub mod backup;
 pub mod commands;
 pub mod db;
+pub mod guardian;
 pub mod helper;
 pub mod keychain;
 pub mod l2tp;

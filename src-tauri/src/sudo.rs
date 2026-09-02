@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 // ---------------------------------------------------------------------------
 
 const HELPER_CONNECT_RETRIES: u32 = 3;
-const HELPER_CONNECT_DELAY: std::time::Duration = std::time::Duration::from_secs(5);
+const HELPER_CONNECT_DELAY: std::time::Duration = std::time::Duration::from_secs(1);
 
 #[derive(Clone)]
 pub struct SudoSession {
@@ -174,21 +174,42 @@ fn helper_installed() -> bool {
 
 /// Запустить уже установленный хелпер через launchctl
 fn start_helper() -> Result<(), String> {
+    // Сначала пробуем bootstrap
     let output = std::process::Command::new("launchctl")
         .args(["bootstrap", "system", "/Library/LaunchDaemons/com.sentiago.l2tp-hub.helper.plist"])
         .output()
         .map_err(|e| e.to_string())?;
 
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
     if output.status.success()
-        || String::from_utf8_lossy(&output.stderr).contains("already loaded")
-        || String::from_utf8_lossy(&output.stderr).contains("in domain")
+        || stderr.contains("already loaded")
+        || stderr.contains("in domain")
+        || stderr.contains("System domain already bootstrapped")
     {
-        Ok(())
-    } else {
+        // Demон уже загружен — kickstart для перезапуска
         let _ = std::process::Command::new("launchctl")
-            .args(["kickstart", "system/com.sentiago.l2tp-hub.helper"])
+            .args(["kickstart", "-k", "system/com.sentiago.l2tp-hub.helper"])
             .output();
         Ok(())
+    } else {
+        // bootstrap не удался — пробуем bootout + bootstrap заново
+        let _ = std::process::Command::new("launchctl")
+            .args(["bootout", "system/com.sentiago.l2tp-hub.helper"])
+            .output();
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        let output = std::process::Command::new("launchctl")
+            .args(["bootstrap", "system", "/Library/LaunchDaemons/com.sentiago.l2tp-hub.helper.plist"])
+            .output()
+            .map_err(|e| e.to_string())?;
+        if output.status.success() {
+            Ok(())
+        } else {
+            let _ = std::process::Command::new("launchctl")
+                .args(["kickstart", "-k", "system/com.sentiago.l2tp-hub.helper"])
+                .output();
+            Ok(())
+        }
     }
 }
 
@@ -226,7 +247,7 @@ fn install_helper() -> Result<(), String> {
     let plist_str = helper_plist.to_string_lossy();
 
     let script = format!(
-        r#"do shell script "mkdir -p /Library/PrivilegedHelperTools && cp '{}' /Library/PrivilegedHelperTools/l2tp-hub-helper && chmod 544 /Library/PrivilegedHelperTools/l2tp-hub-helper && cp '{}' /Library/LaunchDaemons/com.sentiago.l2tp-hub.helper.plist && chmod 644 /Library/LaunchDaemons/com.sentiago.l2tp-hub.helper.plist && launchctl bootstrap system /Library/LaunchDaemons/com.sentiago.l2tp-hub.helper.plist" with administrator privileges"#,
+        r#"do shell script "mkdir -p /Library/PrivilegedHelperTools && cp '{}' /Library/PrivilegedHelperTools/l2tp-hub-helper && chmod 544 /Library/PrivilegedHelperTools/l2tp-hub-helper && cp '{}' /Library/LaunchDaemons/com.sentiago.l2tp-hub.helper.plist && chmod 644 /Library/LaunchDaemons/com.sentiago.l2tp-hub.helper.plist && launchctl bootout system/com.sentiago.l2tp-hub.helper 2>/dev/null; launchctl bootstrap system /Library/LaunchDaemons/com.sentiago.l2tp-hub.helper.plist && launchctl kickstart system/com.sentiago.l2tp-hub.helper" with administrator privileges"#,
         bin_str, plist_str
     );
 

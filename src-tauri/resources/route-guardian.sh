@@ -16,6 +16,7 @@ SERVER_IP="$3"
 CHECK_INTERVAL="${4:-5}"
 MAX_HOURS="${5:-24}"
 LOG="/tmp/l2tp/route-guardian.log"
+TAURI_PID_FILE="/tmp/l2tp/tauri.pid"
 
 CHARON_LABEL="com.sentiago.l2tp-hub.charon"
 XL2TPD_LABEL="com.sentiago.l2tp-hub.xl2tpd"
@@ -141,8 +142,9 @@ full_cleanup() {
         fi
     done
 
-    # 8. Удалить PID файл
+    # 8. Удалить PID файлы
     rm -f /tmp/l2tp/route-guardian.pid
+    rm -f "$TAURI_PID_FILE"
 
     log "=== FULL CLEANUP DONE ==="
 }
@@ -191,6 +193,23 @@ while [ "$ITERATION" -lt "$MAX_ITERATIONS" ]; do
         XL2TPD_ALIVE=true
     fi
 
+    # Проверяем жив ли Tauri-процесс (родитель)
+    TAURI_ALIVE=true
+    if [ -f "$TAURI_PID_FILE" ]; then
+        TAURI_PID=$(cat "$TAURI_PID_FILE" 2>/dev/null)
+        if [ -n "$TAURI_PID" ] && ! kill -0 "$TAURI_PID" 2>/dev/null; then
+            TAURI_ALIVE=false
+        fi
+    fi
+
+    # Если Tauri мёртв — приложение закрылось/крашнулось, восстанавливаем сеть
+    if [ "$TAURI_ALIVE" = "false" ]; then
+        log "tauri process dead (pid file=$TAURI_PID_FILE) — running full cleanup"
+        full_cleanup
+        log "exiting after cleanup (tauri dead)"
+        exit 0
+    fi
+
     # Если pppd мёртв — VPN-туннель упал, нужен полный cleanup
     if [ "$PPPD_ALIVE" = "false" ]; then
         log "pppd dead (charon=$CHARON_ALIVE xl2tpd=$XL2TPD_ALIVE) — running full cleanup"
@@ -206,7 +225,7 @@ while [ "$ITERATION" -lt "$MAX_ITERATIONS" ]; do
 
     # Heartbeat каждые 60 итераций (~5 мин при interval=5)
     if [ $((ITERATION % 60)) -eq 0 ]; then
-        log "heartbeat: pppd=$PPPD_ALIVE charon=$CHARON_ALIVE xl2tpd=$XL2TPD_ALIVE (iter $ITERATION/$MAX_ITERATIONS)"
+        log "heartbeat: pppd=$PPPD_ALIVE charon=$CHARON_ALIVE xl2tpd=$XL2TPD_ALIVE tauri=$TAURI_ALIVE (iter $ITERATION/$MAX_ITERATIONS)"
     fi
 done
 

@@ -1,6 +1,7 @@
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixListener;
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 
 const SOCKET_PATH: &str = "/var/run/l2tp-hub-helper.sock";
 const HELPER_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -51,6 +52,8 @@ fn main() {
     }
 }
 
+const CMD_TIMEOUT: Duration = Duration::from_secs(25);
+
 fn handle_command(line: &str) -> String {
     let args: Vec<String> = match serde_json::from_str(line) {
         Ok(a) => a,
@@ -68,21 +71,117 @@ fn handle_command(line: &str) -> String {
         return serde_json::json!({"ok": true, "stdout": HELPER_VERSION}).to_string();
     }
 
-    let output = Command::new(&args[0])
-        .args(&args[1..])
-        .output();
+    // Специальная команда: guardian_start — запуск скрипта в фоне (без ожидания)
+    if args[0] == "guardian_start" {
+        return start_guardian(&args[1..]);
+    }
 
-    match output {
-        Ok(o) => {
-            serde_json::json!({
-                "ok": o.status.success(),
-                "stdout": String::from_utf8_lossy(&o.stdout),
-                "stderr": String::from_utf8_lossy(&o.stderr),
-            })
-            .to_string()
+    exec_with_timeout(&args)
+}
+
+/// Запуск guardian-скрипта в фоне — не блокирует helper.
+/// Ожидается: guardian_start <script_path> <args...>
+fn start_guardian(args: &[String]) -> String {
+    if args.is_empty() {
+        return serde_json::json!({"ok": false, "stderr": "guardian_start: missing script path"}).to_string();
+    }
+
+    let mut cmd = Command::new(&args[0]);
+    if args.len() > 1 {
+        cmd.args(&args[1..]);
+    }
+    // Отсоединяем от stdin/stdout/stderr — скрипт пишет в свой лог-файл
+    cmd.stdin(Stdio::null())
+       .stdout(Stdio::null())
+       .stderr(Stdio::null());
+
+    match cmd.spawn() {
+        Ok(child) => {
+            serde_json::json!({"ok": true, "stdout": format!("guardian pid={}", child.id())}).to_string()
         }
         Err(e) => {
-            serde_json::json!({"ok": false, "stderr": format!("exec error: {}", e)}).to_string()
+            serde_json::json!({"ok": false, "stderr": format!("guardian spawn error: {}", e)}).to_string()
         }
     }
+}
+
+/// Выполнить команду с таймаутом CMD_TIMEOUT.
+/// Использует spawn() + polling вместо output() чтобы не блокировать helper навсегда.
+fn exec_with_timeout(args: &[String]) -> String {
+    use std::io::Read;
+
+    let mut child = match Command::new(&args[0])
+        .args(&args[1..])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+    {
+        Ok(c) => c,
+        Err(e) => {
+            return serde_json::json!({"ok": false, "stderr": format!("exec error: {}", e)}).to_string();
+        }
+    };
+
+    // Забираем pipe-ы до polling — читаем в отдельных потоках
+    let stdout_pipe = child.stdout.take();
+    let stderr_pipe = child.stderr.take();
+
+    let stdout_handle = stdout_pipe.map(|mut r| {
+        std::thread::spawn(move || {
+            let mut buf = Vec::new();
+            let _ = r.read_to_end(&mut buf);
+            String::from_utf8_lossy(&buf).to_string()
+        })
+    });
+    let stderr_handle = stderr_pipe.map(|mut r| {
+        std::thread::spawn(move || {
+            let mut buf = Vec::new();
+            let _ = r.read_to_end(&mut buf);
+            String::from_utf8_lossy(&buf).to_string()
+        })
+    });
+
+    let start = Instant::now();
+    let exit_status;
+
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                exit_status = status;
+                break;
+            }
+            Ok(None) => {
+                if start.elapsed() >= CMD_TIMEOUT {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return serde_json::json!({
+                        "ok": false,
+                        "stderr": format!("command timed out after {}s", CMD_TIMEOUT.as_secs()),
+                    }).to_string();
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            Err(e) => {
+                let _ = child.kill();
+                return serde_json::json!({"ok": false, "stderr": format!("wait error: {}", e)}).to_string();
+            }
+        }
+    }
+
+    // Собираем output из reader-потоков
+    let stdout = stdout_handle
+        .and_then(|h| h.join().ok())
+        .unwrap_or_default();
+    let stderr = stderr_handle
+        .and_then(|h| h.join().ok())
+        .unwrap_or_default();
+
+    let success = exit_status.success();
+
+    serde_json::json!({
+        "ok": success,
+        "stdout": stdout,
+        "stderr": stderr,
+    })
+    .to_string()
 }

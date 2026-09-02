@@ -36,7 +36,8 @@
       "resources/ipsec/*": "ipsec/",
       "resources/xl2tpd/*": "xl2tpd/",
       "resources/etc/*": "etc/",
-      "resources/helper/*": "helper/"
+      "resources/helper/*": "helper/",
+      "resources/guardian/*": "guardian/"
     }
   }
 }
