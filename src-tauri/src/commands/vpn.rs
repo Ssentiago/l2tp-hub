@@ -242,6 +242,56 @@ pub async fn discover_vpn_routes(
 }
 
 #[tauri::command]
+#[cfg(target_os = "macos")]
+pub async fn scan_vpn_routes(
+    id: String,
+    app_handle: tauri::AppHandle,
+    manager: State<'_, L2tpManager>,
+) -> Result<Vec<String>, String> {
+    log!("[scan_vpn_routes] id={}", id);
+    let manager = manager.inner().clone();
+    let app = app_handle.clone();
+
+    // Проверяем что VPN подключён
+    if manager.status(&id) != VpnStatus::Connected {
+        return Err("VPN должен быть подключён в режиме «Полный туннель» для сканирования".to_string());
+    }
+
+    let id_clone = id.clone();
+    let result = tokio::task::spawn_blocking(move || {
+        let sudo = manager.sudo();
+        crate::l2tp::macos::discover_vpn_routes(sudo)
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+
+    // Сохраняем auto_discovered_routes в store
+    let app2 = app.clone();
+    let routes_clone = result.clone();
+    let id2 = id_clone.clone();
+    tokio::task::spawn_blocking(move || {
+        let mut store = store::load(app2.config());
+        for ws in &mut store.workspaces {
+            if let Some(c) = ws.connections.iter_mut().find(|c| c.id == id2) {
+                c.auto_discovered_routes = routes_clone.clone();
+            }
+        }
+        store::save(&store).ok();
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+
+    // Эмитим событие с результатом
+    let _ = app.emit("scan-routes-result", serde_json::json!({
+        "id": id_clone,
+        "routes": result,
+        "count": result.len(),
+    }));
+
+    Ok(result)
+}
+
+#[tauri::command]
 #[cfg(target_os = "windows")]
 pub async fn switch_tunnel_mode(_id: String, _new_mode: String) -> Result<(), String> {
     Err("Split tunneling не поддерживается на Windows".to_string())
@@ -250,5 +300,11 @@ pub async fn switch_tunnel_mode(_id: String, _new_mode: String) -> Result<(), St
 #[tauri::command]
 #[cfg(target_os = "windows")]
 pub async fn discover_vpn_routes() -> Result<Vec<String>, String> {
+    Err("Split tunneling не поддерживается на Windows".to_string())
+}
+
+#[tauri::command]
+#[cfg(target_os = "windows")]
+pub async fn scan_vpn_routes(_id: String) -> Result<Vec<String>, String> {
     Err("Split tunneling не поддерживается на Windows".to_string())
 }

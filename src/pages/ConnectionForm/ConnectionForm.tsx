@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Box, Button, FormControl, FormControlLabel, FormHelperText, InputLabel, MenuItem, Paper, Radio, RadioGroup, Select, TextField, Typography } from "@mui/material";
+import { Box, Button, FormControl, FormControlLabel, Paper, Radio, RadioGroup, TextField, Typography } from "@mui/material";
 import { api } from "../../core/api";
+import { SubnetEditor } from "../../components/SubnetEditor";
 import { Connection, ConnectionPayload, Label } from "../../typing/definitions";
 import toast from "react-hot-toast";
 
@@ -178,22 +179,9 @@ export function ConnectionForm({
 
           {formData.tunnel_mode === "split" && (
             <Box>
-              <TextField
-                label="Сети через VPN"
-                size="small"
-                multiline
-                rows={3}
-                fullWidth
-                value={(formData.split_routes ?? []).join("\n")}
-                onChange={(e) => {
-                  const routes = e.target.value
-                    .split("\n")
-                    .map((s) => s.trim())
-                    .filter((s) => s.length > 0);
-                  updateFormData({ split_routes: routes });
-                }}
-                placeholder={"10.0.0.0/8\n192.168.50.0/24\n172.16.20.0/24"}
-                helperText="Одна подсеть CIDR на строку. Интернет пойдёт напрямую."
+              <SubnetEditor
+                routes={formData.split_routes ?? []}
+                onChange={(routes) => updateFormData({ split_routes: routes })}
               />
               {initialConnection?.auto_discovered_routes &&
                 initialConnection.auto_discovered_routes.length > 0 &&

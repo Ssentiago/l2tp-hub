@@ -30,6 +30,7 @@ export const api = {
     switchTunnelMode: (id: string, newMode: string) =>
       invoke<void>("switch_tunnel_mode", { id, newMode }),
     discoverRoutes: () => invoke<string[]>("discover_vpn_routes"),
+    scanRoutes: (id: string) => invoke<string[]>("scan_vpn_routes", { id }),
   },
   sudo: {
     authenticate: () =>

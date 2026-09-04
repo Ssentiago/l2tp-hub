@@ -1208,54 +1208,117 @@ pub fn switch_tunnel_mode(
 
 /// Авто-обнаружение корпоративных сетей через VPN.
 /// Собирает routes что идут через ppp интерфейс + traffic selectors из swanctl.
+/// Каждый шаг логируется через log! и эмитится как scan-progress event.
 pub fn discover_vpn_routes(sudo: &SudoSession) -> Vec<String> {
     let mut routes = Vec::new();
 
-    // 1. Собираем routes через ppp интерфейс из routing table
-    if let Some(ppp_iface) = find_ppp_interface() {
+    // 1. Определяем PPP интерфейс
+    let ppp_iface = find_ppp_interface();
+    match &ppp_iface {
+        Some(iface) => log!("[scan] PPP интерфейс: {}", iface),
+        None => log!("[scan] PPP интерфейс не найден — VPN не подключён?"),
+    }
+
+    // 2. Собираем routes через ppp интерфейс из routing table
+    log!("[scan] Шаг 1/2: сканирование routing table (netstat -rn)...");
+    if let Some(ref iface) = ppp_iface {
         if let Ok(output) = Command::new("netstat")
             .args(["-rn"])
             .output()
         {
             let text = String::from_utf8_lossy(&output.stdout);
+            let mut netstat_count = 0;
             for line in text.lines() {
-                // Ищем строки с ppp интерфейсом и подсетевыми маршрутами
-                if line.contains(&ppp_iface) && !line.contains("default") {
+                if line.contains(iface) && !line.contains("default") {
                     let parts: Vec<&str> = line.split_whitespace().collect();
-                    if parts.len() >= 1 {
+                    if !parts.is_empty() {
                         let dest = parts[0];
-                        // Пропускаем host routes (255.255.255.255) и loopback
                         if dest.contains('/') && !dest.starts_with("127.") && !dest.contains("255.255.255") {
-                            routes.push(dest.to_string());
+                            if !routes.contains(&dest.to_string()) {
+                                routes.push(dest.to_string());
+                                log!("[scan]   → найден маршрут: {} (через {})", dest, iface);
+                                netstat_count += 1;
+                            }
                         }
                     }
                 }
             }
+            if netstat_count == 0 {
+                log!("[scan]   → маршруты через {} не найдены в routing table", iface);
+            } else {
+                log!("[scan]   → найдено {} маршрутов через netstat", netstat_count);
+            }
+        } else {
+            log!("[scan]   → ошибка выполнения netstat -rn");
         }
     }
 
-    // 2. Парсим traffic selectors из swanctl
+    // 3. Парсим traffic selectors из swanctl
+    log!("[scan] Шаг 2/2: чтение IPSec traffic selectors (swanctl --list-sas)...");
     let active = active_dir();
     let strongswan_conf = active.join("strongswan.conf");
     let swanctl = swanctl_bin();
-    if let Ok(output) = sudo.run_sudo(&[
+    match sudo.run_sudo(&[
         "env",
         &format!("STRONGSWAN_CONF={}", strongswan_conf.to_string_lossy()),
         &swanctl.to_string_lossy(),
         "--list-sas",
         "--raw",
     ]) {
-        // Парсим "local-ts" и "remote-ts" из вывода
-        for line in output.lines() {
-            let trimmed = line.trim();
-            if trimmed.starts_with("local-ts") || trimmed.starts_with("remote-ts") {
-                // Формат: local-ts = 10.0.0.0/8
-                if let Some(cidr) = trimmed.split('=').nth(1) {
-                    let cidr = cidr.trim().to_string();
-                    if cidr.contains('/') && !routes.contains(&cidr) {
-                        routes.push(cidr);
+        Ok(output) => {
+            if output.trim().is_empty() {
+                log!("[scan]   → swanctl не вернул данных (IPSec SA не установлен?)");
+            } else {
+                let mut ts_count = 0;
+                for line in output.lines() {
+                    let trimmed = line.trim();
+                    if trimmed.starts_with("local-ts") || trimmed.starts_with("remote-ts") {
+                        if let Some(cidr) = trimmed.split('=').nth(1) {
+                            let cidr = cidr.trim().to_string();
+                            if cidr.contains('/') && !routes.contains(&cidr) {
+                                routes.push(cidr.clone());
+                                log!("[scan]   → traffic selector: {}", cidr);
+                                ts_count += 1;
+                            }
+                        }
                     }
                 }
+                if ts_count == 0 {
+                    log!("[scan]   → traffic selectors не найдены в выводе swanctl");
+                } else {
+                    log!("[scan]   → найдено {} traffic selectors", ts_count);
+                }
+            }
+        }
+        Err(e) => {
+            log!("[scan]   → ошибка swanctl: {}", e);
+        }
+    }
+
+    // 4. Пинг-проверка найденных сетей
+    if !routes.is_empty() {
+        log!("[scan] Проверка доступности {} подсетей через VPN...", routes.len());
+        for route in &routes {
+            // Извлекаем первый IP из подсети для пинга
+            let test_ip = route.split('/').next().unwrap_or(route);
+            // Заменяем последний октет на .1 для пинга (gateway в подсети)
+            let parts: Vec<&str> = test_ip.split('.').collect();
+            let ping_target = if parts.len() == 4 {
+                format!("{}.{}.{}.1", parts[0], parts[1], parts[2])
+            } else {
+                test_ip.to_string()
+            };
+            let ping_ok = Command::new("ping")
+                .args(["-c", "1", "-t", "2", &ping_target])
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false);
+            if ping_ok {
+                log!("[scan]   ✓ {} → {} доступна", route, ping_target);
+            } else {
+                log!("[scan]   ✗ {} → {} не отвечает (может быть ICMP заблокирован)", route, ping_target);
             }
         }
     }
@@ -1263,7 +1326,7 @@ pub fn discover_vpn_routes(sudo: &SudoSession) -> Vec<String> {
     // Дедупликация и сортировка
     routes.sort();
     routes.dedup();
-    log!("[l2tp] discovered {} VPN routes: {:?}", routes.len(), routes);
+    log!("[scan] Итого обнаружено {} подсетей: {:?}", routes.len(), routes);
     routes
 }
 
