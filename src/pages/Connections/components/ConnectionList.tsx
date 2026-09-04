@@ -85,6 +85,7 @@ interface ConnectionListProps {
   anyActive: boolean;
   groupBy: string;
   onGroupByChange: (labelId: string) => void;
+  onModeChanged?: () => void;
 }
 
 
@@ -185,6 +186,7 @@ export function ConnectionList({
         active={activeConn}
         connecting={connectingConn}
         onDisconnect={props.onDisconnect}
+        onModeChanged={props.onModeChanged}
       />
 
       <Box sx={{ mb: 2 }}>

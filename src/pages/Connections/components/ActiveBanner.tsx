@@ -1,12 +1,14 @@
-import { Box, Button, Chip, Typography } from "@mui/material";
-import { FiberManualRecord, Stop } from "@mui/icons-material";
+import { Box, Button, Chip, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from "@mui/material";
+import { FiberManualRecord, Stop, SwapHoriz } from "@mui/icons-material";
 import { ConnectionWithStatus } from "../../../typing/definitions";
 import { useState, useEffect } from "react";
+import { api } from "../../../core/api";
 
 interface Props {
   active: ConnectionWithStatus | null;
   connecting: ConnectionWithStatus | null;
   onDisconnect: (id: string) => void;
+  onModeChanged?: () => void;
 }
 
 function formatUptime(since: number | null): string {
@@ -19,8 +21,9 @@ function formatUptime(since: number | null): string {
   return `${m}м`;
 }
 
-export function ActiveBanner({ active, connecting, onDisconnect }: Props) {
+export function ActiveBanner({ active, connecting, onDisconnect, onModeChanged }: Props) {
   const [uptime, setUptime] = useState("");
+  const [switching, setSwitching] = useState(false);
 
   useEffect(() => {
     if (!active?.connected_since) {
@@ -32,6 +35,19 @@ export function ActiveBanner({ active, connecting, onDisconnect }: Props) {
     const interval = setInterval(update, 5000);
     return () => clearInterval(interval);
   }, [active?.connected_since, active?.id]);
+
+  const handleModeChange = async (_: React.MouseEvent<HTMLElement>, newMode: string | null) => {
+    if (!newMode || !active || newMode === active.tunnel_mode || switching) return;
+    setSwitching(true);
+    try {
+      await api.vpn.switchTunnelMode(active.id, newMode);
+      onModeChanged?.();
+    } catch (e) {
+      console.error("switch_tunnel_mode failed:", e);
+    } finally {
+      setSwitching(false);
+    }
+  };
 
   // Connecting state
   if (connecting) {
@@ -124,6 +140,34 @@ export function ActiveBanner({ active, connecting, onDisconnect }: Props) {
         </Typography>
       )}
       <Box sx={{ flex: 1 }} />
+
+      {/* Tunnel mode switcher */}
+      <Tooltip title={switching ? "Переключение..." : "Режим маршрутизации"}>
+        <ToggleButtonGroup
+          value={active.tunnel_mode}
+          exclusive
+          onChange={handleModeChange}
+          size="small"
+          disabled={switching}
+          sx={{
+            height: 24,
+            "& .MuiToggleButton-root": {
+              px: 1, py: 0, fontSize: 11, textTransform: "none",
+              borderColor: "rgba(255,255,255,0.2)",
+              color: "text.secondary",
+              "&.Mui-selected": {
+                bgcolor: "rgba(255,255,255,0.1)",
+                color: "text.primary",
+                "&:hover": { bgcolor: "rgba(255,255,255,0.15)" },
+              },
+            },
+          }}
+        >
+          <ToggleButton value="full">Полный</ToggleButton>
+          <ToggleButton value="split">Раздельный</ToggleButton>
+        </ToggleButtonGroup>
+      </Tooltip>
+
       <Button
         size="small"
         variant="outlined"

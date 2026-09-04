@@ -27,6 +27,9 @@ export const api = {
     getAllStatuses: () => invoke<Record<string, VpnStatus>>("get_all_vpn_statuses"),
     check: (id: string) =>
       invoke<{ ping: boolean; ipsec: boolean }>("check_connection", { id }),
+    switchTunnelMode: (id: string, newMode: string) =>
+      invoke<void>("switch_tunnel_mode", { id, newMode }),
+    discoverRoutes: () => invoke<string[]>("discover_vpn_routes"),
   },
   sudo: {
     authenticate: () =>

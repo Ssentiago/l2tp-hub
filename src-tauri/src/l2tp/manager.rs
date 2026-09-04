@@ -30,6 +30,10 @@ impl L2tpManager {
         self.app.config()
     }
 
+    pub fn sudo(&self) -> &SudoSession {
+        &self.sudo
+    }
+
     /// Есть ли активное подключение
     pub fn active_connection(&self) -> Option<String> {
         self.active.lock().unwrap().clone()
@@ -99,7 +103,7 @@ impl L2tpManager {
         let connect_result = tauri::async_runtime::block_on(
             tokio::time::timeout(
                 std::time::Duration::from_secs(60),
-                l2tp::connect_vpn(&self.sudo, &conn.name, &conn.server, &original_gateway),
+                l2tp::connect_vpn(&self.sudo, &conn.name, &conn.server, &original_gateway, &conn.tunnel_mode, &conn.split_routes),
             )
         );
 

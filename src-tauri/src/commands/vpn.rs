@@ -167,3 +167,88 @@ pub async fn get_all_vpn_statuses(
     .await
     .map_err(|e| e.to_string())
 }
+
+// ---------------------------------------------------------------------------
+// Split tunnel commands
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+#[cfg(target_os = "macos")]
+pub async fn switch_tunnel_mode(
+    id: String,
+    new_mode: String,
+    manager: State<'_, L2tpManager>,
+) -> Result<(), String> {
+    log!("[switch_tunnel_mode] id={}, new_mode={}", id, new_mode);
+    let manager = manager.inner().clone();
+
+    tokio::task::spawn_blocking(move || {
+        let store = store::load(manager.app_config());
+        let conn = store.workspaces.iter()
+            .flat_map(|ws| ws.connections.iter())
+            .find(|c| c.id == id)
+            .ok_or("Подключение не найдено")?
+            .clone();
+
+        // Проверяем что подключение активно
+        if manager.status(&id) != VpnStatus::Connected {
+            return Err("Подключение не активно".to_string());
+        }
+
+        let sudo = manager.sudo();
+        let original_gw = crate::l2tp::get_default_gateway()?;
+        let (original_iface, _) = crate::l2tp::macos::capture_physical_route()
+            .unwrap_or_else(|_| (String::new(), original_gw.clone()));
+
+        crate::l2tp::macos::switch_tunnel_mode(
+            sudo,
+            &conn.server,
+            &original_iface,
+            &original_gw,
+            &conn.tunnel_mode,
+            &new_mode,
+            &conn.split_routes,
+        )?;
+
+        // Обновляем tunnel_mode в store
+        let mut store = store::load(manager.app_config());
+        for ws in &mut store.workspaces {
+            if let Some(c) = ws.connections.iter_mut().find(|c| c.id == id) {
+                c.tunnel_mode = new_mode.clone();
+            }
+        }
+        store::save(&store)?;
+
+        Ok(())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+#[cfg(target_os = "macos")]
+pub async fn discover_vpn_routes(
+    manager: State<'_, L2tpManager>,
+) -> Result<Vec<String>, String> {
+    log!("[discover_vpn_routes] called");
+    let manager = manager.inner().clone();
+
+    tokio::task::spawn_blocking(move || {
+        let sudo = manager.sudo();
+        Ok(crate::l2tp::macos::discover_vpn_routes(sudo))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+#[cfg(target_os = "windows")]
+pub async fn switch_tunnel_mode(_id: String, _new_mode: String) -> Result<(), String> {
+    Err("Split tunneling не поддерживается на Windows".to_string())
+}
+
+#[tauri::command]
+#[cfg(target_os = "windows")]
+pub async fn discover_vpn_routes() -> Result<Vec<String>, String> {
+    Err("Split tunneling не поддерживается на Windows".to_string())
+}

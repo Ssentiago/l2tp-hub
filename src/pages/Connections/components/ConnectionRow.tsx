@@ -250,6 +250,11 @@ export function ConnectionRow({
               · {c.connect_count} подключ.
             </Typography>
           )}
+          {c.tunnel_mode === "split" && (
+            <Typography component="span" variant="caption" sx={{ fontSize: 10, ml: 0.5, color: "info.main", fontWeight: 500 }}>
+              · раздельный
+            </Typography>
+          )}
         </Typography>
         {c.status === "disconnected" && c.error && !errorDismissed && (
           <Tooltip

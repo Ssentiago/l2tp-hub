@@ -20,6 +20,9 @@ export interface Connection {
   connected_since: number | null;
   last_connected_at: number | null;
   last_disconnected_at: number | null;
+  tunnel_mode: "full" | "split";
+  split_routes: string[];
+  auto_discovered_routes: string[];
 }
 
 export type VpnStatus = "connected" | "connecting" | "reconnecting" | "disconnected" | "unknown";
@@ -37,6 +40,8 @@ export interface ConnectionPayload {
   password: string;
   shared_secret: string;
   labels: Record<string, string>;
+  tunnel_mode?: "full" | "split";
+  split_routes?: string[];
 }
 
 export interface FilterState {

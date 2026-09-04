@@ -168,7 +168,7 @@ fn route_state_path() -> PathBuf {
 /// Захватить текущий физический маршрут ДО поднятия VPN.
 /// Сохраняет (interface, gateway) — не просто gateway, т.к. при full-tunnel
 /// VPN забирает default route и `route -n get default` будет врать.
-fn capture_physical_route() -> Result<(String, String), String> {
+pub fn capture_physical_route() -> Result<(String, String), String> {
     let output = Command::new("route")
         .args(["-n", "get", "default"])
         .output()
@@ -196,9 +196,10 @@ fn parse_route_field(text: &str, field: &str) -> Result<String, String> {
 }
 
 /// Сохранить состояние маршрутизации на диск (для crash recovery)
-/// Формат: server\ninterface\ngateway\n
-fn save_route_state(sudo: &SudoSession, server: &str, iface: &str, gateway: &str) -> Result<(), String> {
-    let content = format!("{}\n{}\n{}\n", server, iface, gateway);
+/// Формат: server\ninterface\ngateway\ntunnel_mode\nroute1,route2,...
+fn save_route_state(sudo: &SudoSession, server: &str, iface: &str, gateway: &str, tunnel_mode: &str, split_routes: &[String]) -> Result<(), String> {
+    let routes_str = split_routes.join(",");
+    let content = format!("{}\n{}\n{}\n{}\n{}\n", server, iface, gateway, tunnel_mode, routes_str);
     let path = route_state_path();
     let tmp = "/tmp/l2tp-route.state";
     fs::write(tmp, &content).map_err(|e| format!("write route state: {}", e))?;
@@ -207,12 +208,12 @@ fn save_route_state(sudo: &SudoSession, server: &str, iface: &str, gateway: &str
     sudo.run_sudo(&["chmod", "600", &path.to_string_lossy()])?;
     sudo.run_sudo(&["chown", "root:wheel", &path.to_string_lossy()])?;
     let _ = fs::remove_file(tmp);
-    log!("[route] saved state: server={}, iface={}, gw={}", server, iface, gateway);
+    log!("[route] saved state: server={}, iface={}, gw={}, mode={}, routes={}", server, iface, gateway, tunnel_mode, routes_str);
     Ok(())
 }
 
 /// Загрузить сохранённое состояние маршрутизации с диска
-fn load_route_state(sudo: &SudoSession) -> Option<(String, String, String)> {
+fn load_route_state(sudo: &SudoSession) -> Option<(String, String, String, String, Vec<String>)> {
     let path = route_state_path();
     let output = sudo.run_sudo(&["cat", &path.to_string_lossy()]).ok()?;
     let mut lines = output.lines();
@@ -225,9 +226,15 @@ fn load_route_state(sudo: &SudoSession) -> Option<(String, String, String)> {
     // Обратная совместимость: старый формат (server\ngateway\n) — iface отсутствует
     if iface.contains('.') || iface.contains(':') {
         // iface выглядит как IP — значит это старый формат, gateway попал на строку iface
-        Some((server, String::new(), iface))
+        let mode = lines.next().unwrap_or("full").trim().to_string();
+        let routes_str = lines.next().unwrap_or("").trim().to_string();
+        let routes = if routes_str.is_empty() { vec![] } else { routes_str.split(',').map(|s| s.to_string()).collect() };
+        Some((server, String::new(), iface, mode, routes))
     } else {
-        Some((server, iface, gateway))
+        let mode = lines.next().unwrap_or("full").trim().to_string();
+        let routes_str = lines.next().unwrap_or("").trim().to_string();
+        let routes = if routes_str.is_empty() { vec![] } else { routes_str.split(',').map(|s| s.to_string()).collect() };
+        Some((server, iface, gateway, mode, routes))
     }
 }
 
@@ -329,34 +336,39 @@ fn find_any_active_physical_gateway() -> Option<String> {
 }
 
 /// Восстановить route — умная версия
-fn restore_routes(sudo: &SudoSession, server: &str, original_iface: &str, original_gw: &str) {
-    log!("[route] restoring: server={}, original_iface={}, original_gw={}", server, original_iface, original_gw);
+fn restore_routes(sudo: &SudoSession, server: &str, original_iface: &str, original_gw: &str, tunnel_mode: &str, split_routes: &[String]) {
+    log!("[route] restoring: server={}, iface={}, gw={}, mode={}", server, original_iface, original_gw, tunnel_mode);
 
     // 1. Удаляем host route к VPN-серверу (безопасно всегда)
     let r1 = sudo.run_sudo(&["route", "delete", "-host", server]);
     log!("[route] route delete -host {}: {:?}", server, r1);
 
-    // 2. Определяем актуальный gateway для восстановления
-    match resolve_restore_gateway(original_iface, original_gw) {
-        Some(ref gw) => {
-            // 3. Удаляем текущий default (VPN-туннель)
-            let r_del = sudo.run_sudo(&["route", "delete", "default"]);
-            log!("[route] route delete default: {:?}", r_del);
-
-            // 4. Добавляем default route через актуальный gateway
-            let r_add = sudo.run_sudo(&["route", "add", "default", gw]);
-            log!("[route] route add default {}: {:?}", gw, r_add);
-
-            // 5. Верификация
-            match get_default_gateway() {
-                Ok(gw) => log!("[route] current default gateway after restore: {}", gw),
-                Err(e) => log!("[route] WARNING: can't verify gateway after restore: {}", e),
-            }
+    if tunnel_mode == "split" {
+        // SPLIT: удаляем только subnet routes, default не трогали
+        log!("[route] split mode — removing {} subnet routes", split_routes.len());
+        for route in split_routes {
+            let r = sudo.run_sudo(&["route", "delete", "-net", route]);
+            log!("[route] route delete -net {}: {:?}", route, r);
         }
-        None => {
-            log!("[route] WARNING: cannot resolve restore gateway — network may have changed, route NOT restored");
-            // Всё равно удаляем VPN default, чтобы система могла сама выбрать маршрут
-            let _ = sudo.run_sudo(&["route", "delete", "default"]);
+    } else {
+        // FULL: восстанавливаем default route через физический gateway
+        match resolve_restore_gateway(original_iface, original_gw) {
+            Some(ref gw) => {
+                let r_del = sudo.run_sudo(&["route", "delete", "default"]);
+                log!("[route] route delete default: {:?}", r_del);
+
+                let r_add = sudo.run_sudo(&["route", "add", "default", gw]);
+                log!("[route] route add default {}: {:?}", gw, r_add);
+
+                match get_default_gateway() {
+                    Ok(gw) => log!("[route] current default gateway after restore: {}", gw),
+                    Err(e) => log!("[route] WARNING: can't verify gateway after restore: {}", e),
+                }
+            }
+            None => {
+                log!("[route] WARNING: cannot resolve restore gateway — route NOT restored");
+                let _ = sudo.run_sudo(&["route", "delete", "default"]);
+            }
         }
     }
 }
@@ -405,8 +417,8 @@ pub fn install_guardian_daemon(sudo: &SudoSession) -> Result<(), String> {
 }
 
 /// Активировать мониторинг guardian — шлём set_state через socket
-fn activate_guardian(server: &str, iface: &str, gateway: &str) {
-    match crate::guardian::set_state(server, iface, gateway) {
+fn activate_guardian(server: &str, iface: &str, gateway: &str, tunnel_mode: &str, split_routes: &[String]) {
+    match crate::guardian::set_state(server, iface, gateway, tunnel_mode, split_routes) {
         Ok(resp) => log!("[guardian] set_state: ok, mode={:?}", resp.mode),
         Err(e) => log!("[guardian] WARNING: set_state failed: {}", e),
     }
@@ -826,8 +838,10 @@ pub async fn connect_vpn(
     name: &str,
     server: &str,
     original_gateway: &str,
+    tunnel_mode: &str,
+    split_routes: &[String],
 ) -> Result<(), String> {
-    log!("[l2tp] connect_vpn: {} (server={}, gw={})", name, server, original_gateway);
+    log!("[l2tp] connect_vpn: {} (server={}, gw={}, mode={})", name, server, original_gateway, tunnel_mode);
 
     // Захватываем физический маршрут ДО поднятия VPN
     let (original_iface, original_gw) = capture_physical_route()
@@ -837,7 +851,7 @@ pub async fn connect_vpn(
         });
 
     // Сохраняем route state на ДИСК — для crash recovery
-    save_route_state(sudo, server, &original_iface, &original_gw)?;
+    save_route_state(sudo, server, &original_iface, &original_gw, tunnel_mode, split_routes)?;
 
     // Очищаем логи предыдущего сеанса
     let _ = fs::remove_file(format!("/tmp/l2tp/{}-xl2tpd.log", sanitize_name(name)));
@@ -977,34 +991,44 @@ pub async fn connect_vpn(
         match ppp_iface {
             Some(ref iface) => {
                 log!("[l2tp] detected PPP interface: {}", iface);
-                // Host route к VPN-серверу через физический gateway
+                // Host route к VPN-серверу через физический gateway (всегда нужен)
                 let r1 = sudo.run_sudo(&["route", "add", "-host", server, original_gateway]);
                 log!("[l2tp] route add -host {} {}: {:?}", server, original_gateway, r1);
-                // Default route через PPP
-                let r2 = sudo.run_sudo(&["route", "change", "default", "-interface", iface]);
-                log!("[l2tp] route change default -interface {}: {:?}", iface, r2);
 
-                // Route safety: ping через новый default чтобы убедиться что инет есть
-                log!("[l2tp] verifying connectivity through new default route...");
-                let ping_ok = Command::new("ping")
-                    .args(["-c", "1", "-t", "3", "8.8.8.8"])
-                    .stdout(std::process::Stdio::null())
-                    .stderr(std::process::Stdio::null())
-                    .status()
-                    .map(|s| s.success())
-                    .unwrap_or(false);
-
-                if ping_ok {
-                    log!("[l2tp] connectivity verified through VPN ✓");
+                if tunnel_mode == "split" && !split_routes.is_empty() {
+                    // SPLIT TUNNEL: добавляем только корпоративные сети через VPN
+                    log!("[l2tp] split tunnel mode — adding {} routes", split_routes.len());
+                    for route in split_routes {
+                        let r = sudo.run_sudo(&["route", "add", "-net", route, "-interface", iface]);
+                        log!("[l2tp] route add -net {} -interface {}: {:?}", route, iface, r);
+                    }
+                    // Default route НЕ меняем — интернет идёт напрямую
+                    log!("[l2tp] split tunnel: default route unchanged (physical gateway)");
                 } else {
-                    log!("[l2tp] WARNING: ping through VPN failed — rolling back route!");
-                    // Откатываем route обратно на физический gateway
-                    let _ = sudo.run_sudo(&["route", "delete", "default"]);
-                    let _ = sudo.run_sudo(&["route", "add", "default", original_gateway]);
-                    let _ = sudo.run_sudo(&["route", "delete", "-host", server]);
-                    // Не фейлим connect — VPN может работать, просто route не через default
-                    // Но логируем для диагностики
-                    log!("[l2tp] route rolled back to physical gateway: {}", original_gateway);
+                    // FULL TUNNEL: весь трафик через VPN
+                    log!("[l2tp] full tunnel mode — changing default route");
+                    let r2 = sudo.run_sudo(&["route", "change", "default", "-interface", iface]);
+                    log!("[l2tp] route change default -interface {}: {:?}", iface, r2);
+
+                    // Route safety: ping через новый default
+                    log!("[l2tp] verifying connectivity through new default route...");
+                    let ping_ok = Command::new("ping")
+                        .args(["-c", "1", "-t", "3", "8.8.8.8"])
+                        .stdout(std::process::Stdio::null())
+                        .stderr(std::process::Stdio::null())
+                        .status()
+                        .map(|s| s.success())
+                        .unwrap_or(false);
+
+                    if ping_ok {
+                        log!("[l2tp] connectivity verified through VPN ✓");
+                    } else {
+                        log!("[l2tp] WARNING: ping through VPN failed — rolling back route!");
+                        let _ = sudo.run_sudo(&["route", "delete", "default"]);
+                        let _ = sudo.run_sudo(&["route", "add", "default", original_gateway]);
+                        let _ = sudo.run_sudo(&["route", "delete", "-host", server]);
+                        log!("[l2tp] route rolled back to physical gateway: {}", original_gateway);
+                    }
                 }
 
                 // Проверяем
@@ -1044,7 +1068,7 @@ pub async fn connect_vpn(
     if is_process_running_global("pppd") {
         // Пишем PID Tauri для guardian
         let _ = fs::write("/tmp/l2tp/tauri.pid", std::process::id().to_string());
-        activate_guardian(server, &original_iface, &original_gw);
+        activate_guardian(server, &original_iface, &original_gw, tunnel_mode, split_routes);
         start_heartbeat_thread();
     }
 
@@ -1099,8 +1123,8 @@ pub async fn disconnect_vpn(sudo: &SudoSession, name: &str) -> Result<(), String
     // -------------------------------------------------------------------------
     // ЯВНОЕ восстановление route — умная логика через физический интерфейс
     // -------------------------------------------------------------------------
-    if let Some((server, iface, gateway)) = route_state {
-        restore_routes(sudo, &server, &iface, &gateway);
+    if let Some((server, iface, gateway, tunnel_mode, split_routes)) = route_state {
+        restore_routes(sudo, &server, &iface, &gateway, &tunnel_mode, &split_routes);
         clear_route_state(sudo);
 
         // Route safety: ping через восстановленный default
@@ -1134,6 +1158,113 @@ pub async fn disconnect_vpn(sudo: &SudoSession, name: &str) -> Result<(), String
     log!("[l2tp] disconnect_vpn done");
     log_system_state(name);
     Ok(())
+}
+
+/// Переключить режим маршрутизации на лету (без reconnect).
+/// L2TP-сессия остаётся, меняются только routes на клиенте.
+pub fn switch_tunnel_mode(
+    sudo: &SudoSession,
+    server: &str,
+    original_iface: &str,
+    original_gw: &str,
+    current_mode: &str,
+    new_mode: &str,
+    split_routes: &[String],
+) -> Result<(), String> {
+    log!("[l2tp] switch_tunnel_mode: {} → {}", current_mode, new_mode);
+
+    let ppp_iface = find_ppp_interface()
+        .ok_or("PPP interface not found — VPN not connected?")?;
+
+    if current_mode == new_mode {
+        return Ok(());
+    }
+
+    if new_mode == "split" {
+        // Full → Split: убираем default через VPN, добавляем subnet routes
+        log!("[l2tp] switching to split: removing VPN default, adding subnet routes");
+        let _ = sudo.run_sudo(&["route", "delete", "default"]);
+        let _ = sudo.run_sudo(&["route", "add", "default", original_gw]);
+        for route in split_routes {
+            let r = sudo.run_sudo(&["route", "add", "-net", route, "-interface", &ppp_iface]);
+            log!("[l2tp] route add -net {} -interface {}: {:?}", route, ppp_iface, r);
+        }
+    } else {
+        // Split → Full: убираем subnet routes, ставим default через VPN
+        log!("[l2tp] switching to full: removing subnet routes, adding VPN default");
+        for route in split_routes {
+            let _ = sudo.run_sudo(&["route", "delete", "-net", route]);
+        }
+        let r = sudo.run_sudo(&["route", "change", "default", "-interface", &ppp_iface]);
+        log!("[l2tp] route change default -interface {}: {:?}", ppp_iface, r);
+    }
+
+    // Обновляем route.state
+    save_route_state(sudo, server, original_iface, original_gw, new_mode, split_routes)?;
+
+    log!("[l2tp] switch_tunnel_mode done");
+    Ok(())
+}
+
+/// Авто-обнаружение корпоративных сетей через VPN.
+/// Собирает routes что идут через ppp интерфейс + traffic selectors из swanctl.
+pub fn discover_vpn_routes(sudo: &SudoSession) -> Vec<String> {
+    let mut routes = Vec::new();
+
+    // 1. Собираем routes через ppp интерфейс из routing table
+    if let Some(ppp_iface) = find_ppp_interface() {
+        if let Ok(output) = Command::new("netstat")
+            .args(["-rn"])
+            .output()
+        {
+            let text = String::from_utf8_lossy(&output.stdout);
+            for line in text.lines() {
+                // Ищем строки с ppp интерфейсом и подсетевыми маршрутами
+                if line.contains(&ppp_iface) && !line.contains("default") {
+                    let parts: Vec<&str> = line.split_whitespace().collect();
+                    if parts.len() >= 1 {
+                        let dest = parts[0];
+                        // Пропускаем host routes (255.255.255.255) и loopback
+                        if dest.contains('/') && !dest.starts_with("127.") && !dest.contains("255.255.255") {
+                            routes.push(dest.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Парсим traffic selectors из swanctl
+    let active = active_dir();
+    let strongswan_conf = active.join("strongswan.conf");
+    let swanctl = swanctl_bin();
+    if let Ok(output) = sudo.run_sudo(&[
+        "env",
+        &format!("STRONGSWAN_CONF={}", strongswan_conf.to_string_lossy()),
+        &swanctl.to_string_lossy(),
+        "--list-sas",
+        "--raw",
+    ]) {
+        // Парсим "local-ts" и "remote-ts" из вывода
+        for line in output.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("local-ts") || trimmed.starts_with("remote-ts") {
+                // Формат: local-ts = 10.0.0.0/8
+                if let Some(cidr) = trimmed.split('=').nth(1) {
+                    let cidr = cidr.trim().to_string();
+                    if cidr.contains('/') && !routes.contains(&cidr) {
+                        routes.push(cidr);
+                    }
+                }
+            }
+        }
+    }
+
+    // Дедупликация и сортировка
+    routes.sort();
+    routes.dedup();
+    log!("[l2tp] discovered {} VPN routes: {:?}", routes.len(), routes);
+    routes
 }
 
 pub fn get_vpn_status(name: &str) -> VpnStatus {

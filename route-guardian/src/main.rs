@@ -40,6 +40,8 @@ struct VpnContext {
     server: String,
     iface: String,
     gateway: String,
+    tunnel_mode: String,
+    split_routes: Vec<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -128,6 +130,14 @@ struct Request {
     iface: String,
     #[serde(default)]
     gateway: String,
+    #[serde(default = "default_tunnel_mode")]
+    tunnel_mode: String,
+    #[serde(default)]
+    split_routes: Vec<String>,
+}
+
+fn default_tunnel_mode() -> String {
+    "full".to_string()
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -297,14 +307,17 @@ fn handle_connection(stream: &std::os::unix::net::UnixStream) -> String {
             if req.server.is_empty() || req.gateway.is_empty() {
                 return json_err("set_state requires server and gateway");
             }
-            // Write route.state for crash recovery
-            let content = format!("{}\n{}\n{}\n", req.server, req.iface, req.gateway);
+            // Write route.state for crash recovery (расширенный формат)
+            let routes_str = req.split_routes.join(",");
+            let content = format!("{}\n{}\n{}\n{}\n{}\n", req.server, req.iface, req.gateway, req.tunnel_mode, routes_str);
             let _ = std::fs::write(ROUTE_STATE, &content);
 
             let ctx = VpnContext {
                 server: req.server.clone(),
                 iface: req.iface.clone(),
                 gateway: req.gateway.clone(),
+                tunnel_mode: req.tunnel_mode.clone(),
+                split_routes: req.split_routes.clone(),
             };
             // Update VPN context
             if let Some(vpn_mtx) = GLOBAL_VPN.get() {
@@ -614,36 +627,47 @@ fn json_err(msg: &str) -> String {
 fn full_cleanup() {
     eprintln!("[guardian] === FULL CLEANUP START ===");
 
-    let server = GLOBAL_VPN
+    let vpn_ctx = GLOBAL_VPN
         .get()
         .and_then(|m| m.lock().ok())
-        .and_then(|v| v.as_ref().map(|c| c.server.clone()))
-        .unwrap_or_default();
+        .and_then(|v| v.clone());
 
-    let restore_gw = GLOBAL_MAP
-        .get()
-        .and_then(|m| m.lock().ok())
-        .and_then(|m| m.best_restore_gateway().map(|s| s.to_string()));
+    let server = vpn_ctx.as_ref().map(|c| c.server.clone()).unwrap_or_default();
+    let tunnel_mode = vpn_ctx.as_ref().map(|c| c.tunnel_mode.clone()).unwrap_or_else(|| "full".to_string());
+    let split_routes = vpn_ctx.as_ref().map(|c| c.split_routes.clone()).unwrap_or_default();
 
-    if let Some(ref gw) = restore_gw {
-        eprintln!("[guardian] restoring default route to {}", gw);
-        if !server.is_empty() {
-            let _ = Command::new("route").args(["delete", "-host", &server]).status();
-        }
-        let _ = Command::new("route").args(["delete", "default"]).status();
-        let _ = Command::new("route").args(["add", "default", gw]).status();
-        let (_, actual_gw) = get_current_default_route();
-        if actual_gw == *gw {
-            eprintln!("[guardian] route verified ✓");
-        } else {
-            eprintln!("[guardian] WARNING: expected gw={} got={}", gw, actual_gw);
+    // Удаляем host route к VPN-серверу (всегда)
+    if !server.is_empty() {
+        let _ = Command::new("route").args(["delete", "-host", &server]).status();
+    }
+
+    if tunnel_mode == "split" {
+        // SPLIT: удаляем только subnet routes, default не трогали
+        eprintln!("[guardian] split mode — removing {} subnet routes", split_routes.len());
+        for route in &split_routes {
+            let _ = Command::new("route").args(["delete", "-net", route]).status();
         }
     } else {
-        eprintln!("[guardian] WARNING: no gateway — deleting VPN routes only");
-        if !server.is_empty() {
-            let _ = Command::new("route").args(["delete", "-host", &server]).status();
+        // FULL: восстанавливаем default route через физический gateway
+        let restore_gw = GLOBAL_MAP
+            .get()
+            .and_then(|m| m.lock().ok())
+            .and_then(|m| m.best_restore_gateway().map(|s| s.to_string()));
+
+        if let Some(ref gw) = restore_gw {
+            eprintln!("[guardian] restoring default route to {}", gw);
+            let _ = Command::new("route").args(["delete", "default"]).status();
+            let _ = Command::new("route").args(["add", "default", gw]).status();
+            let (_, actual_gw) = get_current_default_route();
+            if actual_gw == *gw {
+                eprintln!("[guardian] route verified ✓");
+            } else {
+                eprintln!("[guardian] WARNING: expected gw={} got={}", gw, actual_gw);
+            }
+        } else {
+            eprintln!("[guardian] WARNING: no gateway — deleting VPN default only");
+            let _ = Command::new("route").args(["delete", "default"]).status();
         }
-        let _ = Command::new("route").args(["delete", "default"]).status();
     }
 
     for proc in &["pppd", "xl2tpd", "charon"] {

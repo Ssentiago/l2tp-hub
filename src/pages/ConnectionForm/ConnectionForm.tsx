@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Box, Button, Paper, TextField, Typography } from "@mui/material";
+import { Box, Button, FormControl, FormControlLabel, FormHelperText, InputLabel, MenuItem, Paper, Radio, RadioGroup, Select, TextField, Typography } from "@mui/material";
 import { api } from "../../core/api";
 import { Connection, ConnectionPayload, Label } from "../../typing/definitions";
 import toast from "react-hot-toast";
@@ -25,6 +25,8 @@ export function ConnectionForm({
     password: "",
     shared_secret: "",
     labels: initialConnection?.labels ?? {},
+    tunnel_mode: initialConnection?.tunnel_mode ?? "full",
+    split_routes: initialConnection?.split_routes ?? [],
   });
 
   const [saving, setSaving] = useState(false);
@@ -136,6 +138,76 @@ export function ConnectionForm({
                 onChange={(e) => setLabel(label.id, e.target.value)}
               />
             ))
+          )}
+        </Box>
+      </Paper>
+
+      <Paper variant="outlined" sx={{ p: 3, mb: 2 }}>
+        <Typography variant="overline" color="text.secondary">
+          Маршрутизация
+        </Typography>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
+          <FormControl size="small">
+            <RadioGroup
+              value={formData.tunnel_mode}
+              onChange={(e) => updateFormData({ tunnel_mode: e.target.value as "full" | "split" })}
+              row
+            >
+              <FormControlLabel
+                value="full"
+                control={<Radio size="small" />}
+                label={
+                  <Box>
+                    <Typography variant="body2">Полный туннель</Typography>
+                    <Typography variant="caption" color="text.disabled">Весь трафик через VPN</Typography>
+                  </Box>
+                }
+              />
+              <FormControlLabel
+                value="split"
+                control={<Radio size="small" />}
+                label={
+                  <Box>
+                    <Typography variant="body2">Раздельный</Typography>
+                    <Typography variant="caption" color="text.disabled">Только корпоративные сети</Typography>
+                  </Box>
+                }
+              />
+            </RadioGroup>
+          </FormControl>
+
+          {formData.tunnel_mode === "split" && (
+            <Box>
+              <TextField
+                label="Сети через VPN"
+                size="small"
+                multiline
+                rows={3}
+                fullWidth
+                value={(formData.split_routes ?? []).join("\n")}
+                onChange={(e) => {
+                  const routes = e.target.value
+                    .split("\n")
+                    .map((s) => s.trim())
+                    .filter((s) => s.length > 0);
+                  updateFormData({ split_routes: routes });
+                }}
+                placeholder={"10.0.0.0/8\n192.168.50.0/24\n172.16.20.0/24"}
+                helperText="Одна подсеть CIDR на строку. Интернет пойдёт напрямую."
+              />
+              {initialConnection?.auto_discovered_routes &&
+                initialConnection.auto_discovered_routes.length > 0 &&
+                (formData.split_routes ?? []).length === 0 && (
+                <Button
+                  size="small"
+                  variant="text"
+                  sx={{ mt: 1, textTransform: "none", fontSize: 12 }}
+                  onClick={() => updateFormData({ split_routes: initialConnection.auto_discovered_routes })}
+                >
+                  Заполнить из авто-обнаруженных ({initialConnection.auto_discovered_routes.length} сетей)
+                </Button>
+              )}
+            </Box>
           )}
         </Box>
       </Paper>

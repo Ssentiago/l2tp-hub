@@ -134,6 +134,8 @@ fn main() {
             commands::rename_workspace,
             commands::delete_workspace,
             commands::switch_workspace,
+            commands::switch_tunnel_mode,
+            commands::discover_vpn_routes,
         ])
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())

@@ -157,6 +157,7 @@ export function Connections({ labels, onEdit }: Props) {
           disconnectingId={disconnectingId}
           deletingId={deletingId}
           anyActive={anyActive}
+          onModeChanged={() => loadConnections()}
         />
       )}
     </>

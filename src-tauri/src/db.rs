@@ -65,6 +65,9 @@ async fn create_tables(pool: &SqlitePool) -> Result<(), String> {
             connected_since INTEGER,
             last_connected_at INTEGER,
             last_disconnected_at INTEGER,
+            tunnel_mode TEXT NOT NULL DEFAULT 'full',
+            split_routes TEXT NOT NULL DEFAULT '[]',
+            auto_discovered_routes TEXT NOT NULL DEFAULT '[]',
             FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
         )",
     )
@@ -81,6 +84,18 @@ async fn create_tables(pool: &SqlitePool) -> Result<(), String> {
     .execute(pool)
     .await
     .map_err(|e| format!("create settings: {}", e))?;
+
+    // Миграция: добавляем колонки для split tunneling (если их нет)
+    // Игнорируем ошибку если колонка уже существует
+    let _ = sqlx::query("ALTER TABLE connections ADD COLUMN tunnel_mode TEXT NOT NULL DEFAULT 'full'")
+        .execute(pool)
+        .await;
+    let _ = sqlx::query("ALTER TABLE connections ADD COLUMN split_routes TEXT NOT NULL DEFAULT '[]'")
+        .execute(pool)
+        .await;
+    let _ = sqlx::query("ALTER TABLE connections ADD COLUMN auto_discovered_routes TEXT NOT NULL DEFAULT '[]'")
+        .execute(pool)
+        .await;
 
     Ok(())
 }
@@ -106,7 +121,7 @@ pub async fn load_store(pool: &SqlitePool) -> Result<Store, String> {
     let mut result_workspaces = Vec::new();
     for ws_row in &workspaces {
         let conns = sqlx::query_as::<_, ConnectionRow>(
-            "SELECT id, name, display_name, server, username, keychain_key, shared_secret_key, service_hash, labels, connect_count, connected_since, last_connected_at, last_disconnected_at FROM connections WHERE workspace_id = ?",
+            "SELECT id, name, display_name, server, username, keychain_key, shared_secret_key, service_hash, labels, connect_count, connected_since, last_connected_at, last_disconnected_at, tunnel_mode, split_routes, auto_discovered_routes FROM connections WHERE workspace_id = ?",
         )
         .bind(&ws_row.id)
         .fetch_all(pool)
@@ -139,6 +154,9 @@ pub async fn load_store(pool: &SqlitePool) -> Result<Store, String> {
                         connected_since: c.connected_since,
                         last_connected_at: c.last_connected_at,
                         last_disconnected_at: c.last_disconnected_at,
+                        tunnel_mode: c.tunnel_mode,
+                        split_routes: serde_json::from_str(&c.split_routes).unwrap_or_default(),
+                        auto_discovered_routes: serde_json::from_str(&c.auto_discovered_routes).unwrap_or_default(),
                     }
                 })
                 .collect(),
@@ -224,8 +242,10 @@ pub async fn save_store(pool: &SqlitePool, store: &Store) -> Result<(), String> 
 
         for conn in &ws.connections {
             let labels_json = serde_json::to_string(&conn.labels).unwrap_or_default();
+            let split_routes_json = serde_json::to_string(&conn.split_routes).unwrap_or_default();
+            let auto_routes_json = serde_json::to_string(&conn.auto_discovered_routes).unwrap_or_default();
             sqlx::query(
-                "INSERT INTO connections (id, workspace_id, name, display_name, server, username, keychain_key, shared_secret_key, service_hash, labels, connect_count, connected_since, last_connected_at, last_disconnected_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO connections (id, workspace_id, name, display_name, server, username, keychain_key, shared_secret_key, service_hash, labels, connect_count, connected_since, last_connected_at, last_disconnected_at, tunnel_mode, split_routes, auto_discovered_routes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             )
             .bind(&conn.id)
             .bind(&ws.id)
@@ -241,6 +261,9 @@ pub async fn save_store(pool: &SqlitePool, store: &Store) -> Result<(), String> 
             .bind(conn.connected_since)
             .bind(conn.last_connected_at)
             .bind(conn.last_disconnected_at)
+            .bind(&conn.tunnel_mode)
+            .bind(&split_routes_json)
+            .bind(&auto_routes_json)
             .execute(&mut *tx)
             .await
             .map_err(|e| format!("insert connection: {}", e))?;
@@ -272,7 +295,8 @@ pub async fn connections_for_workspace(
 ) -> Result<Vec<Connection>, String> {
     let rows = sqlx::query_as::<_, ConnectionRow>(
         "SELECT id, name, display_name, server, username, keychain_key, shared_secret_key, \
-         service_hash, labels, connect_count, connected_since, last_connected_at, last_disconnected_at \
+         service_hash, labels, connect_count, connected_since, last_connected_at, last_disconnected_at, \
+         tunnel_mode, split_routes, auto_discovered_routes \
          FROM connections WHERE workspace_id = ?",
     )
     .bind(ws_id)
@@ -299,6 +323,9 @@ pub async fn connections_for_workspace(
                 connected_since: c.connected_since,
                 last_connected_at: c.last_connected_at,
                 last_disconnected_at: c.last_disconnected_at,
+                tunnel_mode: c.tunnel_mode,
+                split_routes: serde_json::from_str(&c.split_routes).unwrap_or_default(),
+                auto_discovered_routes: serde_json::from_str(&c.auto_discovered_routes).unwrap_or_default(),
             }
         })
         .collect())
@@ -393,6 +420,9 @@ struct ConnectionRow {
     connected_since: Option<i64>,
     last_connected_at: Option<i64>,
     last_disconnected_at: Option<i64>,
+    tunnel_mode: String,
+    split_routes: String,
+    auto_discovered_routes: String,
 }
 
 #[derive(sqlx::FromRow)]

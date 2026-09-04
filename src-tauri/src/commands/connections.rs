@@ -53,6 +53,8 @@ pub async fn save_connection(
             keychain_key,
             shared_secret_key,
             labels: input.labels,
+            tunnel_mode: input.tunnel_mode,
+            split_routes: input.split_routes,
             ..Default::default()
         };
 

@@ -35,8 +35,8 @@ pub fn heartbeat() -> Result<GuardianResponse, String> {
 }
 
 /// Активировать мониторинг — guardian начинает следить за VPN и Tauri
-pub fn set_state(server: &str, iface: &str, gateway: &str) -> Result<GuardianResponse, String> {
-    send_command_with_fields("set_state", server, iface, gateway)
+pub fn set_state(server: &str, iface: &str, gateway: &str, tunnel_mode: &str, split_routes: &[String]) -> Result<GuardianResponse, String> {
+    send_command_full("set_state", server, iface, gateway, tunnel_mode, split_routes)
 }
 
 /// Деактивировать мониторинг — VPN отключён штатно
@@ -73,7 +73,7 @@ fn send_command(cmd: &str) -> Result<GuardianResponse, String> {
     serde_json::from_str(&line).map_err(|e| format!("json decode: {}", e))
 }
 
-fn send_command_with_fields(cmd: &str, server: &str, iface: &str, gateway: &str) -> Result<GuardianResponse, String> {
+fn send_command_full(cmd: &str, server: &str, iface: &str, gateway: &str, tunnel_mode: &str, split_routes: &[String]) -> Result<GuardianResponse, String> {
     let stream = UnixStream::connect(SOCKET_PATH)
         .map_err(|e| format!("guardian connect: {}", e))?;
     stream
@@ -85,6 +85,8 @@ fn send_command_with_fields(cmd: &str, server: &str, iface: &str, gateway: &str)
         "server": server,
         "iface": iface,
         "gateway": gateway,
+        "tunnel_mode": tunnel_mode,
+        "split_routes": split_routes,
     }).to_string();
     let mut writer = &stream;
     writer.write_all(payload.as_bytes()).map_err(|e| format!("write: {}", e))?;
