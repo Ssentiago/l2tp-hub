@@ -79,19 +79,23 @@ export function ActiveBanner({ active, connecting, onDisconnect, onModeChanged }
     };
   }, [scanning]);
 
+  const [showScanPrompt, setShowScanPrompt] = useState(false);
+
   const handleModeChange = async (_: React.MouseEvent<HTMLElement>, newMode: string | null) => {
     if (!newMode || !active || newMode === active.tunnel_mode || switching) return;
 
-    // Если переключаем на split и нет routes — запускаем scan flow
+    // Если переключаем на split и нет routes — просто показываем предложение
     if (newMode === "split" && (!active.split_routes || active.split_routes.length === 0)) {
-      await startScan();
+      setShowScanPrompt(true);
       return;
     }
 
+    // Если переключаем на full — сразу переключаем
     setSwitching(true);
     try {
       await api.vpn.switchTunnelMode(active.id, newMode);
       onModeChanged?.();
+      setShowScanPrompt(false);
     } catch (e) {
       console.error("switch_tunnel_mode failed:", e);
     } finally {
@@ -153,6 +157,7 @@ export function ActiveBanner({ active, connecting, onDisconnect, onModeChanged }
   const cancelScan = () => {
     setPendingRoutes(null);
     setShowScanLogs(false);
+    setShowScanPrompt(false);
     setScanLogs([]);
   };
 
@@ -240,12 +245,46 @@ export function ActiveBanner({ active, connecting, onDisconnect, onModeChanged }
         </Button>
       </Box>
 
-      {/* Scan flow: логи + результат */}
-      <Collapse in={showScanLogs}>
+      {/* Scan flow: предложение → логи → результат */}
+      <Collapse in={showScanPrompt || showScanLogs}>
         <Box sx={{
           mt: 0.5, p: 1.5, borderRadius: 1.5,
           bgcolor: "background.paper", border: "1px solid", borderColor: "divider",
         }}>
+          {/* Предложение просканировать (когда showScanPrompt && !showScanLogs) */}
+          {showScanPrompt && !showScanLogs && !scanning && !pendingRoutes && (
+            <Box>
+              <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: "block" }}>
+                Для раздельного режима нужно указать подсети, которые пойдут через VPN.
+                Можно просканировать их автоматически через текущее подключение.
+              </Typography>
+              <Box sx={{ display: "flex", gap: 1 }}>
+                <Button
+                  size="small" variant="contained" color="primary"
+                  startIcon={<Search sx={{ fontSize: 14 }} />}
+                  onClick={() => { setShowScanPrompt(false); startScan(); }}
+                  sx={{ textTransform: "none", fontSize: 12 }}
+                >
+                  Просканировать
+                </Button>
+                <Button
+                  size="small" variant="outlined"
+                  onClick={() => setShowScanPrompt(false)}
+                  sx={{ textTransform: "none", fontSize: 12 }}
+                >
+                  Ввести вручную
+                </Button>
+                <Button
+                  size="small" variant="text"
+                  onClick={() => { setShowScanPrompt(false); cancelScan(); }}
+                  sx={{ textTransform: "none", fontSize: 12 }}
+                >
+                  Отмена
+                </Button>
+              </Box>
+            </Box>
+          )}
+
           {/* Scanning in progress */}
           {scanning && (
             <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
@@ -326,17 +365,6 @@ export function ActiveBanner({ active, connecting, onDisconnect, onModeChanged }
             </Box>
           )}
 
-          {/* Scan button if no pending routes and not scanning */}
-          {!pendingRoutes && !scanning && (
-            <Button
-              size="small" variant="outlined"
-              startIcon={<Search sx={{ fontSize: 14 }} />}
-              onClick={startScan}
-              sx={{ textTransform: "none", fontSize: 12 }}
-            >
-              Сканировать сети через VPN
-            </Button>
-          )}
         </Box>
       </Collapse>
     </Box>
