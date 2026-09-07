@@ -3,6 +3,8 @@ import {
   Connection,
   ConnectionPayload,
   Label,
+  SessionMeta,
+  SessionLogs,
   VpnStatus,
   WorkspaceInfo,
 } from "../typing/definitions.ts";
@@ -28,9 +30,13 @@ export const api = {
     check: (id: string) =>
       invoke<{ ping: boolean; ipsec: boolean }>("check_connection", { id }),
     switchTunnelMode: (id: string, newMode: string) =>
-      invoke<void>("switch_tunnel_mode", { id, newMode }),
-    discoverRoutes: () => invoke<string[]>("discover_vpn_routes"),
-    scanRoutes: (id: string) => invoke<string[]>("scan_vpn_routes", { id }),
+      invoke<void>("switch_tunnel_mode", { id, new_mode: newMode }),
+  },
+  logs: {
+    getHistory: (id: string) =>
+      invoke<SessionMeta[]>("get_connection_history", { id }),
+    getSession: (id: string, timestamp: number) =>
+      invoke<SessionLogs>("get_session_logs", { id, timestamp }),
   },
   sudo: {
     authenticate: () =>

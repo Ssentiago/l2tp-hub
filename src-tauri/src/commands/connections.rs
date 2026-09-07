@@ -44,21 +44,43 @@ pub async fn save_connection(
             keychain::set_password(&shared_secret_key, &input.shared_secret)?;
         }
 
-        let conn = Connection {
-            id: id.clone(),
-            name: id.clone(),
-            display_name: input.display_name,
-            server: input.server,
-            username: input.username,
-            keychain_key,
-            shared_secret_key,
-            labels: input.labels,
-            tunnel_mode: input.tunnel_mode,
-            split_routes: input.split_routes,
-            ..Default::default()
+        let ws = store.active_workspace_mut();
+        // При обновлении сохраняем статистику и service_name
+        let conn = if let Some(idx) = ws.connections.iter().position(|c| c.id == id) {
+            let existing = &ws.connections[idx];
+            Connection {
+                id: id.clone(),
+                service_name: existing.service_name.clone(),
+                display_name: input.display_name,
+                server: input.server,
+                username: input.username,
+                keychain_key,
+                shared_secret_key,
+                service_hash: existing.service_hash.clone(),
+                labels: input.labels,
+                connect_count: existing.connect_count,
+                connected_since: existing.connected_since,
+                last_connected_at: existing.last_connected_at,
+                last_disconnected_at: existing.last_disconnected_at,
+                tunnel_mode: input.tunnel_mode,
+                split_routes: input.split_routes,
+            }
+        } else {
+            Connection {
+                id: id.clone(),
+                service_name: id.clone(),
+                display_name: input.display_name,
+                server: input.server,
+                username: input.username,
+                keychain_key,
+                shared_secret_key,
+                labels: input.labels,
+                tunnel_mode: input.tunnel_mode,
+                split_routes: input.split_routes,
+                ..Default::default()
+            }
         };
 
-        let ws = store.active_workspace_mut();
         if let Some(idx) = ws.connections.iter().position(|c| c.id == id) {
             ws.connections[idx] = conn.clone();
         } else {
@@ -92,7 +114,7 @@ pub async fn delete_connection(
         if let Some(conn) = ws.connections.iter().find(|c| c.id == id) {
             let _ = keychain::delete_password(&conn.keychain_key);
             let _ = keychain::delete_password(&conn.shared_secret_key);
-            let _ = l2tp::delete_vpn_service(&sudo, &conn.name);
+            let _ = l2tp::delete_vpn_service(&sudo, &conn.service_name);
         }
         ws.connections.retain(|c| c.id != id);
         store::save(&store)?;
@@ -116,7 +138,7 @@ pub async fn delete_connection(app_handle: tauri::AppHandle, id: String) -> Resu
         if let Some(conn) = ws.connections.iter().find(|c| c.id == id) {
             let _ = keychain::delete_password(&conn.keychain_key);
             let _ = keychain::delete_password(&conn.shared_secret_key);
-            let _ = l2tp::delete_vpn_service(&conn.name);
+            let _ = l2tp::delete_vpn_service(&conn.service_name);
         }
         ws.connections.retain(|c| c.id != id);
         store::save(&store)?;

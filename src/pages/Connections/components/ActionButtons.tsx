@@ -2,8 +2,8 @@ import {
   Connection,
   ConnectionWithStatus,
 } from "../../../typing/definitions.ts";
-import { Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, IconButton, Tooltip, CircularProgress } from "@mui/material";
-import { Delete, Edit, Info, NetworkCheck, Stop, SwapHoriz } from "@mui/icons-material";
+import { Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, IconButton, ListItemIcon, ListItemText, Menu, MenuItem, Tooltip, CircularProgress } from "@mui/material";
+import { Delete, Edit, Info, MoreVert, NetworkCheck, Stop, Subject, SwapHoriz } from "@mui/icons-material";
 import React, { useState } from "react";
 import toast from "react-hot-toast";
 import { api } from "../../../core/api";
@@ -13,14 +13,16 @@ export function ConnectButton({
   onConnect,
   onDisconnect,
   onSwitch,
+  onModeSwitch,
   connectingId,
   disconnectingId,
   anyActive,
 }: {
   connection: ConnectionWithStatus;
-  onConnect: (id: string) => void;
+  onConnect: (id: string, mode: "full" | "split") => void;
   onDisconnect: (id: string) => void;
   onSwitch: (id: string) => void;
+  onModeSwitch?: (id: string, mode: "full" | "split") => void;
   connectingId: string | null;
   disconnectingId: string | null;
   anyActive: boolean;
@@ -28,20 +30,54 @@ export function ConnectButton({
   const isThisConnecting = connectingId === connection.id;
   const isThisDisconnecting = disconnectingId === connection.id;
 
-  // Active connection — show Disconnect
+  // Active connection — show current mode with switch option
   if (connection.status === "connected") {
+    const hasSplitRoutes = (connection.split_routes?.length ?? 0) > 0;
     return (
-      <Button
-        size="small"
-        variant="outlined"
-        color="error"
-        startIcon={isThisDisconnecting ? <CircularProgress size={14} color="inherit" /> : <Stop sx={{ fontSize: 14 }} />}
-        onClick={() => onDisconnect(connection.id)}
-        disabled={isThisDisconnecting}
-        sx={{ textTransform: "none", fontSize: 12, py: 0, px: 1.5, minWidth: 0 }}
-      >
-        Отключить
-      </Button>
+      <Box sx={{ display: "inline-flex", gap: 0.5 }}>
+        <Tooltip title={hasSplitRoutes ? "Только корпоративные сети через VPN" : "Укажите подсети в настройках"}>
+          <span>
+            <Button
+              size="small"
+              variant={connection.tunnel_mode === "split" ? "contained" : "outlined"}
+              color={connection.tunnel_mode === "split" ? "info" : "inherit"}
+              disabled={!onModeSwitch || !hasSplitRoutes}
+              onClick={() => onModeSwitch?.(connection.id, "split")}
+              sx={{
+                textTransform: "none", fontSize: 11, py: 0, px: 1, minWidth: 0,
+                ...(connection.tunnel_mode === "split" && { fontWeight: 600 }),
+              }}
+            >
+              {connection.tunnel_mode === "split" ? "Сплит ✓" : "Сплит"}
+            </Button>
+          </span>
+        </Tooltip>
+        <Tooltip title="Весь трафик через VPN">
+          <Button
+            size="small"
+            variant={connection.tunnel_mode === "full" ? "contained" : "outlined"}
+            color={connection.tunnel_mode === "full" ? "success" : "inherit"}
+            disabled={!onModeSwitch}
+            onClick={() => onModeSwitch?.(connection.id, "full")}
+            sx={{
+              textTransform: "none", fontSize: 11, py: 0, px: 1, minWidth: 0,
+              ...(connection.tunnel_mode === "full" && { fontWeight: 600 }),
+            }}
+          >
+            {connection.tunnel_mode === "full" ? "Фулл ✓" : "Фулл"}
+          </Button>
+        </Tooltip>
+        <Tooltip title="Отключить">
+          <IconButton
+            size="small"
+            color="error"
+            onClick={() => onDisconnect(connection.id)}
+            disabled={isThisDisconnecting}
+          >
+            {isThisDisconnecting ? <CircularProgress size={16} color="inherit" /> : <Stop sx={{ fontSize: 16 }} />}
+          </IconButton>
+        </Tooltip>
+      </Box>
     );
   }
 
@@ -60,33 +96,40 @@ export function ConnectButton({
     );
   }
 
-  // Disconnected, nothing active — show Connect
-  if (!anyActive) {
-    return (
-      <Button
-        size="small"
-        variant="outlined"
-        color="success"
-        onClick={() => onConnect(connection.id)}
-        sx={{ textTransform: "none", fontSize: 12, py: 0, px: 1.5, minWidth: 0 }}
-      >
-        Подключить
-      </Button>
-    );
-  }
-
-  // Disconnected, something else active — show Switch
+  // Disconnected — two mode buttons
+  const canConnect = !anyActive;
+  const hasSplitRoutes = (connection.split_routes?.length ?? 0) > 0;
   return (
-    <Button
-      size="small"
-      variant="outlined"
-      color="warning"
-      startIcon={<SwapHoriz sx={{ fontSize: 14 }} />}
-      onClick={() => onSwitch(connection.id)}
-      sx={{ textTransform: "none", fontSize: 12, py: 0, px: 1.5, minWidth: 0 }}
-    >
-      Переключить
-    </Button>
+    <Box sx={{ display: "inline-flex", gap: 0.5 }}>
+      <Tooltip title={!canConnect ? "Сначала отключите текущее подключение" : !hasSplitRoutes ? "Укажите подсети в настройках" : "Только корпоративные сети через VPN"}>
+        <span>
+          <Button
+            size="small"
+            variant="outlined"
+            color="info"
+            disabled={!canConnect || !hasSplitRoutes}
+            onClick={() => onConnect(connection.id, "split")}
+            sx={{ textTransform: "none", fontSize: 11, py: 0, px: 1, minWidth: 0 }}
+          >
+            Сплит
+          </Button>
+        </span>
+      </Tooltip>
+      <Tooltip title={canConnect ? "Весь трафик через VPN" : "Сначала отключите текущее подключение"}>
+        <span>
+          <Button
+            size="small"
+            variant="outlined"
+            color="success"
+            disabled={!canConnect}
+            onClick={() => onConnect(connection.id, "full")}
+            sx={{ textTransform: "none", fontSize: 11, py: 0, px: 1, minWidth: 0 }}
+          >
+            Фулл
+          </Button>
+        </span>
+      </Tooltip>
+    </Box>
   );
 }
 
@@ -126,10 +169,13 @@ export function SwitchConfirmDialog({
 export function ActionButtons({
   connection,
   onConnect,
+  onConnectWithMode,
   onDisconnect,
   onSwitch,
+  onModeSwitch,
   onEdit,
   onDelete,
+  onShowLogs,
   connectingId,
   disconnectingId,
   deletingId,
@@ -137,10 +183,13 @@ export function ActionButtons({
 }: {
   connection: ConnectionWithStatus;
   onConnect: (id: string) => void;
+  onConnectWithMode?: (id: string, mode: "full" | "split") => void;
   onDisconnect: (id: string) => void;
   onSwitch: (id: string) => void;
+  onModeSwitch?: (id: string, mode: "full" | "split") => void;
   onEdit: (c: Connection) => void;
   onDelete: (id: string) => void;
+  onShowLogs?: (id: string) => void;
   connectingId: string | null;
   disconnectingId: string | null;
   deletingId: string | null;
@@ -152,13 +201,19 @@ export function ActionButtons({
     disconnectingId === connection.id ||
     deletingId === connection.id;
   const [checking, setChecking] = useState(false);
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+
+  const openMenu = (e: React.MouseEvent<HTMLElement>) => setMenuAnchor(e.currentTarget);
+  const closeMenu = () => setMenuAnchor(null);
+
   return (
     <>
       <ConnectButton
         connection={connection}
-        onConnect={onConnect}
+        onConnect={onConnectWithMode ?? ((id, _mode) => onConnect(id))}
         onDisconnect={onDisconnect}
         onSwitch={onSwitch}
+        onModeSwitch={onModeSwitch}
         connectingId={connectingId}
         disconnectingId={disconnectingId}
         anyActive={anyActive}
@@ -175,93 +230,82 @@ export function ActionButtons({
           </IconButton>
         </span>
       </Tooltip>
-      <Tooltip title="Удалить">
+      <Tooltip title="Ещё">
         <span>
-          <IconButton
-            size="small"
-            color="error"
-            onClick={() => onDelete(connection.id)}
-            disabled={busy}
-            aria-label="Удалить"
-          >
-            {deletingId === connection.id ? (
-              <CircularProgress size={18} color="inherit" />
-            ) : (
-              <Delete fontSize="small" />
-            )}
+          <IconButton size="small" onClick={openMenu} disabled={busy} aria-label="Ещё">
+            <MoreVert fontSize="small" />
           </IconButton>
         </span>
       </Tooltip>
-      <Tooltip
-        title={
-          checking
-            ? "Проверка..."
-            : anyActive
-              ? "Проверка недоступна во время активного VPN-подключения"
-              : "Проверить доступность сервера"
-        }
+      <Menu
+        anchorEl={menuAnchor}
+        open={Boolean(menuAnchor)}
+        onClose={closeMenu}
+        transformOrigin={{ horizontal: "right", vertical: "top" }}
+        anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
       >
-        <span>
-          <IconButton
-            size="small"
-            color="default"
-            disabled={anyActive || busy || checking}
-            onClick={async () => {
-              setChecking(true);
-              try {
-                const result = await api.vpn.check(connection.id);
-                if (result.ping && result.ipsec) {
-                  toast.success("Сервер доступен, IPsec отвечает");
-                } else if (result.ping) {
-                  toast.success("Сервер доступен, IPsec не отвечает");
-                } else if (result.ipsec) {
-                  toast.success("IPsec отвечает, ICMP заблокирован");
-                } else {
-                  toast.error("Сервер не отвечает");
-                }
-              } catch (e) {
-                toast.error(String(e));
-              } finally {
-                setChecking(false);
+        <MenuItem
+          disabled={anyActive || checking}
+          onClick={async () => {
+            closeMenu();
+            setChecking(true);
+            try {
+              const result = await api.vpn.check(connection.id);
+              if (result.ping && result.ipsec) {
+                toast.success("Сервер доступен, IPsec отвечает");
+              } else if (result.ping) {
+                toast.success("Сервер доступен, IPsec не отвечает");
+              } else if (result.ipsec) {
+                toast.success("IPsec отвечает, ICMP заблокирован");
+              } else {
+                toast.error("Сервер не отвечает");
               }
-            }}
-          >
-            {checking ? (
-              <CircularProgress size={18} color="inherit" />
+            } catch (e) {
+              toast.error(String(e));
+            } finally {
+              setChecking(false);
+            }
+          }}
+        >
+          <ListItemIcon>
+            {checking ? <CircularProgress size={18} /> : <NetworkCheck fontSize="small" />}
+          </ListItemIcon>
+          <ListItemText>Проверить доступность</ListItemText>
+        </MenuItem>
+        <MenuItem
+          onClick={async () => {
+            closeMenu();
+            await navigator.clipboard.write([
+              new ClipboardItem({
+                "text/plain": new Blob([connection.id], { type: "text/plain" }),
+              }),
+            ]);
+            toast.success("ID скопирован");
+          }}
+        >
+          <ListItemIcon><Info fontSize="small" /></ListItemIcon>
+          <ListItemText>Скопировать ID</ListItemText>
+        </MenuItem>
+        {onShowLogs && (
+          <MenuItem onClick={() => { closeMenu(); onShowLogs(connection.id); }}>
+            <ListItemIcon><Subject fontSize="small" /></ListItemIcon>
+            <ListItemText>Логи</ListItemText>
+          </MenuItem>
+        )}
+        <MenuItem
+          onClick={() => { closeMenu(); onDelete(connection.id); }}
+          sx={{ color: "error.main" }}
+        >
+          <ListItemIcon>
+            {deletingId === connection.id ? (
+              <CircularProgress size={18} color="error" />
             ) : (
-              <NetworkCheck fontSize="small" />
+              <Delete fontSize="small" sx={{ color: "error.main" }} />
             )}
-          </IconButton>
-        </span>
-      </Tooltip>
-      <Tooltip title={"Скопировать ID подключения"}>
-        <span>
-          <IconButton
-            size="small"
-            color="default"
-            disabled={busy}
-            aria-label="Скопировать ID подключения"
-            onClick={async () => {
-              await navigator.clipboard.write([
-                new ClipboardItem({
-                  "text/plain": new Blob([connection.id], {
-                    type: "text/plain",
-                  }),
-                }),
-              ]);
-              toast.success("ID скопирован", {
-                style: {
-                  background: "var(--mui-palette-background-paper)",
-                  color: "var(--mui-palette-text-primary)",
-                  border: "1px solid var(--mui-palette-divider)",
-                },
-              });
-            }}
-          >
-            <Info fontSize="small" />
-          </IconButton>
-        </span>
-      </Tooltip>
+          </ListItemIcon>
+          <ListItemText>Удалить</ListItemText>
+        </MenuItem>
+      </Menu>
     </>
   );
 }

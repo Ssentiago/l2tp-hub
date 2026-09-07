@@ -236,6 +236,14 @@ export const useStore = create<Store>((set, get) => ({
     listen<{ id: string; status: VpnStatus; connected_since?: number; error?: string }>("vpn-status-changed", (event) => {
       const { id, status, connected_since, error } = event.payload;
       console.log("[store] vpn-status-changed event:", id, status, connected_since, error);
+
+      const { disconnectingId, connectingId } = get();
+
+      // Игнорируем промежуточные статусы от tray poller пока идёт disconnect
+      if (id === disconnectingId && status !== "disconnected") return;
+      // Игнорируем промежуточные статусы пока идёт connect
+      if (id === connectingId && status !== "connected" && status !== "disconnected") return;
+
       set((s) => ({
         connections: s.connections.map((c) =>
           c.id === id ? {
@@ -246,7 +254,6 @@ export const useStore = create<Store>((set, get) => ({
           } : c,
         ),
       }));
-      // Сбрасываем pending state при получении финального статуса
       if (status === "connected") {
         set({ connectingId: null });
       }

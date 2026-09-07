@@ -7,7 +7,8 @@ fn default_tunnel_mode() -> String {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Connection {
     pub id: String,
-    pub name: String,
+    #[serde(alias = "name")]
+    pub service_name: String,
     #[serde(default)]
     pub display_name: String,
     pub server: String,
@@ -30,9 +31,6 @@ pub struct Connection {
     /// Список подсетей для split-туннелинга (CIDR notation)
     #[serde(default)]
     pub split_routes: Vec<String>,
-    /// Авто-обнаруженные сети при full tunnel (заполняются автоматически)
-    #[serde(default)]
-    pub auto_discovered_routes: Vec<String>,
 }
 
 impl Connection {

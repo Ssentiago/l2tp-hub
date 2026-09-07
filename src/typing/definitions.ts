@@ -22,7 +22,6 @@ export interface Connection {
   last_disconnected_at: number | null;
   tunnel_mode: "full" | "split";
   split_routes: string[];
-  auto_discovered_routes: string[];
 }
 
 export type VpnStatus = "connected" | "connecting" | "reconnecting" | "disconnected" | "unknown";
@@ -57,4 +56,21 @@ export interface WorkspaceInfo {
   id: string;
   name: string;
   group_by: string[];
+}
+
+export interface SessionMeta {
+  timestamp: number;
+  started_at: number | null;
+  ended_at: number | null;
+  status: string;
+  error: string | null;
+  server: string;
+}
+
+export interface SessionLogs {
+  meta: SessionMeta;
+  charon: string;
+  pppd: string;
+  xl2tpd: string;
+  app: string;
 }

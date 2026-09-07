@@ -135,8 +135,8 @@ fn main() {
             commands::delete_workspace,
             commands::switch_workspace,
             commands::switch_tunnel_mode,
-            commands::discover_vpn_routes,
-            commands::scan_vpn_routes,
+            commands::get_connection_history,
+            commands::get_session_logs,
         ])
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -207,7 +207,7 @@ fn do_wake_check(app: &tauri::AppHandle) -> Result<(), String> {
     let conn_name = store.workspaces.iter()
         .flat_map(|ws| ws.connections.iter())
         .find(|c| c.id == active_id)
-        .map(|c| c.name.clone())
+        .map(|c| c.service_name.clone())
         .ok_or("connection not found")?;
 
     // Проверяем SA через helper

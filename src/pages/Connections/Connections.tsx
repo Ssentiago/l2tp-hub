@@ -3,6 +3,8 @@ import { Box, CircularProgress } from "@mui/material";
 import { ConnectionList } from "./components/ConnectionList";
 import { SwitchConfirmDialog } from "./components/ActionButtons";
 import { useStore } from "../../store";
+import { api } from "../../core/api";
+import { getDisplayTitle } from "../../core/display";
 import type {
   Connection,
   FilterState,
@@ -57,6 +59,40 @@ export function Connections({ labels, onEdit }: Props) {
     await connectVpn(id);
   };
 
+  const handleConnectWithMode = async (id: string, mode: "full" | "split") => {
+    if (!sudoReady) return;
+    const c = connections.find((c) => c.id === id);
+    if (c?.status === "connecting" || c?.status === "connected") return;
+    if (anyActive) return;
+    // Сохраняем выбранный режим в профиль перед подключением
+    if (c && c.tunnel_mode !== mode) {
+      await api.connections.save({
+        id: c.id,
+        display_name: c.display_name,
+        server: c.server,
+        username: c.username,
+        password: "",
+        shared_secret: "",
+        labels: c.labels,
+        tunnel_mode: mode,
+        split_routes: c.split_routes,
+      });
+      await loadConnections();
+    }
+    await connectVpn(id);
+  };
+
+  const handleModeSwitch = async (id: string, mode: "full" | "split") => {
+    const c = connections.find((c) => c.id === id);
+    if (!c || c.status !== "connected" || c.tunnel_mode === mode) return;
+    try {
+      await api.vpn.switchTunnelMode(id, mode);
+      await loadConnections();
+    } catch (e) {
+      console.error("switch_tunnel_mode failed:", e);
+    }
+  };
+
   const handleDisconnect = async (id: string) => {
     await disconnectVpn(id);
   };
@@ -89,7 +125,7 @@ export function Connections({ labels, onEdit }: Props) {
       if (filter.search) {
         const labelValues = Object.values(c.labels).join(" ");
         if (
-          !`${c.name} ${c.server} ${labelValues}`
+          !`${c.display_name} ${c.server} ${labelValues}`
             .toLowerCase()
             .includes(filter.search.toLowerCase())
         )
@@ -105,8 +141,8 @@ export function Connections({ labels, onEdit }: Props) {
       const dir = sortDir === "asc" ? 1 : -1;
       if (sortField === "status") return a.status.localeCompare(b.status) * dir;
       return (
-        (a.labels["company"] ?? a.name).localeCompare(
-          b.labels["company"] ?? b.name,
+        (a.labels["company"] ?? a.display_name).localeCompare(
+          b.labels["company"] ?? b.display_name,
         ) * dir
       );
     });
@@ -119,8 +155,8 @@ export function Connections({ labels, onEdit }: Props) {
     <>
       <SwitchConfirmDialog
         open={switchTarget !== null}
-        targetName={switchTargetConn?.name ?? ""}
-        currentName={activeConn?.name ?? ""}
+        targetName={switchTargetConn ? getDisplayTitle(switchTargetConn) : ""}
+        currentName={activeConn ? getDisplayTitle(activeConn) : ""}
         onConfirm={handleSwitchConfirm}
         onCancel={() => setSwitchTarget(null)}
       />
@@ -149,8 +185,10 @@ export function Connections({ labels, onEdit }: Props) {
             }
           }}
           onConnect={handleConnect}
+          onConnectWithMode={handleConnectWithMode}
           onDisconnect={handleDisconnect}
           onSwitch={handleSwitch}
+          onModeSwitch={handleModeSwitch}
           onEdit={onEdit}
           onDelete={handleDelete}
           connectingId={connectingId}

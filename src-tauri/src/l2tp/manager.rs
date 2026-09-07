@@ -81,7 +81,7 @@ impl L2tpManager {
 
         l2tp::create_vpn_service(
             &self.sudo,
-            &conn.name,
+            &conn.service_name,
             &conn.server,
             &conn.username,
             &password,
@@ -103,7 +103,7 @@ impl L2tpManager {
         let connect_result = tauri::async_runtime::block_on(
             tokio::time::timeout(
                 std::time::Duration::from_secs(60),
-                l2tp::connect_vpn(&self.sudo, &conn.name, &conn.server, &original_gateway, &conn.tunnel_mode, &conn.split_routes),
+                l2tp::connect_vpn(&self.sudo, &conn.service_name, &conn.server, &original_gateway, &conn.tunnel_mode, &conn.split_routes),
             )
         );
 
@@ -123,7 +123,7 @@ impl L2tpManager {
         store::save(&store)?;
         let _ = crate::tray::refresh_tray();
 
-        log!("[manager] connect done: {}", conn.name);
+        log!("[manager] connect done: {}", conn.service_name);
         Ok(())
     }
 
@@ -140,8 +140,17 @@ impl L2tpManager {
             .ok_or("Подключение не найдено")?
             .clone();
 
+        // Сохраняем логи сессии ПЕРЕД disconnect (он очистит /tmp/l2tp/)
+        l2tp::logs::save_session_logs(
+            id,
+            &conn.service_name,
+            &conn.server,
+            conn.connected_since,
+            None,
+        );
+
         tauri::async_runtime::block_on(
-            l2tp::disconnect_vpn(&self.sudo, &conn.name)
+            l2tp::disconnect_vpn(&self.sudo, &conn.service_name)
         )?;
 
         // Очищаем active
@@ -152,7 +161,7 @@ impl L2tpManager {
         store::save(&store)?;
         let _ = crate::tray::refresh_tray();
 
-        log!("[manager] disconnect done: {}", conn.name);
+        log!("[manager] disconnect done: {}", conn.service_name);
         Ok(())
     }
 
@@ -167,7 +176,7 @@ impl L2tpManager {
                 .flat_map(|ws| ws.connections.iter())
                 .find(|c| c.id == id)
             {
-                let dir = l2tp::config_dir(&conn.name);
+                let dir = l2tp::config_dir(&conn.service_name);
                 if !dir.join("swanctl.conf").exists() {
                     return VpnStatus::Disconnected;
                 }
@@ -192,7 +201,7 @@ impl L2tpManager {
         for ws in &store.workspaces {
             for conn in &ws.connections {
                 let status = if active.as_deref() == Some(conn.id.as_str()) {
-                    let dir = l2tp::config_dir(&conn.name);
+                    let dir = l2tp::config_dir(&conn.service_name);
                     if !dir.join("swanctl.conf").exists() {
                         VpnStatus::Disconnected
                     } else {

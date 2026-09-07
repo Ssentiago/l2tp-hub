@@ -42,6 +42,20 @@ pub async fn connect_vpn(
         }
         Err(e) => {
             log!("[connect_vpn] failed: {}, emitting disconnected event", e);
+            // Сохраняем логи неудачного подключения
+            let store = store::load(app.config());
+            if let Some(conn) = store.workspaces.iter()
+                .flat_map(|ws| ws.connections.iter())
+                .find(|c| c.id == id)
+            {
+                crate::l2tp::logs::save_session_logs(
+                    &id,
+                    &conn.service_name,
+                    &conn.server,
+                    conn.connected_since,
+                    Some(e),
+                );
+            }
             let _ = app.emit("vpn-status-changed", serde_json::json!({
                 "id": id,
                 "status": "disconnected",
@@ -95,14 +109,14 @@ pub async fn connect_vpn(app_handle: tauri::AppHandle, id: String) -> Result<(),
         let shared_secret = crate::keychain::get_password(&conn.shared_secret_key)?;
 
         l2tp::create_vpn_service(
-            &conn.name,
+            &conn.service_name,
             &conn.server,
             &conn.username,
             &password,
             &shared_secret,
         )?;
 
-        l2tp::connect_vpn(&conn.name, &conn.username, &password)?;
+        l2tp::connect_vpn(&conn.service_name, &conn.username, &password)?;
         Ok(())
     })
     .await
@@ -123,7 +137,7 @@ pub async fn disconnect_vpn(id: String, app_handle: tauri::AppHandle) -> Result<
             .find(|c| c.id == id)
             .ok_or("Подключение не найдено")?
             .clone();
-        l2tp::disconnect_vpn(&conn.name)?;
+        l2tp::disconnect_vpn(&conn.service_name)?;
         Ok(())
     })
     .await
@@ -226,85 +240,27 @@ pub async fn switch_tunnel_mode(
 }
 
 #[tauri::command]
-#[cfg(target_os = "macos")]
-pub async fn discover_vpn_routes(
-    manager: State<'_, L2tpManager>,
-) -> Result<Vec<String>, String> {
-    log!("[discover_vpn_routes] called");
-    let manager = manager.inner().clone();
-
-    tokio::task::spawn_blocking(move || {
-        let sudo = manager.sudo();
-        Ok(crate::l2tp::macos::discover_vpn_routes(sudo))
-    })
-    .await
-    .map_err(|e| e.to_string())?
-}
-
-#[tauri::command]
-#[cfg(target_os = "macos")]
-pub async fn scan_vpn_routes(
-    id: String,
-    app_handle: tauri::AppHandle,
-    manager: State<'_, L2tpManager>,
-) -> Result<Vec<String>, String> {
-    log!("[scan_vpn_routes] id={}", id);
-    let manager = manager.inner().clone();
-    let app = app_handle.clone();
-
-    // Проверяем что VPN подключён
-    if manager.status(&id) != VpnStatus::Connected {
-        return Err("VPN должен быть подключён в режиме «Полный туннель» для сканирования".to_string());
-    }
-
-    let id_clone = id.clone();
-    let result = tokio::task::spawn_blocking(move || {
-        let sudo = manager.sudo();
-        crate::l2tp::macos::discover_vpn_routes(sudo)
-    })
-    .await
-    .map_err(|e| e.to_string())?;
-
-    // Сохраняем auto_discovered_routes в store
-    let app2 = app.clone();
-    let routes_clone = result.clone();
-    let id2 = id_clone.clone();
-    tokio::task::spawn_blocking(move || {
-        let mut store = store::load(app2.config());
-        for ws in &mut store.workspaces {
-            if let Some(c) = ws.connections.iter_mut().find(|c| c.id == id2) {
-                c.auto_discovered_routes = routes_clone.clone();
-            }
-        }
-        store::save(&store).ok();
-    })
-    .await
-    .map_err(|e| e.to_string())?;
-
-    // Эмитим событие с результатом
-    let _ = app.emit("scan-routes-result", serde_json::json!({
-        "id": id_clone,
-        "routes": result,
-        "count": result.len(),
-    }));
-
-    Ok(result)
-}
-
-#[tauri::command]
 #[cfg(target_os = "windows")]
 pub async fn switch_tunnel_mode(_id: String, _new_mode: String) -> Result<(), String> {
     Err("Split tunneling не поддерживается на Windows".to_string())
 }
 
+// ---------------------------------------------------------------------------
+// Connection Logs + History
+// ---------------------------------------------------------------------------
+
 #[tauri::command]
-#[cfg(target_os = "windows")]
-pub async fn discover_vpn_routes() -> Result<Vec<String>, String> {
-    Err("Split tunneling не поддерживается на Windows".to_string())
+pub async fn get_connection_history(
+    id: String,
+) -> Result<Vec<crate::l2tp::logs::SessionMeta>, String> {
+    Ok(crate::l2tp::logs::get_connection_history(&id))
 }
 
 #[tauri::command]
-#[cfg(target_os = "windows")]
-pub async fn scan_vpn_routes(_id: String) -> Result<Vec<String>, String> {
-    Err("Split tunneling не поддерживается на Windows".to_string())
+pub async fn get_session_logs(
+    id: String,
+    timestamp: i64,
+) -> Result<crate::l2tp::logs::SessionLogs, String> {
+    crate::l2tp::logs::get_session_logs(&id, timestamp)
+        .ok_or_else(|| "Сессия не найдена".to_string())
 }

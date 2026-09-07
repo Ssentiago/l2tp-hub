@@ -31,6 +31,7 @@ import {
 } from "../../../typing/definitions";
 import { ConnectionRow, STATUS_LABEL } from "./ConnectionRow.tsx";
 import { ActiveBanner } from "./ActiveBanner.tsx";
+import { ConnectionLogDrawer } from "./ConnectionLogDrawer.tsx";
 import { ChevronRight, ExpandMore } from "@mui/icons-material";
 
 function useDeleteConfirm(onDelete: (id: string) => void) {
@@ -75,8 +76,10 @@ interface ConnectionListProps {
   sortDir: SortDir;
   onSort: (field: SortField) => void;
   onConnect: (id: string) => void;
+  onConnectWithMode?: (id: string, mode: "full" | "split") => void;
   onDisconnect: (id: string) => void;
   onSwitch: (id: string) => void;
+  onModeSwitch?: (id: string, mode: "full" | "split") => void;
   onEdit: (c: Connection) => void;
   onDelete: (id: string) => void;
   connectingId: string | null;
@@ -124,6 +127,10 @@ export function ConnectionList({
                                  anyActive,
                                  ...props
                                }: ConnectionListProps) {
+  const [logDrawerConnId, setLogDrawerConnId] = useState<string | null>(null);
+  const logDrawerConnName = logDrawerConnId
+    ? allConnections.find((c) => c.id === logDrawerConnId)?.display_name ?? ""
+    : "";
   const { request: requestDelete, dialog: deleteDialog } = useDeleteConfirm(
     props.onDelete
   );
@@ -165,10 +172,13 @@ export function ConnectionList({
   const rowProps = {
     labels,
     onConnect: props.onConnect,
+    onConnectWithMode: props.onConnectWithMode,
     onDisconnect: props.onDisconnect,
     onSwitch: props.onSwitch,
+    onModeSwitch: props.onModeSwitch,
     onEdit: props.onEdit,
     onDelete: requestDelete,
+    onShowLogs: (id: string) => setLogDrawerConnId(id),
     connectingId,
     disconnectingId,
     deletingId,
@@ -179,12 +189,14 @@ export function ConnectionList({
   const connectingConn = allConnections.find((c) => c.status === "connecting") ?? null;
 
   return (
+    <>
     <Box>
       {deleteDialog}
 
       <ActiveBanner
         active={activeConn}
         connecting={connectingConn}
+        labels={labels}
         onDisconnect={props.onDisconnect}
         onModeChanged={props.onModeChanged}
       />
@@ -380,8 +392,6 @@ export function ConnectionList({
                           key={c.id}
                           connection={c}
                           {...rowProps}
-                          hideCompanyLabel
-                          isLast={i === conns.length - 1}
                         />
                       ))
                       : [])
@@ -393,5 +403,12 @@ export function ConnectionList({
         </Paper>
       }
     </Box>
+    <ConnectionLogDrawer
+      open={logDrawerConnId !== null}
+      onClose={() => setLogDrawerConnId(null)}
+      connectionId={logDrawerConnId ?? ""}
+      connectionName={logDrawerConnName}
+    />
+    </>
   );
 }

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Box, Button, FormControl, FormControlLabel, Paper, Radio, RadioGroup, TextField, Typography } from "@mui/material";
+import { Box, Button, Paper, TextField, Typography } from "@mui/material";
 import { api } from "../../core/api";
 import { SubnetEditor } from "../../components/SubnetEditor";
 import { Connection, ConnectionPayload, Label } from "../../typing/definitions";
@@ -145,59 +145,15 @@ export function ConnectionForm({
 
       <Paper variant="outlined" sx={{ p: 3, mb: 2 }}>
         <Typography variant="overline" color="text.secondary">
-          Маршрутизация
+          Подсети для раздельного туннелирования
         </Typography>
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
-          <FormControl size="small">
-            <RadioGroup
-              value={formData.tunnel_mode}
-              onChange={(e) => updateFormData({ tunnel_mode: e.target.value as "full" | "split" })}
-              row
-            >
-              <FormControlLabel
-                value="full"
-                control={<Radio size="small" />}
-                label={
-                  <Box>
-                    <Typography variant="body2">Полный туннель</Typography>
-                    <Typography variant="caption" color="text.disabled">Весь трафик через VPN</Typography>
-                  </Box>
-                }
-              />
-              <FormControlLabel
-                value="split"
-                control={<Radio size="small" />}
-                label={
-                  <Box>
-                    <Typography variant="body2">Раздельный</Typography>
-                    <Typography variant="caption" color="text.disabled">Только корпоративные сети</Typography>
-                  </Box>
-                }
-              />
-            </RadioGroup>
-          </FormControl>
-
-          {formData.tunnel_mode === "split" && (
-            <Box>
-              <SubnetEditor
-                routes={formData.split_routes ?? []}
-                onChange={(routes) => updateFormData({ split_routes: routes })}
-              />
-              {initialConnection?.auto_discovered_routes &&
-                initialConnection.auto_discovered_routes.length > 0 &&
-                (formData.split_routes ?? []).length === 0 && (
-                <Button
-                  size="small"
-                  variant="text"
-                  sx={{ mt: 1, textTransform: "none", fontSize: 12 }}
-                  onClick={() => updateFormData({ split_routes: initialConnection.auto_discovered_routes })}
-                >
-                  Заполнить из авто-обнаруженных ({initialConnection.auto_discovered_routes.length} сетей)
-                </Button>
-              )}
-            </Box>
-          )}
-        </Box>
+        <Typography variant="caption" color="text.disabled" sx={{ display: "block", mb: 1 }}>
+          Укажите подсети, чтобы при подключении была доступна кнопка «Сплит». Без подсетей только «Фулл».
+        </Typography>
+        <SubnetEditor
+          routes={formData.split_routes ?? []}
+          onChange={(routes) => updateFormData({ split_routes: routes })}
+        />
       </Paper>
 
       <Box sx={{ display: "flex", gap: 2, justifyContent: "flex-end" }}>

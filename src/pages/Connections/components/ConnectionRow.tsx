@@ -88,12 +88,13 @@ export interface ConnectionRowProps {
   connection: ConnectionWithStatus;
   labels: Label[];
   onConnect: (id: string) => void;
+  onConnectWithMode?: (id: string, mode: "full" | "split") => void;
   onDisconnect: (id: string) => void;
   onSwitch: (id: string) => void;
+  onModeSwitch?: (id: string, mode: "full" | "split") => void;
   onEdit: (c: Connection) => void;
   onDelete: (id: string) => void;
-  hideCompanyLabel?: boolean;
-  isLast?: boolean;
+  onShowLogs?: (id: string) => void;
   connectingId: string | null;
   disconnectingId: string | null;
   deletingId: string | null;
@@ -104,12 +105,13 @@ export function ConnectionRow({
                                 connection: c,
                                 labels,
                                 onConnect,
+                                onConnectWithMode,
                                 onDisconnect,
                                 onSwitch,
+                                onModeSwitch,
                                 onEdit,
                                 onDelete,
-                                hideCompanyLabel = false,
-                                isLast = false,
+                                onShowLogs,
                                 connectingId,
                                 disconnectingId,
                                 deletingId,
@@ -147,7 +149,6 @@ export function ConnectionRow({
   const onDoubleClick = useCallback(
     (e: React.MouseEvent) => {
       if ((e.target as HTMLElement).closest("button")) return;
-      console.log("[onDoubleClick] status=", c.status, "id=", c.id);
       switch (c.status) {
         case "connected":
           onDisconnect(c.id);
@@ -155,14 +156,18 @@ export function ConnectionRow({
         case "disconnected":
         case "unknown":
           if (!anyActive) {
-            onConnect(c.id);
+            const hasSplitRoutes = (c.split_routes?.length ?? 0) > 0;
+            const mode = (c.tunnel_mode === "split" && hasSplitRoutes) ? "split" : "full";
+            if (onConnectWithMode) {
+              onConnectWithMode(c.id, mode);
+            } else {
+              onConnect(c.id);
+            }
           }
           break;
-        default:
-          console.log("[onDoubleClick] no action for status=", c.status);
       }
     },
-    [c.status, c.id, onDisconnect, onConnect, anyActive]
+    [c.status, c.id, c.tunnel_mode, c.split_routes, onDisconnect, onConnect, onConnectWithMode, anyActive]
   );
 
   const [errorDismissed, setErrorDismissed] = useState(false);
@@ -195,25 +200,7 @@ export function ConnectionRow({
         }),
       }}
     >
-      <TableCell sx={{ position: "relative", ...(hideCompanyLabel && { pl: 3.5 }) }}>
-        {hideCompanyLabel && (
-          <Box
-            sx={{
-              position: "absolute",
-              left: 8,
-              top: "50%",
-              transform: "translateY(-50%)",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              color: "text.disabled",
-              fontSize: 10,
-            }}
-          >
-            <Box sx={{ width: 8, height: 1, bgcolor: "currentColor" }} />
-            <Box sx={{ width: 1, height: isLast ? 8 : 16, bgcolor: "currentColor" }} />
-          </Box>
-        )}
+      <TableCell sx={{ position: "relative" }}>
         {isBusy && (
           <LinearProgress
             sx={{
@@ -319,10 +306,13 @@ export function ConnectionRow({
           <ActionButtons
             connection={c}
             onConnect={onConnect}
+            onConnectWithMode={onConnectWithMode}
             onDisconnect={onDisconnect}
             onSwitch={onSwitch}
+            onModeSwitch={onModeSwitch}
             onEdit={onEdit}
             onDelete={onDelete}
+            onShowLogs={onShowLogs}
             connectingId={connectingId}
             disconnectingId={disconnectingId}
             deletingId={deletingId}

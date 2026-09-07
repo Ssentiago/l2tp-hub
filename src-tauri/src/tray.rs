@@ -51,7 +51,7 @@ pub fn create_tray() -> Result<TrayIcon, Box<dyn std::error::Error>> {
                     let result = {
                         let store = store::load(app.config());
                         if let Some(conn) = find_connection(&store, &conn_id) {
-                            l2tp::disconnect_vpn(&conn.name)
+                            l2tp::disconnect_vpn(&conn.service_name)
                         } else {
                             Err("Подключение не найдено".to_string())
                         }
@@ -267,10 +267,10 @@ fn handle_tray_connect(id: &str) {
         #[cfg(target_os = "macos")]
         let disconnect_result = {
             let sudo = app.state::<crate::sudo::SudoSession>();
-            tauri::async_runtime::block_on(l2tp::disconnect_vpn(&sudo, &conn.name))
+            tauri::async_runtime::block_on(l2tp::disconnect_vpn(&sudo, &conn.service_name))
         };
         #[cfg(target_os = "windows")]
-        let disconnect_result = l2tp::disconnect_vpn(&conn.name);
+        let disconnect_result = l2tp::disconnect_vpn(&conn.service_name);
 
         match disconnect_result {
             Ok(()) => {
@@ -348,13 +348,13 @@ fn connect_vpn_windows(id: &str) -> Result<(), String> {
     let shared_secret = keychain::get_password(&conn.shared_secret_key)?;
 
     let hash = crate::commands::utils::service_hash(&conn, &password, &shared_secret);
-    let status = l2tp::get_vpn_status(&conn.name);
+    let status = l2tp::get_vpn_status(&conn.service_name);
     let needs_recreate =
         conn.service_hash.as_deref() != Some(hash.as_str()) || status == VpnStatus::Unknown;
 
     if needs_recreate {
         l2tp::create_vpn_service(
-            &conn.name,
+            &conn.service_name,
             &conn.server,
             &conn.username,
             &password,
@@ -372,7 +372,7 @@ fn connect_vpn_windows(id: &str) -> Result<(), String> {
         std::thread::sleep(std::time::Duration::from_millis(1500));
     }
 
-    l2tp::connect_vpn(&conn.name, &conn.username, &password)
+    l2tp::connect_vpn(&conn.service_name, &conn.username, &password)
 }
 
 pub fn refresh_tray() -> Result<(), Box<dyn std::error::Error>> {
