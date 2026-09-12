@@ -19,31 +19,49 @@ pub async fn connect_vpn(
     let manager = manager.inner().clone();
     let id_clone = id.clone();
     let app = app_handle.clone();
-    let result = tokio::task::spawn_blocking(move || manager.connect(&id_clone))
-        .await
-        .map_err(|e| e.to_string())?;
+    let result = manager.connect(&id_clone).await;
 
     match &result {
         Ok(()) => {
             // Читаем connected_since из store для фронта
-            let connected_since = {
-                let store = store::load(app.config());
-                store.workspaces.iter()
-                    .flat_map(|ws| ws.connections.iter())
-                    .find(|c| c.id == id)
-                    .and_then(|c| c.connected_since)
-            };
+            let store = store::load(app.config()).await;
+            let connected_since = store.workspaces.iter()
+                .flat_map(|ws| ws.connections.iter())
+                .find(|c| c.id == id)
+                .and_then(|c| c.connected_since);
+
             log!("[connect_vpn] success, emitting connected event (connected_since={:?})", connected_since);
             let _ = app.emit("vpn-status-changed", serde_json::json!({
                 "id": id,
                 "status": "connected",
                 "connected_since": connected_since
             }));
+
+            // При multi-connection xl2tpd рестартится — все ppp пересоздаются.
+            // Re-emit "connected" для ВСЕХ активных подключений чтобы UI не показал
+            // ложное "disconnected" для существующих connection'ов.
+            let active_ids = manager.active_connections();
+            if active_ids.len() > 1 {
+                log!("[connect_vpn] multi-connection: re-emitting connected for {} active connections", active_ids.len());
+                for active_id in &active_ids {
+                    if *active_id != id {
+                        let active_since = store.workspaces.iter()
+                            .flat_map(|ws| ws.connections.iter())
+                            .find(|c| c.id == *active_id)
+                            .and_then(|c| c.connected_since);
+                        let _ = app.emit("vpn-status-changed", serde_json::json!({
+                            "id": active_id,
+                            "status": "connected",
+                            "connected_since": active_since
+                        }));
+                    }
+                }
+            }
         }
         Err(e) => {
             log!("[connect_vpn] failed: {}, emitting disconnected event", e);
             // Сохраняем логи неудачного подключения
-            let store = store::load(app.config());
+            let store = store::load(app.config()).await;
             if let Some(conn) = store.workspaces.iter()
                 .flat_map(|ws| ws.connections.iter())
                 .find(|c| c.id == id)
@@ -77,12 +95,28 @@ pub async fn disconnect_vpn(
     let manager = manager.inner().clone();
     let id_clone = id.clone();
     let app = app_handle.clone();
-    let result = tokio::task::spawn_blocking(move || manager.disconnect(&id_clone))
-        .await
-        .map_err(|e| e.to_string())?;
+    let result = manager.disconnect(&id_clone).await;
 
     log!("[disconnect_vpn] emitting disconnected event");
     let _ = app.emit("vpn-status-changed", serde_json::json!({ "id": id, "status": "disconnected" }));
+
+    // При multi-connection disconnect xl2tpd рестартится — re-emit "connected" для оставшихся
+    let active_ids = manager.active_connections();
+    if !active_ids.is_empty() {
+        log!("[disconnect_vpn] re-emitting connected for {} remaining connections", active_ids.len());
+        let store = store::load(app.config()).await;
+        for active_id in &active_ids {
+            let active_since = store.workspaces.iter()
+                .flat_map(|ws| ws.connections.iter())
+                .find(|c| c.id == *active_id)
+                .and_then(|c| c.connected_since);
+            let _ = app.emit("vpn-status-changed", serde_json::json!({
+                "id": active_id,
+                "status": "connected",
+                "connected_since": active_since
+            }));
+        }
+    }
     result
 }
 
@@ -154,20 +188,15 @@ pub async fn get_vpn_status(
     manager: State<'_, L2tpManager>,
 ) -> Result<VpnStatus, String> {
     let manager = manager.inner().clone();
-    tokio::task::spawn_blocking(move || {
-        let store = store::load(manager.app_config());
-        match store
-            .workspaces
-            .iter()
-            .flat_map(|ws| ws.connections.iter())
-            .find(|c| c.id == id)
-        {
-            Some(_conn) => manager.status(&id),
-            None => VpnStatus::Unknown,
-        }
-    })
-    .await
-    .map_err(|e| e.to_string())
+    let store = store::load(manager.app_config()).await;
+    let has_conn = store.workspaces.iter()
+        .flat_map(|ws| ws.connections.iter())
+        .any(|c| c.id == id);
+    if has_conn {
+        Ok(manager.status(&id).await)
+    } else {
+        Ok(VpnStatus::Unknown)
+    }
 }
 
 #[tauri::command]
@@ -175,11 +204,7 @@ pub async fn get_all_vpn_statuses(
     manager: State<'_, L2tpManager>,
 ) -> Result<std::collections::HashMap<String, VpnStatus>, String> {
     let manager = manager.inner().clone();
-    tokio::task::spawn_blocking(move || {
-        manager.all_statuses()
-    })
-    .await
-    .map_err(|e| e.to_string())
+    Ok(manager.all_statuses().await)
 }
 
 // ---------------------------------------------------------------------------
@@ -196,47 +221,43 @@ pub async fn switch_tunnel_mode(
     log!("[switch_tunnel_mode] id={}, new_mode={}", id, new_mode);
     let manager = manager.inner().clone();
 
-    tokio::task::spawn_blocking(move || {
-        let store = store::load(manager.app_config());
-        let conn = store.workspaces.iter()
-            .flat_map(|ws| ws.connections.iter())
-            .find(|c| c.id == id)
-            .ok_or("Подключение не найдено")?
-            .clone();
+    let store = store::load(manager.app_config()).await;
+    let conn = store.workspaces.iter()
+        .flat_map(|ws| ws.connections.iter())
+        .find(|c| c.id == id)
+        .ok_or("Подключение не найдено")?
+        .clone();
 
-        // Проверяем что подключение активно
-        if manager.status(&id) != VpnStatus::Connected {
-            return Err("Подключение не активно".to_string());
+    // Проверяем что подключение активно
+    if manager.status(&id).await != VpnStatus::Connected {
+        return Err("Подключение не активно".to_string());
+    }
+
+    let sudo = manager.sudo();
+    let original_gw = crate::l2tp::get_default_gateway()?;
+    let (original_iface, _) = crate::l2tp::macos::capture_physical_route()
+        .unwrap_or_else(|_| (String::new(), original_gw.clone()));
+
+    crate::l2tp::macos::switch_tunnel_mode(
+        sudo,
+        &conn.server,
+        &original_iface,
+        &original_gw,
+        &conn.tunnel_mode,
+        &new_mode,
+        &conn.split_routes,
+    )?;
+
+    // Обновляем tunnel_mode в store
+    let mut store = store::load(manager.app_config()).await;
+    for ws in &mut store.workspaces {
+        if let Some(c) = ws.connections.iter_mut().find(|c| c.id == id) {
+            c.tunnel_mode = new_mode.clone();
         }
+    }
+    store::save(&store).await?;
 
-        let sudo = manager.sudo();
-        let original_gw = crate::l2tp::get_default_gateway()?;
-        let (original_iface, _) = crate::l2tp::macos::capture_physical_route()
-            .unwrap_or_else(|_| (String::new(), original_gw.clone()));
-
-        crate::l2tp::macos::switch_tunnel_mode(
-            sudo,
-            &conn.server,
-            &original_iface,
-            &original_gw,
-            &conn.tunnel_mode,
-            &new_mode,
-            &conn.split_routes,
-        )?;
-
-        // Обновляем tunnel_mode в store
-        let mut store = store::load(manager.app_config());
-        for ws in &mut store.workspaces {
-            if let Some(c) = ws.connections.iter_mut().find(|c| c.id == id) {
-                c.tunnel_mode = new_mode.clone();
-            }
-        }
-        store::save(&store)?;
-
-        Ok(())
-    })
-    .await
-    .map_err(|e| e.to_string())?
+    Ok(())
 }
 
 #[tauri::command]

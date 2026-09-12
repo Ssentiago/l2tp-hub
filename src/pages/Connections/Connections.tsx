@@ -54,8 +54,6 @@ export function Connections({ labels, onEdit }: Props) {
     if (!sudoReady) return;
     const c = connections.find((c) => c.id === id);
     if (c?.status === "connecting" || c?.status === "connected") return;
-    // Блокируем если другое соединение уже активно
-    if (anyActive) return;
     await connectVpn(id);
   };
 
@@ -63,7 +61,6 @@ export function Connections({ labels, onEdit }: Props) {
     if (!sudoReady) return;
     const c = connections.find((c) => c.id === id);
     if (c?.status === "connecting" || c?.status === "connected") return;
-    if (anyActive) return;
     // Сохраняем выбранный режим в профиль перед подключением
     if (c && c.tunnel_mode !== mode) {
       await api.connections.save({
@@ -147,10 +144,6 @@ export function Connections({ labels, onEdit }: Props) {
       );
     });
 
-  const anyActive = connections.some(
-    (c) => c.status === "connected" || c.status === "connecting",
-  );
-
   return (
     <>
       <SwitchConfirmDialog
@@ -194,7 +187,6 @@ export function Connections({ labels, onEdit }: Props) {
           connectingId={connectingId}
           disconnectingId={disconnectingId}
           deletingId={deletingId}
-          anyActive={anyActive}
           onModeChanged={() => loadConnections()}
         />
       )}

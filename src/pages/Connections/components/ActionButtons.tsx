@@ -8,24 +8,55 @@ import React, { useState } from "react";
 import toast from "react-hot-toast";
 import { api } from "../../../core/api";
 
+/// Находит подсети из routes, которые пересекаются с активными split-подключениями
+function findOverlappingRoutes(routes: string[], activeConns: ConnectionWithStatus[], excludeId: string): string[] {
+  const activeRoutes: string[] = [];
+  for (const c of activeConns) {
+    if (c.id !== excludeId && c.tunnel_mode === "split" && c.split_routes) {
+      activeRoutes.push(...c.split_routes);
+    }
+  }
+  if (activeRoutes.length === 0) return [];
+  return routes.filter((r) => activeRoutes.some((ar) => cidrOverlap(r, ar)));
+}
+
+function cidrOverlap(a: string, b: string): boolean {
+  const pa = parseCidr(a);
+  const pb = parseCidr(b);
+  if (!pa || !pb) return a === b;
+  const minPrefix = Math.min(pa.prefix, pb.prefix);
+  const mask = minPrefix === 0 ? 0 : (~0 << (32 - minPrefix)) >>> 0;
+  return (pa.ip & mask) === (pb.ip & mask);
+}
+
+function parseCidr(cidr: string): { ip: number; prefix: number } | null {
+  const parts = cidr.split("/");
+  if (parts.length !== 2) return null;
+  const prefix = parseInt(parts[1], 10);
+  const octets = parts[0].split(".").map(Number);
+  if (octets.length !== 4 || octets.some(isNaN)) return null;
+  const ip = ((octets[0] << 24) | (octets[1] << 16) | (octets[2] << 8) | octets[3]) >>> 0;
+  return { ip, prefix };
+}
+
 export function ConnectButton({
   connection,
+  allConnections,
   onConnect,
   onDisconnect,
   onSwitch,
   onModeSwitch,
   connectingId,
   disconnectingId,
-  anyActive,
 }: {
   connection: ConnectionWithStatus;
+  allConnections?: ConnectionWithStatus[];
   onConnect: (id: string, mode: "full" | "split") => void;
   onDisconnect: (id: string) => void;
   onSwitch: (id: string) => void;
   onModeSwitch?: (id: string, mode: "full" | "split") => void;
   connectingId: string | null;
   disconnectingId: string | null;
-  anyActive: boolean;
 }) {
   const isThisConnecting = connectingId === connection.id;
   const isThisDisconnecting = disconnectingId === connection.id;
@@ -97,17 +128,34 @@ export function ConnectButton({
   }
 
   // Disconnected — two mode buttons
-  const canConnect = !anyActive;
+  const activeConns = (allConnections ?? []).filter((c) => c.status === "connected" || c.status === "connecting");
+  const hasFullActive = activeConns.some((c) => c.tunnel_mode === "full");
   const hasSplitRoutes = (connection.split_routes?.length ?? 0) > 0;
+
+  // Full: блокирован если что-то активно
+  const fullBlocked = activeConns.length > 0;
+  const fullBlockedReason = fullBlocked ? "Есть активное подключение" : "";
+
+  // Split: блокирован если full активен, нет подсетей, или пересечение
+  const overlappingRoutes = hasSplitRoutes ? findOverlappingRoutes(connection.split_routes!, activeConns, connection.id) : [];
+  const splitBlocked = !hasSplitRoutes || hasFullActive || overlappingRoutes.length > 0;
+  const splitBlockedReason = !hasSplitRoutes
+    ? "Укажите подсети в настройках"
+    : hasFullActive
+      ? "Активен полный туннель"
+      : overlappingRoutes.length > 0
+        ? `Пересечение: ${overlappingRoutes.join(", ")}`
+        : "";
+
   return (
     <Box sx={{ display: "inline-flex", gap: 0.5 }}>
-      <Tooltip title={!canConnect ? "Сначала отключите текущее подключение" : !hasSplitRoutes ? "Укажите подсети в настройках" : "Только корпоративные сети через VPN"}>
+      <Tooltip title={splitBlockedReason || "Только корпоративные сети через VPN"}>
         <span>
           <Button
             size="small"
             variant="outlined"
             color="info"
-            disabled={!canConnect || !hasSplitRoutes}
+            disabled={splitBlocked}
             onClick={() => onConnect(connection.id, "split")}
             sx={{ textTransform: "none", fontSize: 11, py: 0, px: 1, minWidth: 0 }}
           >
@@ -115,13 +163,13 @@ export function ConnectButton({
           </Button>
         </span>
       </Tooltip>
-      <Tooltip title={canConnect ? "Весь трафик через VPN" : "Сначала отключите текущее подключение"}>
+      <Tooltip title={fullBlockedReason || "Весь трафик через VPN"}>
         <span>
           <Button
             size="small"
             variant="outlined"
             color="success"
-            disabled={!canConnect}
+            disabled={fullBlocked}
             onClick={() => onConnect(connection.id, "full")}
             sx={{ textTransform: "none", fontSize: 11, py: 0, px: 1, minWidth: 0 }}
           >
@@ -168,6 +216,7 @@ export function SwitchConfirmDialog({
 
 export function ActionButtons({
   connection,
+  allConnections,
   onConnect,
   onConnectWithMode,
   onDisconnect,
@@ -179,9 +228,9 @@ export function ActionButtons({
   connectingId,
   disconnectingId,
   deletingId,
-  anyActive,
 }: {
   connection: ConnectionWithStatus;
+  allConnections?: ConnectionWithStatus[];
   onConnect: (id: string) => void;
   onConnectWithMode?: (id: string, mode: "full" | "split") => void;
   onDisconnect: (id: string) => void;
@@ -193,7 +242,6 @@ export function ActionButtons({
   connectingId: string | null;
   disconnectingId: string | null;
   deletingId: string | null;
-  anyActive: boolean;
 }) {
   const busy =
     ["connected", "connecting"].includes(connection.status) ||
@@ -210,13 +258,13 @@ export function ActionButtons({
     <>
       <ConnectButton
         connection={connection}
+        allConnections={allConnections}
         onConnect={onConnectWithMode ?? ((id, _mode) => onConnect(id))}
         onDisconnect={onDisconnect}
         onSwitch={onSwitch}
         onModeSwitch={onModeSwitch}
         connectingId={connectingId}
         disconnectingId={disconnectingId}
-        anyActive={anyActive}
       />
       <Tooltip title="Редактировать">
         <span>
@@ -245,7 +293,7 @@ export function ActionButtons({
         anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
       >
         <MenuItem
-          disabled={anyActive || checking}
+          disabled={busy || checking}
           onClick={async () => {
             closeMenu();
             setChecking(true);

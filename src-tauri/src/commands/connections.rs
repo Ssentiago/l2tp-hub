@@ -26,76 +26,69 @@ pub async fn save_connection(
     input: ConnectionPayload,
 ) -> Result<Connection, String> {
     log!("[save_connection] called, id={:?}", input.id);
-    let app_clone = app_handle.clone();
-    let result = tokio::task::spawn_blocking(move || {
-        let mut store = store::load(app_clone.config());
+    let mut store = store::load(app_handle.config()).await;
 
-        let id = input
-            .id
-            .clone()
-            .unwrap_or_else(|| Uuid::new_v4().to_string());
-        let keychain_key = format!("password_{}", id);
-        let shared_secret_key = format!("shared_{}", id);
+    let id = input
+        .id
+        .clone()
+        .unwrap_or_else(|| Uuid::new_v4().to_string());
+    let keychain_key = format!("password_{}", id);
+    let shared_secret_key = format!("shared_{}", id);
 
-        if !input.password.is_empty() {
-            keychain::set_password(&keychain_key, &input.password)?;
+    if !input.password.is_empty() {
+        keychain::set_password(&keychain_key, &input.password)?;
+    }
+    if !input.shared_secret.is_empty() {
+        keychain::set_password(&shared_secret_key, &input.shared_secret)?;
+    }
+
+    let ws = store.active_workspace_mut();
+    // При обновлении сохраняем статистику и service_name
+    let conn = if let Some(idx) = ws.connections.iter().position(|c| c.id == id) {
+        let existing = &ws.connections[idx];
+        Connection {
+            id: id.clone(),
+            service_name: existing.service_name.clone(),
+            display_name: input.display_name,
+            server: input.server,
+            username: input.username,
+            keychain_key,
+            shared_secret_key,
+            service_hash: existing.service_hash.clone(),
+            labels: input.labels,
+            connect_count: existing.connect_count,
+            connected_since: existing.connected_since,
+            last_connected_at: existing.last_connected_at,
+            last_disconnected_at: existing.last_disconnected_at,
+            tunnel_mode: input.tunnel_mode,
+            split_routes: input.split_routes,
         }
-        if !input.shared_secret.is_empty() {
-            keychain::set_password(&shared_secret_key, &input.shared_secret)?;
+    } else {
+        Connection {
+            id: id.clone(),
+            service_name: id.clone(),
+            display_name: input.display_name,
+            server: input.server,
+            username: input.username,
+            keychain_key,
+            shared_secret_key,
+            labels: input.labels,
+            tunnel_mode: input.tunnel_mode,
+            split_routes: input.split_routes,
+            ..Default::default()
         }
+    };
 
-        let ws = store.active_workspace_mut();
-        // При обновлении сохраняем статистику и service_name
-        let conn = if let Some(idx) = ws.connections.iter().position(|c| c.id == id) {
-            let existing = &ws.connections[idx];
-            Connection {
-                id: id.clone(),
-                service_name: existing.service_name.clone(),
-                display_name: input.display_name,
-                server: input.server,
-                username: input.username,
-                keychain_key,
-                shared_secret_key,
-                service_hash: existing.service_hash.clone(),
-                labels: input.labels,
-                connect_count: existing.connect_count,
-                connected_since: existing.connected_since,
-                last_connected_at: existing.last_connected_at,
-                last_disconnected_at: existing.last_disconnected_at,
-                tunnel_mode: input.tunnel_mode,
-                split_routes: input.split_routes,
-            }
-        } else {
-            Connection {
-                id: id.clone(),
-                service_name: id.clone(),
-                display_name: input.display_name,
-                server: input.server,
-                username: input.username,
-                keychain_key,
-                shared_secret_key,
-                labels: input.labels,
-                tunnel_mode: input.tunnel_mode,
-                split_routes: input.split_routes,
-                ..Default::default()
-            }
-        };
+    if let Some(idx) = ws.connections.iter().position(|c| c.id == id) {
+        ws.connections[idx] = conn.clone();
+    } else {
+        ws.connections.push(conn.clone());
+    }
 
-        if let Some(idx) = ws.connections.iter().position(|c| c.id == id) {
-            ws.connections[idx] = conn.clone();
-        } else {
-            ws.connections.push(conn.clone());
-        }
-
-        store::save(&store)?;
-        log!("[save_connection] success");
-        let _ = tray::refresh_tray();
-        Ok(conn)
-    })
-    .await
-    .map_err(|e| e.to_string())?;
-
-    result
+    store::save(&store).await?;
+    log!("[save_connection] success");
+    let _ = tray::refresh_tray();
+    Ok(conn)
 }
 
 #[tauri::command]
@@ -107,46 +100,32 @@ pub async fn delete_connection(
 ) -> Result<(), String> {
     log!("[delete_connection] (macos) called for id={}", id);
     let sudo = sudo.inner().clone();
-    let app_clone = app_handle.clone();
-    let result = tokio::task::spawn_blocking(move || {
-        let mut store = store::load(app_clone.config());
-        let ws = store.active_workspace_mut();
-        if let Some(conn) = ws.connections.iter().find(|c| c.id == id) {
-            let _ = keychain::delete_password(&conn.keychain_key);
-            let _ = keychain::delete_password(&conn.shared_secret_key);
-            let _ = l2tp::delete_vpn_service(&sudo, &conn.service_name);
-        }
-        ws.connections.retain(|c| c.id != id);
-        store::save(&store)?;
-        let _ = tray::refresh_tray();
-        Ok(())
-    })
-    .await
-    .map_err(|e| e.to_string())?;
-
-    result
+    let mut store = store::load(app_handle.config()).await;
+    let ws = store.active_workspace_mut();
+    if let Some(conn) = ws.connections.iter().find(|c| c.id == id) {
+        let _ = keychain::delete_password(&conn.keychain_key);
+        let _ = keychain::delete_password(&conn.shared_secret_key);
+        let _ = l2tp::delete_vpn_service(&sudo, &conn.service_name);
+    }
+    ws.connections.retain(|c| c.id != id);
+    store::save(&store).await?;
+    let _ = tray::refresh_tray();
+    Ok(())
 }
 
 #[tauri::command]
 #[cfg(target_os = "windows")]
 pub async fn delete_connection(app_handle: tauri::AppHandle, id: String) -> Result<(), String> {
     log!("[delete_connection] (windows) called for id={}", id);
-    let app_clone = app_handle.clone();
-    let result = tokio::task::spawn_blocking(move || {
-        let mut store = store::load(app_clone.config());
-        let ws = store.active_workspace_mut();
-        if let Some(conn) = ws.connections.iter().find(|c| c.id == id) {
-            let _ = keychain::delete_password(&conn.keychain_key);
-            let _ = keychain::delete_password(&conn.shared_secret_key);
-            let _ = l2tp::delete_vpn_service(&conn.service_name);
-        }
-        ws.connections.retain(|c| c.id != id);
-        store::save(&store)?;
-        let _ = tray::refresh_tray();
-        Ok(())
-    })
-    .await
-    .map_err(|e| e.to_string())?;
-
-    result
+    let mut store = store::load(app_handle.config()).await;
+    let ws = store.active_workspace_mut();
+    if let Some(conn) = ws.connections.iter().find(|c| c.id == id) {
+        let _ = keychain::delete_password(&conn.keychain_key);
+        let _ = keychain::delete_password(&conn.shared_secret_key);
+        let _ = l2tp::delete_vpn_service(&conn.service_name);
+    }
+    ws.connections.retain(|c| c.id != id);
+    store::save(&store).await?;
+    let _ = tray::refresh_tray();
+    Ok(())
 }

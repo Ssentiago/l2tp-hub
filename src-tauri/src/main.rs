@@ -145,15 +145,27 @@ fn main() {
         .run(|app, event| {
             match event {
                 tauri::RunEvent::Exit => {
-                    // Штатное отключение через L2tpManager (с кешированными sudo credentials)
-                    if let Some(active_id) = app.try_state::<l2tp::manager::L2tpManager>()
-                        .map(|m| m.active_connection())
-                        .flatten()
-                    {
-                        eprintln!("[exit] active connection found: {}, disconnecting...", active_id);
-                        let manager = app.state::<l2tp::manager::L2tpManager>();
-                        if let Err(e) = manager.disconnect(&active_id) {
-                            eprintln!("[exit] disconnect failed: {}", e);
+                    // Штатное отключение всех активных подключений
+                    // Обёрнуто в catch_unwind — tokio runtime может быть уже мёртв
+                    // к моменту application_will_terminate. Cleanup daemon восстановит
+                    // VPN state при следующем запуске.
+                    if let Some(manager) = app.try_state::<l2tp::manager::L2tpManager>() {
+                        let active = manager.active_connections();
+                        for id in active {
+                            eprintln!("[exit] disconnecting: {}", id);
+                            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                // Создаём свой runtime — основной может быть уже остановлен
+                                if let Ok(rt) = tokio::runtime::Runtime::new() {
+                                    rt.block_on(manager.disconnect(&id))
+                                } else {
+                                    Err("Failed to create tokio runtime for cleanup".to_string())
+                                }
+                            }));
+                            match result {
+                                Ok(Ok(())) => eprintln!("[exit] disconnected: {}", id),
+                                Ok(Err(e)) => eprintln!("[exit] disconnect failed for {}: {}", id, e),
+                                Err(_) => eprintln!("[exit] disconnect panicked for {} (runtime likely shut down)", id),
+                            }
                         }
                     }
                     // Глобальная очистка при выходе — убить все VPN-процессы
@@ -187,59 +199,69 @@ fn on_system_wake(app: &tauri::AppHandle) {
 fn do_wake_check(app: &tauri::AppHandle) -> Result<(), String> {
     use tauri::Manager;
 
+    // IOKit callback thread не в tokio контексте — создаём свой runtime
+    // (или используем существующий, если вдруг вызван из tokio)
+    let rt = tokio::runtime::Runtime::new()
+        .map_err(|e| format!("Failed to create tokio runtime: {}", e))?;
+
     let manager = app.try_state::<l2tp::manager::L2tpManager>()
         .ok_or("no L2tpManager")?
         .inner()
         .clone();
 
-    let active_id = match manager.active_connection() {
-        Some(id) => id,
-        None => {
-            crate::log!("[sleep-wake] no active connection, nothing to check");
-            return Ok(());
-        }
-    };
+    let active_ids = manager.active_connections();
+    if active_ids.is_empty() {
+        crate::log!("[sleep-wake] no active connections, nothing to check");
+        return Ok(());
+    }
 
-    crate::log!("[sleep-wake] checking SA for active connection: {}", active_id);
-
-    // Получаем имя подключения для проверки SA
-    let store = store::load(app.config());
-    let conn_name = store.workspaces.iter()
-        .flat_map(|ws| ws.connections.iter())
-        .find(|c| c.id == active_id)
-        .map(|c| c.service_name.clone())
-        .ok_or("connection not found")?;
-
-    // Проверяем SA через helper
+    // Проверяем SA для каждого активного подключения
+    let store = rt.block_on(store::load(app.config()));
     let sudo = app.state::<sudo::SudoSession>().inner().clone();
-    let sa_alive = l2tp::check_ipsec_sa_alive(&sudo, &conn_name);
+    let mut any_dead = false;
 
-    if sa_alive {
-        crate::log!("[sleep-wake] SA still alive after wake, no action needed");
-    } else {
-        crate::log!("[sleep-wake] SA dead after wake, reconnecting {}", active_id);
-        // Эмитим "reconnecting" для UI
+    for active_id in &active_ids {
+        let conn_name = store.workspaces.iter()
+            .flat_map(|ws| ws.connections.iter())
+            .find(|c| c.id == *active_id)
+            .map(|c| c.service_name.clone());
+
+        if let Some(name) = conn_name {
+            crate::log!("[sleep-wake] checking SA for: {}", name);
+            let alive = crate::l2tp::macos::check_ipsec_sa_alive(&sudo, &name);
+            if !alive {
+                crate::log!("[sleep-wake] SA dead for {}, will reconnect", name);
+                any_dead = true;
+            }
+        }
+    }
+
+    if !any_dead {
+        crate::log!("[sleep-wake] all SAs alive, nothing to do");
+        return Ok(());
+    }
+
+    // Переподключаем мёртвые подключения
+    for active_id in &active_ids {
+        crate::log!("[sleep-wake] reconnecting {}", active_id);
         let _ = app.emit("vpn-status-changed", serde_json::json!({
             "id": active_id,
             "status": "reconnecting"
         }));
-        // Отключаем мёртвое состояние
-        if let Err(e) = manager.disconnect(&active_id) {
+        if let Err(e) = rt.block_on(manager.disconnect(active_id)) {
             crate::log!("[sleep-wake] disconnect failed: {}", e);
         }
-        // Пауза перед переподключением
         std::thread::sleep(std::time::Duration::from_secs(1));
-        // Переподключаем
-        match manager.connect(&active_id) {
+        match rt.block_on(manager.connect(active_id)) {
             Ok(()) => {
-                crate::log!("[sleep-wake] reconnect success");
+                crate::log!("[sleep-wake] reconnect success: {}", active_id);
                 let _ = app.emit("vpn-status-changed", serde_json::json!({
                     "id": active_id,
                     "status": "connected"
                 }));
             }
             Err(e) => {
-                crate::log!("[sleep-wake] reconnect failed: {}", e);
+                crate::log!("[sleep-wake] reconnect failed: {}: {}", active_id, e);
                 let _ = app.emit("vpn-status-changed", serde_json::json!({
                     "id": active_id,
                     "status": "disconnected"

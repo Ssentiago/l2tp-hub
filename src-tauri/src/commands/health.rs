@@ -74,31 +74,32 @@ pub async fn check_connection(app_handle: tauri::AppHandle, id: String, #[cfg(ta
     #[cfg(target_os = "macos")]
     let _sudo_clone = sudo.inner().clone();
     let app_clone = app_handle.clone();
-    tokio::task::spawn_blocking(move || {
-        let store = store::load(app_clone.config());
-        let conn = store
-            .workspaces
-            .iter()
-            .flat_map(|ws| ws.connections.iter())
-            .find(|c| c.id == id)
-            .ok_or("Подключение не найдено")?
-            .clone();
+    let store = store::load(app_clone.config()).await;
+    let conn = store
+        .workspaces
+        .iter()
+        .flat_map(|ws| ws.connections.iter())
+        .find(|c| c.id == id)
+        .ok_or("Подключение не найдено")?
+        .clone();
 
-        // Check if any VPN is active
-        let manager = app_handle.state::<crate::l2tp::manager::L2tpManager>();
-        for ws in &store.workspaces {
-            for c in &ws.connections {
-                let status = manager.status(&c.id);
-                if status == VpnStatus::Connected || status == VpnStatus::Connecting {
-                    return Err(
-                        "Проверка недоступна во время активного VPN-подключения".into(),
-                    );
-                }
+    // Check if any VPN is active
+    let manager = app_handle.state::<crate::l2tp::manager::L2tpManager>();
+    for ws in &store.workspaces {
+        for c in &ws.connections {
+            let status = manager.status(&c.id).await;
+            if status == VpnStatus::Connected || status == VpnStatus::Connecting {
+                return Err(
+                    "Проверка недоступна во время активного VPN-подключения".into(),
+                );
             }
         }
+    }
 
-        let server = conn.server.clone();
+    let server = conn.server.clone();
 
+    // Blocking network operations in spawn_blocking
+    let result = tokio::task::spawn_blocking(move || {
         let ping = icmp_ping(&server);
         log!("[health] ICMP ping {}: {}", server, if ping { "OK" } else { "FAIL" });
 
@@ -116,5 +117,7 @@ pub async fn check_connection(app_handle: tauri::AppHandle, id: String, #[cfg(ta
         Ok(HealthResult { ping, ipsec })
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+
+    result
 }

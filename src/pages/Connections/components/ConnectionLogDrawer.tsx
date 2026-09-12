@@ -6,7 +6,7 @@ import {
 import { Close, ContentCopy, Refresh } from "@mui/icons-material";
 import { api } from "../../../core/api";
 import toast from "react-hot-toast";
-import type { SessionMeta, SessionLogs } from "../../typing/definitions";
+import type { SessionMeta, SessionLogs } from "../../../typing/definitions";
 
 interface Props {
   open: boolean;
@@ -71,7 +71,7 @@ export function ConnectionLogDrawer({ open, onClose, connectionId, connectionNam
 
   const tabContent = tab === 0 ? filteredLog : rawLog;
   const tabLabel = tab === 0 ? "Логи" : "Сырой вывод";
-  const lineCount = tabContent ? tabContent.split("\n").filter((l) => l.trim()).length : 0;
+  const lineCount = tabContent ? tabContent.split("\n").filter((l: string) => l.trim()).length : 0;
 
   const copyLog = () => {
     if (!tabContent) return;
@@ -86,7 +86,7 @@ export function ConnectionLogDrawer({ open, onClose, connectionId, connectionNam
       anchor="right"
       open={open}
       onClose={onClose}
-      PaperProps={{ sx: { width: { xs: "100%", sm: 600, md: 800 } } }}
+      slotProps={{ paper: { sx: { width: { xs: "100%", sm: 600, md: 800 } } } }}
     >
       <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
         {/* Header */}

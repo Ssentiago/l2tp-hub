@@ -31,39 +31,34 @@ pub async fn import(password: String) -> Result<bool, String> {
                 .await
                 .map_err(|e| format!("Ошибка чтения файла: {}", e))?;
 
-            tokio::task::spawn_blocking(move || {
-                let (connections, labels) = backup::restore_backup(&data, &password)?;
-                let mut store = store::load(app.config());
-
-                let ws = store.active_workspace_mut();
-                for imported_conn in connections {
-                    if let Some(idx) = ws
-                        .connections
-                        .iter()
-                        .position(|c| c.id == imported_conn.id)
-                    {
-                        ws.connections[idx] = imported_conn;
-                    } else {
-                        ws.connections.push(imported_conn);
-                    }
-                }
-
-                for imported_label in labels {
-                    if imported_label.built_in {
-                        continue;
-                    }
-                    if let Some(idx) = store.labels.iter().position(|l| l.id == imported_label.id) {
-                        store.labels[idx] = imported_label;
-                    } else {
-                        store.labels.push(imported_label);
-                    }
-                }
-
-                store::save(&store)
+            // CPU-heavy crypto in spawn_blocking
+            let (connections, labels) = tokio::task::spawn_blocking(move || {
+                backup::restore_backup(&data, &password)
             })
             .await
             .map_err(|e| e.to_string())??;
 
+            let mut store = store::load(app.config()).await;
+
+            let ws = store.active_workspace_mut();
+            for imported_conn in connections {
+                if let Some(idx) = ws.connections.iter().position(|c| c.id == imported_conn.id) {
+                    ws.connections[idx] = imported_conn;
+                } else {
+                    ws.connections.push(imported_conn);
+                }
+            }
+
+            for imported_label in labels {
+                if imported_label.built_in { continue; }
+                if let Some(idx) = store.labels.iter().position(|l| l.id == imported_label.id) {
+                    store.labels[idx] = imported_label;
+                } else {
+                    store.labels.push(imported_label);
+                }
+            }
+
+            store::save(&store).await?;
             let _ = tray::refresh_tray();
             log!("[import_config_dialog] done");
             Ok(true)
@@ -77,45 +72,36 @@ pub async fn import_file(file_path: String, password: String) -> Result<bool, St
     log!("[import_file] called with path={}", file_path);
 
     let app = crate::state::get_state().app.clone();
-
     let path_buf = std::path::PathBuf::from(&file_path);
     let data = tokio::fs::read(&path_buf)
         .await
         .map_err(|e| format!("Ошибка чтения файла: {}", e))?;
 
-    tokio::task::spawn_blocking(move || {
-        let (connections, labels) = backup::restore_backup(&data, &password)?;
-        let mut store = store::load(app.config());
-
-        let ws = store.active_workspace_mut();
-        for imported_conn in connections {
-            if let Some(idx) = ws
-                .connections
-                .iter()
-                .position(|c| c.id == imported_conn.id)
-            {
-                ws.connections[idx] = imported_conn;
-            } else {
-                ws.connections.push(imported_conn);
-            }
-        }
-
-        for imported_label in labels {
-            if imported_label.built_in {
-                continue;
-            }
-            if let Some(idx) = store.labels.iter().position(|l| l.id == imported_label.id) {
-                store.labels[idx] = imported_label;
-            } else {
-                store.labels.push(imported_label);
-            }
-        }
-
-        store::save(&store)
+    let (connections, labels) = tokio::task::spawn_blocking(move || {
+        backup::restore_backup(&data, &password)
     })
     .await
     .map_err(|e| e.to_string())??;
 
+    let mut store = store::load(app.config()).await;
+    let ws = store.active_workspace_mut();
+    for imported_conn in connections {
+        if let Some(idx) = ws.connections.iter().position(|c| c.id == imported_conn.id) {
+            ws.connections[idx] = imported_conn;
+        } else {
+            ws.connections.push(imported_conn);
+        }
+    }
+    for imported_label in labels {
+        if imported_label.built_in { continue; }
+        if let Some(idx) = store.labels.iter().position(|l| l.id == imported_label.id) {
+            store.labels[idx] = imported_label;
+        } else {
+            store.labels.push(imported_label);
+        }
+    }
+
+    store::save(&store).await?;
     let _ = tray::refresh_tray();
     log!("[import_file] done");
     Ok(true)
@@ -126,13 +112,11 @@ pub async fn export(password: String) -> Result<bool, String> {
     log!("[export_config_dialog] called");
 
     let app = get_state().app.clone();
+    let store = store::load(app.config()).await;
 
-    let bytes = tokio::task::spawn_blocking({
-        let app_handle = app.clone();
-        move || {
-            let store = store::load(app_handle.config());
-            backup::make_backup(&store, &password)
-        }
+    // CPU-heavy crypto in spawn_blocking
+    let bytes = tokio::task::spawn_blocking(move || {
+        backup::make_backup(&store, &password)
     })
     .await
     .map_err(|e| e.to_string())??;
@@ -172,39 +156,30 @@ pub async fn reset(
     log!("[reset] called");
     let sudo = sudo.inner().clone();
 
-    let app_clone = app_handle.clone();
-    let _ = tokio::task::spawn_blocking(move || {
-        let vpn_services = l2tp::list_vpn_services();
-
-        for service in vpn_services {
-            #[cfg(target_os = "macos")]
-            {
-                if let Err(e) = l2tp::delete_vpn_service(&sudo, &service) {
-                    log!("Error when deleting service {}: {}", service, e)
-                }
-            }
-
-            #[cfg(target_os = "windows")]
-            {
-                if let Err(e) = l2tp::delete_vpn_service(&service) {
-                    log!("Error when deleting service {}: {}", service, e)
-                }
+    let vpn_services = l2tp::list_vpn_services();
+    for service in vpn_services {
+        #[cfg(target_os = "macos")]
+        {
+            if let Err(e) = l2tp::delete_vpn_service(&sudo, &service) {
+                log!("Error when deleting service {}: {}", service, e)
             }
         }
-
-        let store = store::load(app_clone.config());
-        for ws in &store.workspaces {
-            for conn in &ws.connections {
-                let _ = keychain::delete_password(&conn.keychain_key);
-                let _ = keychain::delete_password(&conn.shared_secret_key);
+        #[cfg(target_os = "windows")]
+        {
+            if let Err(e) = l2tp::delete_vpn_service(&service) {
+                log!("Error when deleting service {}: {}", service, e)
             }
         }
-        store::save(&store::Store::default())?;
+    }
 
-        Ok::<(), String>(())
-    })
-    .await
-    .map_err(|e| e.to_string())?;
+    let store = store::load(app_handle.config()).await;
+    for ws in &store.workspaces {
+        for conn in &ws.connections {
+            let _ = keychain::delete_password(&conn.keychain_key);
+            let _ = keychain::delete_password(&conn.shared_secret_key);
+        }
+    }
+    store::save(&store::Store::default()).await?;
 
     let _ = tray::refresh_tray();
     Ok(())

@@ -86,6 +86,7 @@ function LabelChips({
 
 export interface ConnectionRowProps {
   connection: ConnectionWithStatus;
+  allConnections?: ConnectionWithStatus[];
   labels: Label[];
   onConnect: (id: string) => void;
   onConnectWithMode?: (id: string, mode: "full" | "split") => void;
@@ -98,11 +99,11 @@ export interface ConnectionRowProps {
   connectingId: string | null;
   disconnectingId: string | null;
   deletingId: string | null;
-  anyActive: boolean;
 }
 
 export function ConnectionRow({
                                 connection: c,
+                                allConnections,
                                 labels,
                                 onConnect,
                                 onConnectWithMode,
@@ -115,7 +116,6 @@ export function ConnectionRow({
                                 connectingId,
                                 disconnectingId,
                                 deletingId,
-                                anyActive
                               }: ConnectionRowProps) {
   const isBusy =
     connectingId === c.id ||
@@ -155,7 +155,7 @@ export function ConnectionRow({
           break;
         case "disconnected":
         case "unknown":
-          if (!anyActive) {
+          {
             const hasSplitRoutes = (c.split_routes?.length ?? 0) > 0;
             const mode = (c.tunnel_mode === "split" && hasSplitRoutes) ? "split" : "full";
             if (onConnectWithMode) {
@@ -167,7 +167,7 @@ export function ConnectionRow({
           break;
       }
     },
-    [c.status, c.id, c.tunnel_mode, c.split_routes, onDisconnect, onConnect, onConnectWithMode, anyActive]
+    [c.status, c.id, c.tunnel_mode, c.split_routes, onDisconnect, onConnect, onConnectWithMode]
   );
 
   const [errorDismissed, setErrorDismissed] = useState(false);
@@ -305,6 +305,7 @@ export function ConnectionRow({
         <Box sx={{ display: "flex", gap: 0.5, justifyContent: "flex-end" }}>
           <ActionButtons
             connection={c}
+            allConnections={allConnections}
             onConnect={onConnect}
             onConnectWithMode={onConnectWithMode}
             onDisconnect={onDisconnect}
@@ -316,7 +317,6 @@ export function ConnectionRow({
             connectingId={connectingId}
             disconnectingId={disconnectingId}
             deletingId={deletingId}
-            anyActive={anyActive}
           />
         </Box>
       </TableCell>

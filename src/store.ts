@@ -185,12 +185,27 @@ export const useStore = create<Store>((set, get) => ({
     }));
   },
   connectVpn: async (id) => {
-    // Re-validate sudo — cache may have expired since last check
     await get().checkSudo();
     const { sudoReady, connectingId, connections } = get();
     if (!sudoReady || connectingId) return;
-    // Блокируем если другое соединение уже активно
-    if (connections.some((c) => c.id !== id && (c.status === "connected" || c.status === "connecting"))) return;
+
+    const thisConn = connections.find((c) => c.id === id);
+    if (!thisConn) return;
+
+    const activeConns = connections.filter((c) => c.status === "connected" || c.status === "connecting");
+    const hasFullActive = activeConns.some((c) => c.tunnel_mode === "full");
+
+    // Full блокируется если что-то активно
+    if (thisConn.tunnel_mode === "full" && activeConns.length > 0) return;
+    // Split блокируется если есть full
+    if (thisConn.tunnel_mode === "split" && hasFullActive) return;
+    // Reconnect того же ID — разрешаем
+    if (activeConns.some((c) => c.id === id)) {
+      // OK — reconnect
+    } else if (thisConn.tunnel_mode === "split" && activeConns.length > 0) {
+      // Split при других split — пускаем, бэкенд проверит пересечения
+    }
+
     set({ connectingId: id });
     set((s) => ({
       connections: s.connections.map((c) =>
@@ -198,11 +213,8 @@ export const useStore = create<Store>((set, get) => ({
       ),
     }));
     try {
-      // connect блокирует до полного установления VPN (~15 сек)
-      // Статус обновится через vpn-status-changed event от бэкенда
       await api.vpn.connect(id);
     } catch (e) {
-      // Ошибка — event "disconnected" уже пришёл от бэкенда, но на всякий случай:
       set((s) => ({
         connections: s.connections.map((c) =>
           c.id === id ? { ...c, status: "disconnected" as const } : c,
@@ -210,8 +222,6 @@ export const useStore = create<Store>((set, get) => ({
       }));
       set({ connectingId: null });
     }
-    // connectingId сбрасывается event listener'ом при получении "connected"
-    // НЕ вызываем loadConnections() — event listener обновит статус
   },
   disconnectVpn: async (id) => {
     const { disconnectingId } = get();

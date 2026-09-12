@@ -97,44 +97,43 @@ fn debug_log(msg: &str) {
 
 const DB_VERSION: &str = "1";
 
-fn needs_migration() -> bool {
+async fn needs_migration() -> bool {
     let pool = crate::DB_POOL.get().expect("DB pool not initialized");
-    let version: Option<String> = tauri::async_runtime::block_on(
-        sqlx::query_scalar("SELECT value FROM settings WHERE key = 'db_version'")
-            .fetch_optional(pool)
-    ).ok().flatten();
+    let version: Option<String> = sqlx::query_scalar("SELECT value FROM settings WHERE key = 'db_version'")
+        .fetch_optional(pool)
+        .await
+        .ok()
+        .flatten();
     version.as_deref() != Some(DB_VERSION)
 }
 
-fn mark_migrated() {
+async fn mark_migrated() {
     let pool = crate::DB_POOL.get().expect("DB pool not initialized");
-    let _ = tauri::async_runtime::block_on(
-        sqlx::query("INSERT OR REPLACE INTO settings (key, value) VALUES ('db_version', ?)")
-            .bind(DB_VERSION)
-            .execute(pool)
-    );
+    let _ = sqlx::query("INSERT OR REPLACE INTO settings (key, value) VALUES ('db_version', ?)")
+        .bind(DB_VERSION)
+        .execute(pool)
+        .await;
 }
 
-pub fn load(_config: &tauri::Config) -> Store {
+pub async fn load(_config: &tauri::Config) -> Store {
     let pool = crate::DB_POOL.get().expect("DB pool not initialized");
-    
-    if needs_migration() {
+
+    if needs_migration().await {
         debug_log("[store::load] DB version mismatch or empty, trying JSON migration");
         if let Some(json_store) = try_load_json() {
-            let _ = tauri::async_runtime::block_on(db::save_store(pool, &json_store));
-            mark_migrated();
+            let _ = db::save_store(pool, &json_store).await;
+            mark_migrated().await;
             debug_log(&format!("[store::load] migrated {} workspaces from JSON", json_store.workspaces.len()));
             return json_store;
         }
         debug_log("[store::load] no JSON, returning default");
         let default_store = Store::default();
-        // Сохраняем дефолтный store в БД, чтобы следующий load не вернул пустые workspaces
-        let _ = tauri::async_runtime::block_on(db::save_store(pool, &default_store));
-        mark_migrated();
+        let _ = db::save_store(pool, &default_store).await;
+        mark_migrated().await;
         return default_store;
     }
 
-    let db_result = tauri::async_runtime::block_on(db::load_store(pool));
+    let db_result = db::load_store(pool).await;
     match db_result {
         Ok(store) => store,
         Err(e) => {
@@ -144,7 +143,7 @@ pub fn load(_config: &tauri::Config) -> Store {
     }
 }
 
-pub fn save(store: &Store) -> Result<(), String> {
+pub async fn save(store: &Store) -> Result<(), String> {
     let pool = crate::DB_POOL.get().expect("DB pool not initialized");
-    tauri::async_runtime::block_on(db::save_store(pool, store))
+    db::save_store(pool, store).await
 }

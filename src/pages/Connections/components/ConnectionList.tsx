@@ -85,7 +85,6 @@ interface ConnectionListProps {
   connectingId: string | null;
   disconnectingId: string | null;
   deletingId: string | null;
-  anyActive: boolean;
   groupBy: string;
   onGroupByChange: (labelId: string) => void;
   onModeChanged?: () => void;
@@ -124,7 +123,6 @@ export function ConnectionList({
                                  connectingId,
                                  disconnectingId,
                                  deletingId,
-                                 anyActive,
                                  ...props
                                }: ConnectionListProps) {
   const [logDrawerConnId, setLogDrawerConnId] = useState<string | null>(null);
@@ -171,6 +169,7 @@ export function ConnectionList({
 
   const rowProps = {
     labels,
+    allConnections,
     onConnect: props.onConnect,
     onConnectWithMode: props.onConnectWithMode,
     onDisconnect: props.onDisconnect,
@@ -182,10 +181,9 @@ export function ConnectionList({
     connectingId,
     disconnectingId,
     deletingId,
-    anyActive,
   };
 
-  const activeConn = allConnections.find((c) => c.status === "connected") ?? null;
+  const activeConns = allConnections.filter((c) => c.status === "connected");
   const connectingConn = allConnections.find((c) => c.status === "connecting") ?? null;
 
   return (
@@ -194,7 +192,7 @@ export function ConnectionList({
       {deleteDialog}
 
       <ActiveBanner
-        active={activeConn}
+        actives={activeConns}
         connecting={connectingConn}
         labels={labels}
         onDisconnect={props.onDisconnect}
