@@ -1,0 +1,104 @@
+# xl2tpd patches for macOS + l2tp-hub
+#
+# This patch contains all modifications needed to build xl2tpd v1.3.20
+# as a universal binary (arm64+x86_64) for macOS 13+.
+#
+# Patches:
+# 1. file.h: STRLEN 100 → 512
+#    Config file path buffer (configfile, pppoptfile, authfile, etc.).
+#    Original 100 chars insufficient for paths under ~/Library/Application Support/.
+#
+# 2. l2tp.h: MAXSTRLEN 120 → 512
+#    Option string buffer used by add_opt() when building pppd arguments.
+#    pppoptfile path passed to pppd via vsnprintf(new->option, MAXSTRLEN, ...).
+#    Original 120 chars truncates paths ≥120 chars, causing pppd to receive
+#    truncated filename (e.g. "options.xl2tp" instead of "options.xl2tpd").
+#
+# 3. md5.c: DARWIN byte order support
+#    macOS uses __DARWIN_BYTE_ORDER instead of __BYTE_ORDER.
+#
+# 4. osport.h: Skip in_pktinfo on DARWIN
+#    macOS already defines struct in_pktinfo in system headers.
+#
+# 5. pty.c: DARWIN PTY scheme
+#    macOS uses FreeBSD-style PTY device paths.
+#
+# To apply: cd xl2tpd-source && git apply /path/to/this.patch
+# To rebuild: see build-xl2tpd.sh
+
+diff --git a/file.h b/file.h
+index a2707c2..bdd2328 100644
+--- a/file.h
++++ b/file.h
+@@ -16,7 +16,7 @@
+ #ifndef _FILE_H
+ #define _FILE_H
+ 
+-#define STRLEN 100              /* Length of a string */
++#define STRLEN 512              /* Length of a string — increased for macOS ~/Library/Application Support/ paths */
+ 
+ /* Definition of a keyword */
+ struct keyword
+diff --git a/l2tp.h b/l2tp.h
+index ed9ac27..11ea394 100644
+--- a/l2tp.h
++++ b/l2tp.h
+@@ -19,7 +19,7 @@ typedef unsigned long long _u64;
+ #ifndef _L2TP_H
+ #define _L2TP_H
+ 
+-#define MAXSTRLEN 120           /* Maximum length of common strings */
++#define MAXSTRLEN 512           /* Maximum length of common strings — increased for pppoptfile path in add_opt() */
+                                 /* FIXME: MAX_RECV_SIZE, what is it? */
+ #define MAX_RECV_SIZE 4096      /* Biggest packet we'll accept */
+ 
+diff --git a/md5.c b/md5.c
+index 368066f..d8df888 100644
+--- a/md5.c
++++ b/md5.c
+@@ -3,12 +3,18 @@
+ #elif defined(OPENBSD) || defined(NETBSD)
+ # define __BSD_VISIBLE 0
+ # include <machine/endian.h>
++#elif defined(DARWIN)
++# include <machine/endian.h>
+ #elif defined(LINUX)
+ # include <endian.h>
+ #elif defined(SOLARIS)
+ # include <sys/isa_defs.h>
+ #endif
+-#if __BYTE_ORDER == __BIG_ENDIAN
++#if defined(DARWIN)
++# if __DARWIN_BYTE_ORDER == __DARWIN_BIG_ENDIAN
++#  define HIGHFIRST 1
++# endif
++#elif __BYTE_ORDER == __BIG_ENDIAN
+ #define HIGHFIRST 1
+ #endif
+ 
+diff --git a/osport.h b/osport.h
+index c42f5da..d5d426c 100644
+--- a/osport.h
++++ b/osport.h
+@@ -35,7 +35,7 @@
+ 
+ #endif /* defined(SOLARIS) */
+ 
+-#if !defined(LINUX)
++#if !defined(LINUX) && !defined(DARWIN)
+ 
+ /* Declare empty structure to make code portable and keep simple */
+ struct in_pktinfo {
+diff --git a/pty.c b/pty.c
+index d353a28..a3cec62 100644
+--- a/pty.c
++++ b/pty.c
+@@ -42,7 +42,7 @@
+ #define PTY01 "0123456789abcdef"
+ #endif
+ 
+-#if defined(FREEBSD) || defined(NETBSD)
++#if defined(FREEBSD) || defined(NETBSD) || defined(DARWIN)
+ #define PTY00 "/dev/ptyXX"
+ #define PTY10 "p"
+ #define PTY01 "0123456789abcdefghijklmnopqrstuv"
