@@ -183,7 +183,6 @@ impl L2tpManager {
 
         update_connect_stats(&mut store, id);
         store::save(&store).await?;
-        let _ = crate::tray::refresh_tray();
 
         log!("[manager] connect done: {}", conn.service_name);
         Ok(())
@@ -298,7 +297,6 @@ impl L2tpManager {
 
         update_disconnect_stats(&mut store, id);
         store::save(&store).await?;
-        let _ = crate::tray::refresh_tray();
 
         log!("[manager] disconnect done: {}", conn.service_name);
         Ok(())

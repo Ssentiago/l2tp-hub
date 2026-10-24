@@ -19,7 +19,6 @@ mod sleep_wake;
 mod state;
 mod store;
 mod sudo;
-pub mod tray;
 
 pub static LOGGER: std::sync::OnceLock<Arc<Logger>> = std::sync::OnceLock::new();
 pub static DB_POOL: std::sync::OnceLock<sqlx::SqlitePool> = std::sync::OnceLock::new();
@@ -39,13 +38,7 @@ fn main() {
     // Глобальная очистка при старте — убить сиротские процессы от прошлого запуска
     state::cleanup_all_vpn_state();
 
-    let tray_state = state::TrayState {
-        tray: std::sync::Mutex::new(None),
-        poller_running: std::sync::Mutex::new(false),
-    };
-
     tauri::Builder::default()
-        .manage(tray_state)
         .setup(|app| {
             let logger = Arc::new(logger::Logger::new(app.handle().clone()));
             LOGGER.set(logger).ok();
@@ -77,14 +70,6 @@ fn main() {
                 .expect("Main window not found");
 
             state::init_state(app.handle().clone(), window);
-
-            match tray::create_tray() {
-                Ok(tray) => {
-                    let tray_state = app.state::<state::TrayState>();
-                    *tray_state.tray.lock().unwrap() = Some(tray);
-                }
-                Err(e) => eprintln!("Failed to create tray: {}", e),
-            }
 
             // Sleep/Wake — проверяем VPN после пробуждения
             let wake_app = app.handle().clone();

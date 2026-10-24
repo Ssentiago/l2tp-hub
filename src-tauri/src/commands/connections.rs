@@ -2,7 +2,6 @@ use crate::l2tp;
 use crate::models::connection::Connection;
 use crate::models::connection_payload::ConnectionPayload;
 use crate::sudo::SudoSession;
-use crate::tray;
 use crate::{keychain, log, store};
 use tauri::State;
 use uuid::Uuid;
@@ -87,7 +86,6 @@ pub async fn save_connection(
 
     store::save(&store).await?;
     log!("[save_connection] success");
-    let _ = tray::refresh_tray();
     Ok(conn)
 }
 
@@ -109,7 +107,6 @@ pub async fn delete_connection(
     }
     ws.connections.retain(|c| c.id != id);
     store::save(&store).await?;
-    let _ = tray::refresh_tray();
     Ok(())
 }
 
@@ -126,6 +123,5 @@ pub async fn delete_connection(app_handle: tauri::AppHandle, id: String) -> Resu
     }
     ws.connections.retain(|c| c.id != id);
     store::save(&store).await?;
-    let _ = tray::refresh_tray();
     Ok(())
 }

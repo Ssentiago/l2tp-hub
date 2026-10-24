@@ -1,6 +1,5 @@
 use crate::state::get_state;
 use crate::sudo::SudoSession;
-use crate::tray;
 use crate::{backup, keychain, l2tp, log, store};
 use tauri::State;
 use tauri_plugin_dialog::DialogExt;
@@ -59,7 +58,6 @@ pub async fn import(password: String) -> Result<bool, String> {
             }
 
             store::save(&store).await?;
-            let _ = tray::refresh_tray();
             log!("[import_config_dialog] done");
             Ok(true)
         }
@@ -102,7 +100,6 @@ pub async fn import_file(file_path: String, password: String) -> Result<bool, St
     }
 
     store::save(&store).await?;
-    let _ = tray::refresh_tray();
     log!("[import_file] done");
     Ok(true)
 }
@@ -181,6 +178,5 @@ pub async fn reset(
     }
     store::save(&store::Store::default()).await?;
 
-    let _ = tray::refresh_tray();
     Ok(())
 }

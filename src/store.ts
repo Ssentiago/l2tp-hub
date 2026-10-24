@@ -249,7 +249,7 @@ export const useStore = create<Store>((set, get) => ({
 
       const { disconnectingId, connectingId } = get();
 
-      // Игнорируем промежуточные статусы от tray poller пока идёт disconnect
+      // Игнорируем промежуточные статусы пока идёт disconnect
       if (id === disconnectingId && status !== "disconnected") return;
       // Игнорируем промежуточные статусы пока идёт connect
       if (id === connectingId && status !== "connected" && status !== "disconnected") return;

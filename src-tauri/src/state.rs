@@ -1,6 +1,5 @@
-use std::sync::{Mutex, OnceLock};
+use std::sync::OnceLock;
 use tauri::{AppHandle, WebviewWindow};
-use tauri::tray::TrayIcon;
 
 // ---------------------------------------------------------------------------
 // AppState — единая точка хранения
@@ -29,15 +28,6 @@ pub fn get_state() -> &'static AppState {
     APP_STATE
         .get()
         .expect("AppState not initialized. Did you call init_state?")
-}
-
-// ---------------------------------------------------------------------------
-// TrayState — tray icon management
-// ---------------------------------------------------------------------------
-
-pub struct TrayState {
-    pub tray: Mutex<Option<TrayIcon>>,
-    pub poller_running: Mutex<bool>,
 }
 
 // ---------------------------------------------------------------------------
