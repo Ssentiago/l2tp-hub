@@ -13,7 +13,7 @@ networks.
 
 ## Requirements
 
-- macOS 13–15 (macOS 26 Tahoe is not supported — L2TP was removed from the OS)
+- macOS 13+
 - Windows 10/11
 - macOS: [macosvpn](https://github.com/halo/macosvpn) — `brew install macosvpn`
 
