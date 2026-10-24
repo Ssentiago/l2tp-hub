@@ -98,11 +98,16 @@ export function WorkspaceSelector() {
 
   const activeIdx = storeWorkspaces.findIndex((w) => w.id === activeWorkspaceId);
 
+  if (storeWorkspaces.length === 0) return null;
+
   return (
     <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
       <Tabs
         value={activeIdx >= 0 ? activeIdx : 0}
-        onChange={(_, v) => handleSwitch(storeWorkspaces[v].id)}
+        onChange={(_, v) => {
+          const ws = storeWorkspaces[v];
+          if (ws) handleSwitch(ws.id);
+        }}
         sx={{
           minHeight: 36,
           pointerEvents: submitting ? "none" : "auto",

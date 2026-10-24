@@ -1,16 +1,16 @@
 import { useState, useEffect } from "react";
 import { Box, CircularProgress } from "@mui/material";
-import { listen } from "@tauri-apps/api/event";
 import { ConnectionList } from "./components/ConnectionList";
-import { SudoModal } from "./components/SudoModal";
+import { SwitchConfirmDialog } from "./components/ActionButtons";
 import { useStore } from "../../store";
+import { api } from "../../core/api";
+import { getDisplayTitle } from "../../core/display";
 import type {
   Connection,
   FilterState,
   SortDir,
   SortField,
   Label,
-  VpnStatus,
 } from "../../typing/definitions";
 
 const DEFAULT_FILTER: FilterState = {
@@ -35,50 +35,59 @@ export function Connections({ labels, onEdit }: Props) {
     disconnectVpn,
     deleteConnection,
     sudoReady,
-    checkSudo,
   } = useStore();
 
   const [filter, setFilter] = useState<FilterState>(DEFAULT_FILTER);
   const [sortField, setSortField] = useState<SortField>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [loading, setLoading] = useState(true);
-  const [showSudoModal, setShowSudoModal] = useState(false);
   const [groupBy, setGroupBy] = useState<string>("company");
+  const [switchTarget, setSwitchTarget] = useState<string | null>(null);
 
   useEffect(() => {
     loadConnections().then(() => setLoading(false));
-    checkSudo().then(() => {
-      if (!useStore.getState().sudoReady) {
-        setShowSudoModal(true);
-      }
-    });
   }, []);
 
-  useEffect(() => {
-    const unlistenPromise = listen<{ id: string; status: VpnStatus }>(
-      "vpn:status-changed",
-      (event) => {
-        const { id, status } = event.payload;
-        useStore.setState((s) => ({
-          connections: s.connections.map((c) =>
-            c.id === id ? { ...c, status } : c,
-          ),
-        }));
-      },
-    );
-    return () => {
-      unlistenPromise.then((fn) => fn());
-    };
-  }, []);
+  // Event listener для vpn-status-changed инициализируется в App.tsx через initVpnEventListener()
 
   const handleConnect = async (id: string) => {
-    if (!sudoReady) {
-      setShowSudoModal(true);
-      return;
-    }
+    if (!sudoReady) return;
     const c = connections.find((c) => c.id === id);
     if (c?.status === "connecting" || c?.status === "connected") return;
     await connectVpn(id);
+  };
+
+  const handleConnectWithMode = async (id: string, mode: "full" | "split") => {
+    if (!sudoReady) return;
+    const c = connections.find((c) => c.id === id);
+    if (c?.status === "connecting" || c?.status === "connected") return;
+    // Сохраняем выбранный режим в профиль перед подключением
+    if (c && c.tunnel_mode !== mode) {
+      await api.connections.save({
+        id: c.id,
+        display_name: c.display_name,
+        server: c.server,
+        username: c.username,
+        password: "",
+        shared_secret: "",
+        labels: c.labels,
+        tunnel_mode: mode,
+        split_routes: c.split_routes,
+      });
+      await loadConnections();
+    }
+    await connectVpn(id);
+  };
+
+  const handleModeSwitch = async (id: string, mode: "full" | "split") => {
+    const c = connections.find((c) => c.id === id);
+    if (!c || c.status !== "connected" || c.tunnel_mode === mode) return;
+    try {
+      await api.vpn.switchTunnelMode(id, mode);
+      await loadConnections();
+    } catch (e) {
+      console.error("switch_tunnel_mode failed:", e);
+    }
   };
 
   const handleDisconnect = async (id: string) => {
@@ -89,17 +98,31 @@ export function Connections({ labels, onEdit }: Props) {
     await deleteConnection(id);
   };
 
-  const handleSudoAuth = async (password: string) => {
-    await useStore.getState().authenticateSudo(password);
-    if (useStore.getState().sudoReady) setShowSudoModal(false);
+  const handleSwitch = (id: string) => {
+    setSwitchTarget(id);
   };
+
+  const handleSwitchConfirm = async () => {
+    if (!switchTarget) return;
+    const targetId = switchTarget;
+    setSwitchTarget(null);
+    // Disconnect current, then connect target
+    const activeConn = connections.find((c) => c.status === "connected");
+    if (activeConn) {
+      await disconnectVpn(activeConn.id);
+    }
+    await connectVpn(targetId);
+  };
+
+  const activeConn = connections.find((c) => c.status === "connected") ?? null;
+  const switchTargetConn = switchTarget ? connections.find((c) => c.id === switchTarget) : null;
 
   const filtered = connections
     .filter((c) => {
       if (filter.search) {
         const labelValues = Object.values(c.labels).join(" ");
         if (
-          !`${c.name} ${c.server} ${labelValues}`
+          !`${c.display_name} ${c.server} ${labelValues}`
             .toLowerCase()
             .includes(filter.search.toLowerCase())
         )
@@ -115,24 +138,21 @@ export function Connections({ labels, onEdit }: Props) {
       const dir = sortDir === "asc" ? 1 : -1;
       if (sortField === "status") return a.status.localeCompare(b.status) * dir;
       return (
-        (a.labels["company"] ?? a.name).localeCompare(
-          b.labels["company"] ?? b.name,
+        (a.labels["company"] ?? a.display_name).localeCompare(
+          b.labels["company"] ?? b.display_name,
         ) * dir
       );
     });
 
-  const anyActive = connections.some(
-    (c) => c.status === "connected" || c.status === "connecting",
-  );
-
   return (
     <>
-      {showSudoModal && (
-        <SudoModal
-          onAuth={handleSudoAuth}
-          onClose={() => setShowSudoModal(false)}
-        />
-      )}
+      <SwitchConfirmDialog
+        open={switchTarget !== null}
+        targetName={switchTargetConn ? getDisplayTitle(switchTargetConn) : ""}
+        currentName={activeConn ? getDisplayTitle(activeConn) : ""}
+        onConfirm={handleSwitchConfirm}
+        onCancel={() => setSwitchTarget(null)}
+      />
       {loading ? (
         <Box sx={{ display: "flex", justifyContent: "center", mt: 8 }}>
           <CircularProgress />
@@ -158,13 +178,16 @@ export function Connections({ labels, onEdit }: Props) {
             }
           }}
           onConnect={handleConnect}
+          onConnectWithMode={handleConnectWithMode}
           onDisconnect={handleDisconnect}
+          onSwitch={handleSwitch}
+          onModeSwitch={handleModeSwitch}
           onEdit={onEdit}
           onDelete={handleDelete}
           connectingId={connectingId}
           disconnectingId={disconnectingId}
           deletingId={deletingId}
-          anyActive={anyActive}
+          onModeChanged={() => loadConnections()}
         />
       )}
     </>

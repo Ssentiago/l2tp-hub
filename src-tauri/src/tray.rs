@@ -1,17 +1,23 @@
+#[allow(unused_imports)]
 use crate::l2tp;
 use crate::l2tp::VpnStatus;
 use crate::models::connection::Connection;
+use crate::state;
 use crate::store::Store;
-use crate::sudo::SudoSession;
-use crate::{keychain, log, store};
+use crate::{log, store};
 use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
 use tauri::tray::{TrayIcon, TrayIconBuilder};
 use tauri::{AppHandle, Emitter, Manager};
 use std::collections::HashMap;
 
-pub fn create_tray(app: &AppHandle) -> Result<TrayIcon, Box<dyn std::error::Error>> {
+fn app() -> &'static AppHandle {
+    &state::get_state().app
+}
+
+pub fn create_tray() -> Result<TrayIcon, Box<dyn std::error::Error>> {
+    let app = app();
     let icon = load_tray_icon();
-    let menu = build_menu(app)?;
+    let menu = build_menu()?;
 
     let tray = TrayIconBuilder::new()
         .icon(icon?)
@@ -31,20 +37,21 @@ pub fn create_tray(app: &AppHandle) -> Result<TrayIcon, Box<dyn std::error::Erro
                 }
                 id if id.starts_with("connect_") => {
                     let conn_id = id.strip_prefix("connect_").unwrap().to_string();
-                    let app = app.clone();
                     std::thread::spawn(move || {
-                        handle_tray_connect(&app, &conn_id);
+                        handle_tray_connect(&conn_id);
                     });
                 }
                 id if id.starts_with("stop_") => {
                     let conn_id = id.strip_prefix("stop_").unwrap().to_string();
-                    let store = store::load(app.config());
-                    if let Some(conn) = find_connection(&store, &conn_id) {
-                        match l2tp::disconnect_vpn(&conn.name) {
+                    let app2 = app.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let manager = app2.state::<crate::l2tp::manager::L2tpManager>();
+                        let result = manager.disconnect(&conn_id).await;
+                        match result {
                             Ok(()) => {
-                                log!("[tray] disconnected {}", conn.server);
-                                let _ = app.emit(
-                                    "vpn:status-changed",
+                                log!("[tray] disconnected {}", conn_id);
+                                let _ = app2.emit(
+                                    "vpn-status-changed",
                                     VpnStatusPayload {
                                         id: conn_id.clone(),
                                         status: VpnStatus::Disconnected,
@@ -53,15 +60,15 @@ pub fn create_tray(app: &AppHandle) -> Result<TrayIcon, Box<dyn std::error::Erro
                             }
                             Err(e) => log!("[tray] disconnect error: {}", e),
                         }
-                        let _ = refresh_tray(app);
-                    }
+                        let _ = refresh_tray();
+                    });
                 }
                 _ => {}
             }
         })
         .build(app)?;
 
-    start_status_poller(app);
+    start_status_poller();
 
     Ok(tray)
 }
@@ -82,8 +89,26 @@ fn find_connection<'a>(store: &'a Store, id: &str) -> Option<&'a Connection> {
         .find(|c| c.id == id)
 }
 
-fn build_menu(app: &AppHandle) -> Result<tauri::menu::Menu<tauri::Wry>, Box<dyn std::error::Error>> {
-    let store = store::load(app.config());
+/// Блокирующе выполняет future. Работает из любого контекста:
+/// - Если уже внутри tokio → block_in_place + Handle::block_on
+/// - Если вне tokio (plain thread, setup) → создаёт свой Runtime
+fn block_on_anywhere<F: std::future::Future>(f: F) -> F::Output {
+    if let Ok(handle) = tokio::runtime::Handle::try_current() {
+        // Уже внутри tokio — block_in_place переводит thread в blocking mode,
+        // после чего Handle::block_on не паникует
+        tokio::task::block_in_place(|| handle.block_on(f))
+    } else {
+        // Вне tokio — создаём свой runtime
+        let rt = tokio::runtime::Runtime::new()
+            .expect("Failed to create tokio runtime");
+        rt.block_on(f)
+    }
+}
+
+fn build_menu() -> Result<tauri::menu::Menu<tauri::Wry>, Box<dyn std::error::Error>> {
+    let app = app();
+
+    let store = block_on_anywhere(store::load(app.config()));
 
     let mut menu = MenuBuilder::new(app);
 
@@ -101,7 +126,10 @@ fn build_menu(app: &AppHandle) -> Result<tauri::menu::Menu<tauri::Wry>, Box<dyn 
 
     let connected: Vec<&Connection> = all_conns
         .iter()
-        .filter(|c| l2tp::get_vpn_status(&c.name) == VpnStatus::Connected)
+        .filter(|c| {
+            let manager = app.state::<crate::l2tp::manager::L2tpManager>();
+            block_on_anywhere(manager.status(&c.id)) == VpnStatus::Connected
+        })
         .copied()
         .collect();
 
@@ -232,111 +260,85 @@ fn group_connections_for_workspace(ws: &crate::models::workspace::Workspace) -> 
     groups
 }
 
-fn handle_tray_connect(app: &AppHandle, id: &str) {
-    let store = store::load(app.config());
-    let conn = match find_connection(&store, id) {
+fn handle_tray_connect(id: &str) {
+    let app = app();
+    let store = block_on_anywhere(store::load(app.config()));
+    let _conn = match find_connection(&store, id) {
         Some(c) => c.clone(),
         None => return,
     };
 
-    let status = l2tp::get_vpn_status(&conn.name);
+    let manager = app.state::<crate::l2tp::manager::L2tpManager>();
+    let status = block_on_anywhere(manager.status(id));
 
     if status == VpnStatus::Connected || status == VpnStatus::Connecting {
-        match l2tp::disconnect_vpn(&conn.name) {
-            Ok(()) => {
-                log!("[tray] disconnected {}", conn.server);
-                let _ = app.emit(
-                    "vpn:status-changed",
-                    VpnStatusPayload {
-                        id: id.to_string(),
-                        status: VpnStatus::Disconnected,
-                    },
-                );
-            }
-            Err(e) => log!("[tray] disconnect error: {}", e),
+        #[cfg(target_os = "macos")]
+        {
+            let manager2 = manager.inner().clone();
+            let app2 = app.clone();
+            let id2 = id.to_string();
+            tauri::async_runtime::spawn(async move {
+                let result = manager2.disconnect(&id2).await;
+                match result {
+                    Ok(()) => {
+                        log!("[tray] disconnected {}", id2);
+                        let _ = app2.emit("vpn-status-changed", VpnStatusPayload {
+                            id: id2, status: VpnStatus::Disconnected,
+                        });
+                    }
+                    Err(e) => log!("[tray] disconnect error: {}", e),
+                }
+                let _ = refresh_tray();
+            });
         }
     } else {
         #[cfg(target_os = "macos")]
         {
-            let sudo = app.state::<SudoSession>();
-            if let Err(e) = connect_vpn_macos(app, id, &sudo) {
-                log!("[tray] connect failed: {}", e);
-            } else {
-                let _ = app.emit(
-                    "vpn:status-changed",
-                    VpnStatusPayload {
-                        id: id.to_string(),
-                        status: VpnStatus::Connecting,
-                    },
-                );
-            }
+            let manager2 = manager.inner().clone();
+            let app2 = app.clone();
+            let id2 = id.to_string();
+            tauri::async_runtime::spawn(async move {
+                let result = manager2.connect(&id2).await;
+                match result {
+                    Ok(()) => {
+                        log!("[tray] connect success");
+                        let _ = app2.emit("vpn-status-changed", VpnStatusPayload {
+                            id: id2, status: VpnStatus::Connected,
+                        });
+                    }
+                    Err(e) => {
+                        log!("[tray] connect failed: {}", e);
+                        let _ = app2.emit("vpn-status-changed", VpnStatusPayload {
+                            id: id2, status: VpnStatus::Disconnected,
+                        });
+                    }
+                }
+                let _ = refresh_tray();
+            });
         }
 
         #[cfg(target_os = "windows")]
         {
-            if let Err(e) = connect_vpn_windows(app, id) {
+            if let Err(e) = connect_vpn_windows(id) {
                 log!("[tray] connect failed: {}", e);
+                let _ = app.emit("vpn-status-changed", VpnStatusPayload {
+                    id: id.to_string(), status: VpnStatus::Disconnected,
+                });
             } else {
-                let _ = app.emit(
-                    "vpn:status-changed",
-                    VpnStatusPayload {
-                        id: id.to_string(),
-                        status: VpnStatus::Connecting,
-                    },
-                );
+                let _ = app.emit("vpn-status-changed", VpnStatusPayload {
+                    id: id.to_string(), status: VpnStatus::Connected,
+                });
             }
         }
     }
 
-    let _ = refresh_tray(app);
-}
-
-#[cfg(target_os = "macos")]
-fn connect_vpn_macos(
-    app: &AppHandle,
-    id: &str,
-    sudo: &SudoSession,
-) -> Result<(), String> {
-    let store = store::load(app.config());
-    let conn = find_connection(&store, id)
-        .ok_or("Подключение не найдено")?
-        .clone();
-
-    let password = keychain::get_password(&conn.keychain_key)?;
-    let shared_secret = keychain::get_password(&conn.shared_secret_key)?;
-
-    let hash = crate::commands::utils::service_hash(&conn, &password, &shared_secret);
-    let status = l2tp::get_vpn_status(&conn.name);
-    let needs_recreate =
-        conn.service_hash.as_deref() != Some(hash.as_str()) || status == VpnStatus::Unknown;
-
-    if needs_recreate {
-        l2tp::create_vpn_service(
-            sudo,
-            &conn.name,
-            &conn.server,
-            &conn.username,
-            &password,
-            &shared_secret,
-        )?;
-
-        let mut store = store::load(app.config());
-        for ws in &mut store.workspaces {
-            if let Some(c) = ws.connections.iter_mut().find(|c| c.id == id) {
-                c.service_hash = Some(hash.clone());
-            }
-        }
-        let _ = store::save(&store);
-
-        std::thread::sleep(std::time::Duration::from_millis(1500));
-    }
-
-    l2tp::connect_vpn(&conn.name)
+    let _ = refresh_tray();
 }
 
 #[cfg(target_os = "windows")]
-fn connect_vpn_windows(app: &AppHandle, id: &str) -> Result<(), String> {
-    let store = store::load(app.config());
+fn connect_vpn_windows(id: &str) -> Result<(), String> {
+    let app = app();
+    let store = tokio::runtime::Handle::current().block_on(store::load(app.config()));
     let conn = find_connection(&store, id)
         .ok_or("Подключение не найдено")?
         .clone();
@@ -345,39 +347,43 @@ fn connect_vpn_windows(app: &AppHandle, id: &str) -> Result<(), String> {
     let shared_secret = keychain::get_password(&conn.shared_secret_key)?;
 
     let hash = crate::commands::utils::service_hash(&conn, &password, &shared_secret);
-    let status = l2tp::get_vpn_status(&conn.name);
+    let status = l2tp::get_vpn_status(&conn.service_name);
     let needs_recreate =
         conn.service_hash.as_deref() != Some(hash.as_str()) || status == VpnStatus::Unknown;
 
     if needs_recreate {
         l2tp::create_vpn_service(
-            &conn.name,
+            &conn.service_name,
             &conn.server,
             &conn.username,
             &password,
             &shared_secret,
         )?;
 
-        let mut store = store::load(app.config());
+        let mut store = tokio::runtime::Handle::current().block_on(store::load(app.config()));
         for ws in &mut store.workspaces {
             if let Some(c) = ws.connections.iter_mut().find(|c| c.id == id) {
                 c.service_hash = Some(hash.clone());
             }
         }
-        let _ = store::save(&store);
+        let _ = tokio::runtime::Handle::current().block_on(store::save(&store));
 
         std::thread::sleep(std::time::Duration::from_millis(1500));
     }
 
-    l2tp::connect_vpn(&conn.name, &conn.username, &password)
+    l2tp::connect_vpn(&conn.service_name, &conn.username, &password)
 }
 
-pub fn refresh_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+pub fn refresh_tray() -> Result<(), Box<dyn std::error::Error>> {
+    let app = app();
     let tray_state = app.state::<crate::state::TrayState>();
-    let mut tray_lock = tray_state.tray.lock().unwrap();
+    let mut tray_lock = match tray_state.tray.lock() {
+        Ok(lock) => lock,
+        Err(poisoned) => poisoned.into_inner(), // Recover from poisoned mutex
+    };
 
     if let Some(tray) = tray_lock.as_mut() {
-        let menu = build_menu(app)?;
+        let menu = build_menu()?;
         tray.set_menu(Some(menu))?;
     }
 
@@ -390,9 +396,13 @@ struct VpnStatusPayload {
     status: VpnStatus,
 }
 
-fn start_status_poller(app: &AppHandle) {
+fn start_status_poller() {
+    let app = app();
     let tray_state = app.state::<crate::state::TrayState>();
-    let mut running = tray_state.poller_running.lock().unwrap();
+    let mut running = match tray_state.poller_running.lock() {
+        Ok(lock) => lock,
+        Err(poisoned) => poisoned.into_inner(),
+    };
     if *running {
         return;
     }
@@ -401,22 +411,34 @@ fn start_status_poller(app: &AppHandle) {
 
     let app = app.clone();
     std::thread::spawn(move || {
+        // Создаём свой runtime для async операций (poller thread не в tokio контексте)
+        let rt = match tokio::runtime::Runtime::new() {
+            Ok(rt) => rt,
+            Err(e) => {
+                crate::log!("[poller] failed to create tokio runtime: {}", e);
+                return;
+            }
+        };
+        let handle = rt.handle().clone();
+
         let mut prev_statuses: HashMap<String, VpnStatus> = HashMap::new();
 
         loop {
             std::thread::sleep(std::time::Duration::from_secs(3));
 
-            let store = store::load(app.config());
+            let store = handle.block_on(store::load(app.config()));
             let mut changed = false;
+
+            let manager = app.state::<crate::l2tp::manager::L2tpManager>();
 
             for ws in &store.workspaces {
                 for conn in &ws.connections {
-                    let status = l2tp::get_vpn_status(&conn.name);
+                    let status = handle.block_on(manager.status(&conn.id));
                     let prev = prev_statuses.get(&conn.id).copied();
                     if prev != Some(status) {
                         changed = true;
                         let _ = app.emit(
-                            "vpn:status-changed",
+                            "vpn-status-changed",
                             VpnStatusPayload {
                                 id: conn.id.clone(),
                                 status,
@@ -428,7 +450,7 @@ fn start_status_poller(app: &AppHandle) {
             }
 
             if changed {
-                let _ = refresh_tray(&app);
+                let _ = refresh_tray();
             }
         }
     });

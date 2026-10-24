@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Box, Button, Paper, TextField, Typography } from "@mui/material";
 import { api } from "../../core/api";
+import { SubnetEditor } from "../../components/SubnetEditor";
 import { Connection, ConnectionPayload, Label } from "../../typing/definitions";
 import toast from "react-hot-toast";
 
@@ -25,6 +26,8 @@ export function ConnectionForm({
     password: "",
     shared_secret: "",
     labels: initialConnection?.labels ?? {},
+    tunnel_mode: initialConnection?.tunnel_mode ?? "full",
+    split_routes: initialConnection?.split_routes ?? [],
   });
 
   const [saving, setSaving] = useState(false);
@@ -138,6 +141,19 @@ export function ConnectionForm({
             ))
           )}
         </Box>
+      </Paper>
+
+      <Paper variant="outlined" sx={{ p: 3, mb: 2 }}>
+        <Typography variant="overline" color="text.secondary">
+          Подсети для раздельного туннелирования
+        </Typography>
+        <Typography variant="caption" color="text.disabled" sx={{ display: "block", mb: 1 }}>
+          Укажите подсети, чтобы при подключении была доступна кнопка «Сплит». Без подсетей только «Фулл».
+        </Typography>
+        <SubnetEditor
+          routes={formData.split_routes ?? []}
+          onChange={(routes) => updateFormData({ split_routes: routes })}
+        />
       </Paper>
 
       <Box sx={{ display: "flex", gap: 2, justifyContent: "flex-end" }}>

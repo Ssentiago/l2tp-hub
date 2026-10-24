@@ -30,6 +30,8 @@ import {
   SortField
 } from "../../../typing/definitions";
 import { ConnectionRow, STATUS_LABEL } from "./ConnectionRow.tsx";
+import { ActiveBanner } from "./ActiveBanner.tsx";
+import { ConnectionLogDrawer } from "./ConnectionLogDrawer.tsx";
 import { ChevronRight, ExpandMore } from "@mui/icons-material";
 
 function useDeleteConfirm(onDelete: (id: string) => void) {
@@ -74,15 +76,18 @@ interface ConnectionListProps {
   sortDir: SortDir;
   onSort: (field: SortField) => void;
   onConnect: (id: string) => void;
+  onConnectWithMode?: (id: string, mode: "full" | "split") => void;
   onDisconnect: (id: string) => void;
+  onSwitch: (id: string) => void;
+  onModeSwitch?: (id: string, mode: "full" | "split") => void;
   onEdit: (c: Connection) => void;
   onDelete: (id: string) => void;
   connectingId: string | null;
   disconnectingId: string | null;
   deletingId: string | null;
-  anyActive: boolean;
   groupBy: string;
   onGroupByChange: (labelId: string) => void;
+  onModeChanged?: () => void;
 }
 
 
@@ -118,9 +123,12 @@ export function ConnectionList({
                                  connectingId,
                                  disconnectingId,
                                  deletingId,
-                                 anyActive,
                                  ...props
                                }: ConnectionListProps) {
+  const [logDrawerConnId, setLogDrawerConnId] = useState<string | null>(null);
+  const logDrawerConnName = logDrawerConnId
+    ? allConnections.find((c) => c.id === logDrawerConnId)?.display_name ?? ""
+    : "";
   const { request: requestDelete, dialog: deleteDialog } = useDeleteConfirm(
     props.onDelete
   );
@@ -161,19 +169,35 @@ export function ConnectionList({
 
   const rowProps = {
     labels,
+    allConnections,
     onConnect: props.onConnect,
+    onConnectWithMode: props.onConnectWithMode,
     onDisconnect: props.onDisconnect,
+    onSwitch: props.onSwitch,
+    onModeSwitch: props.onModeSwitch,
     onEdit: props.onEdit,
     onDelete: requestDelete,
+    onShowLogs: (id: string) => setLogDrawerConnId(id),
     connectingId,
     disconnectingId,
     deletingId,
-    anyActive,
   };
 
+  const activeConns = allConnections.filter((c) => c.status === "connected");
+  const connectingConn = allConnections.find((c) => c.status === "connecting") ?? null;
+
   return (
+    <>
     <Box>
       {deleteDialog}
+
+      <ActiveBanner
+        actives={activeConns}
+        connecting={connectingConn}
+        labels={labels}
+        onDisconnect={props.onDisconnect}
+        onModeChanged={props.onModeChanged}
+      />
 
       <Box sx={{ mb: 2 }}>
         <TextField
@@ -312,6 +336,7 @@ export function ConnectionList({
 
                 return groups.flatMap(([company, conns]) => {
                   const isCollapsed = collapsedGroups.has(company);
+                  const activeInGroup = conns.find((c) => c.status === "connected");
 
                   return [
                     <TableRow
@@ -349,18 +374,22 @@ export function ConnectionList({
                             {company || `Без ${groupLabel}`}
                           </Typography>
                           <Typography variant="caption" color="text.disabled">
-                            {conns.length}
+                            · {conns.length}
                           </Typography>
+                          {activeInGroup && (
+                            <Typography variant="caption" sx={{ color: "success.main", fontWeight: 500 }}>
+                              · 🟢 {activeInGroup.name}
+                            </Typography>
+                          )}
                         </Box>
                       </TableCell>
                     </TableRow>,
                     ...(!isCollapsed
-                      ? conns.map((c) => (
+                      ? conns.map((c, i) => (
                         <ConnectionRow
                           key={c.id}
                           connection={c}
                           {...rowProps}
-                          hideCompanyLabel
                         />
                       ))
                       : [])
@@ -372,5 +401,12 @@ export function ConnectionList({
         </Paper>
       }
     </Box>
+    <ConnectionLogDrawer
+      open={logDrawerConnId !== null}
+      onClose={() => setLogDrawerConnId(null)}
+      connectionId={logDrawerConnId ?? ""}
+      connectionName={logDrawerConnName}
+    />
+    </>
   );
 }

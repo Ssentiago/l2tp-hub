@@ -1,7 +1,13 @@
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Mutex, OnceLock};
 use tauri::{AppHandle, WebviewWindow};
 use tauri::tray::TrayIcon;
 
+// ---------------------------------------------------------------------------
+// AppState — единая точка хранения
+// Процессы управляются через LaunchDaemon, не хранятся здесь.
+// ---------------------------------------------------------------------------
+
+#[allow(dead_code)]
 pub struct AppState {
     pub app: AppHandle,
     pub window: WebviewWindow,
@@ -10,7 +16,10 @@ pub struct AppState {
 static APP_STATE: OnceLock<AppState> = OnceLock::new();
 
 pub fn init_state(app: AppHandle, window: WebviewWindow) {
-    let state = AppState { app, window };
+    let state = AppState {
+        app,
+        window,
+    };
     if APP_STATE.set(state).is_err() {
         eprintln!("Warning: AppState was already initialized");
     }
@@ -22,7 +31,19 @@ pub fn get_state() -> &'static AppState {
         .expect("AppState not initialized. Did you call init_state?")
 }
 
+// ---------------------------------------------------------------------------
+// TrayState — tray icon management
+// ---------------------------------------------------------------------------
+
 pub struct TrayState {
     pub tray: Mutex<Option<TrayIcon>>,
     pub poller_running: Mutex<bool>,
+}
+
+// ---------------------------------------------------------------------------
+// Global cleanup — делегирует в l2tp::cleanup_all_vpn_state()
+// ---------------------------------------------------------------------------
+
+pub fn cleanup_all_vpn_state() {
+    crate::l2tp::cleanup_all_vpn_state();
 }

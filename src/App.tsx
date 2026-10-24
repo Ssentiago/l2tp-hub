@@ -17,6 +17,8 @@ import {
   Settings as SettingsIcon,
   Info,
   Terminal,
+  CheckCircle,
+  Error as ErrorIcon,
 } from "@mui/icons-material";
 import { ConnectionForm } from "./pages/ConnectionForm/ConnectionForm";
 import { Settings } from "./pages/Settings/Settings";
@@ -24,6 +26,7 @@ import { About } from "./pages/About/About";
 import { LogDrawer } from "./components/LogDrawer";
 import { WorkspaceSelector } from "./components/WorkspaceSelector";
 import { Connections } from "./pages/Connections/Connections";
+import { SudoModal } from "./pages/Connections/components/SudoModal";
 import { useStore } from "./store";
 import type { Connection } from "./typing/definitions";
 import { Toaster } from "react-hot-toast";
@@ -46,7 +49,10 @@ const theme = createTheme({
   },
 });
 
-export default function App() {
+// ---------------------------------------------------------------------------
+// Main app — only mounts AFTER sudo is authenticated
+// ---------------------------------------------------------------------------
+function AppContent() {
   const [view, setView] = useState<View>("list");
   const [editingConn, setEditingConn] = useState<Connection | null>(null);
   const [showLog, setShowLog] = useState(false);
@@ -58,14 +64,20 @@ export default function App() {
     appVersion,
     loadAppVersion,
     loadWorkspaces,
-    checkSudo,
+    initVpnEventListener,
+    helperReady,
+    checkHelper,
   } = useStore();
 
   useEffect(() => {
+    initVpnEventListener();
     loadAppVersion();
     loadLabels();
     loadWorkspaces();
-    checkSudo();
+    checkHelper();
+    // Poll helper status каждые 5 сек
+    const interval = setInterval(checkHelper, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleEdit = (conn: Connection) => {
@@ -81,8 +93,7 @@ export default function App() {
   };
 
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
+    <>
       <LogDrawer open={showLog} onClose={() => setShowLog(false)} />
 
       <AppBar
@@ -108,6 +119,15 @@ export default function App() {
 
           {view === "list" && (
             <>
+              <Tooltip title={helperReady ? "Сервис активен" : "Сервис не отвечает"}>
+                <Box sx={{ display: "flex", alignItems: "center", mr: 1 }}>
+                  {helperReady ? (
+                    <CheckCircle fontSize="small" color="success" />
+                  ) : (
+                    <ErrorIcon fontSize="small" color="error" />
+                  )}
+                </Box>
+              </Tooltip>
               <Tooltip title="Лог / отладка">
                 <IconButton color="inherit" onClick={() => setShowLog(true)} aria-label="Лог / отладка">
                   <Terminal />
@@ -144,22 +164,69 @@ export default function App() {
       </AppBar>
 
       <Box component="main" sx={{ p: 2 }}>
-        {view === "list" ? (
-          <Connections labels={labels} onEdit={handleEdit} />
-        ) : view === "about" ? (
-          <About version={appVersion} onBack={() => setView("list")} />
-        ) : view === "settings" ? (
-          <Settings />
-        ) : (
+        {view === "form" ? (
           <ConnectionForm
             initialConnection={editingConn}
             labels={labels}
             onSave={handleFormSave}
-            onCancel={() => setView("list")}
+            onCancel={() => {
+              setView("list");
+              setEditingConn(null);
+            }}
           />
+        ) : view === "settings" ? (
+          <Settings />
+        ) : view === "about" ? (
+          <About version={appVersion} onBack={() => setView("list")} />
+        ) : (
+          <Connections labels={labels} onEdit={handleEdit} />
         )}
       </Box>
       <Toaster />
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Root — SudoModal gate (macOS only), nothing else renders until authenticated
+// ---------------------------------------------------------------------------
+export default function App() {
+  const { sudoReady, authenticateSudo, keychainReady, requestKeychainAccess, helperStatusText, pollHelperStatus } = useStore();
+
+  const isMac = navigator.userAgent.includes("Mac");
+
+  // Poll helper status пока не ready (показывает "Ожидание сервиса (1/3)..." и т.д.)
+  useEffect(() => {
+    if (!isMac || (sudoReady && keychainReady)) return;
+    const interval = setInterval(pollHelperStatus, 1000);
+    return () => clearInterval(interval);
+  }, [isMac, sudoReady, keychainReady]);
+
+  const handleSudoAuth = async () => {
+    await authenticateSudo();
+  };
+
+  const handleKeychainAuth = async () => {
+    await requestKeychainAccess();
+  };
+
+  // Windows — сразу ready, без авторизации
+  const ready = isMac ? (sudoReady && keychainReady) : true;
+
+  return (
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      {isMac && !ready ? (
+        <SudoModal
+          sudoReady={sudoReady}
+          keychainReady={keychainReady}
+          helperStatusText={helperStatusText}
+          onAuthSudo={handleSudoAuth}
+          onAuthKeychain={handleKeychainAuth}
+        />
+      ) : (
+        <AppContent />
+      )}
     </ThemeProvider>
   );
 }

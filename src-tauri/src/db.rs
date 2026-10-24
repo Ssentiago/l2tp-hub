@@ -5,7 +5,6 @@ use crate::models::workspace::Workspace;
 use crate::store::Store;
 use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
 use std::path::PathBuf;
-use uuid::Uuid;
 
 pub async fn init_pool(db_path: &PathBuf) -> Result<SqlitePool, String> {
     if let Some(parent) = db_path.parent() {
@@ -13,7 +12,7 @@ pub async fn init_pool(db_path: &PathBuf) -> Result<SqlitePool, String> {
     }
 
     let pool = SqlitePoolOptions::new()
-        .max_connections(1)
+        .max_connections(4)
         .connect(&format!("sqlite://{}?mode=rwc", db_path.display()))
         .await
         .map_err(|e| format!("db connect: {}", e))?;
@@ -66,6 +65,8 @@ async fn create_tables(pool: &SqlitePool) -> Result<(), String> {
             connected_since INTEGER,
             last_connected_at INTEGER,
             last_disconnected_at INTEGER,
+            tunnel_mode TEXT NOT NULL DEFAULT 'full',
+            split_routes TEXT NOT NULL DEFAULT '[]',
             FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
         )",
     )
@@ -82,6 +83,15 @@ async fn create_tables(pool: &SqlitePool) -> Result<(), String> {
     .execute(pool)
     .await
     .map_err(|e| format!("create settings: {}", e))?;
+
+    // Миграция: добавляем колонки для split tunneling (если их нет)
+    // Игнорируем ошибку если колонка уже существует
+    let _ = sqlx::query("ALTER TABLE connections ADD COLUMN tunnel_mode TEXT NOT NULL DEFAULT 'full'")
+        .execute(pool)
+        .await;
+    let _ = sqlx::query("ALTER TABLE connections ADD COLUMN split_routes TEXT NOT NULL DEFAULT '[]'")
+        .execute(pool)
+        .await;
 
     Ok(())
 }
@@ -107,7 +117,7 @@ pub async fn load_store(pool: &SqlitePool) -> Result<Store, String> {
     let mut result_workspaces = Vec::new();
     for ws_row in &workspaces {
         let conns = sqlx::query_as::<_, ConnectionRow>(
-            "SELECT id, name, display_name, server, username, keychain_key, shared_secret_key, service_hash, labels, connect_count, connected_since, last_connected_at, last_disconnected_at FROM connections WHERE workspace_id = ?",
+            "SELECT id, name, display_name, server, username, keychain_key, shared_secret_key, service_hash, labels, connect_count, connected_since, last_connected_at, last_disconnected_at, tunnel_mode, split_routes FROM connections WHERE workspace_id = ?",
         )
         .bind(&ws_row.id)
         .fetch_all(pool)
@@ -128,7 +138,7 @@ pub async fn load_store(pool: &SqlitePool) -> Result<Store, String> {
                         serde_json::from_str(&c.labels).unwrap_or_default();
                     Connection {
                         id: c.id,
-                        name: c.name,
+                        service_name: c.name,
                         display_name: c.display_name,
                         server: c.server,
                         username: c.username,
@@ -140,6 +150,8 @@ pub async fn load_store(pool: &SqlitePool) -> Result<Store, String> {
                         connected_since: c.connected_since,
                         last_connected_at: c.last_connected_at,
                         last_disconnected_at: c.last_disconnected_at,
+                        tunnel_mode: c.tunnel_mode,
+                        split_routes: serde_json::from_str(&c.split_routes).unwrap_or_default(),
                     }
                 })
                 .collect(),
@@ -158,6 +170,25 @@ pub async fn load_store(pool: &SqlitePool) -> Result<Store, String> {
             .map(|w| w.id.clone())
             .unwrap_or_default()
     });
+
+    // Гарантируем что хотя бы один workspace существует
+    if result_workspaces.is_empty() {
+        let ws = Workspace::new("Основной");
+        let id = ws.id.clone();
+        result_workspaces.push(ws);
+        // Сохраняем дефолтный workspace в БД
+        let _ = sqlx::query("INSERT INTO workspaces (id, name, group_by) VALUES (?, ?, ?)")
+            .bind(&id)
+            .bind("Основной")
+            .bind("[]")
+            .execute(pool)
+            .await;
+        return Ok(Store {
+            workspaces: result_workspaces,
+            active_workspace_id: id,
+            labels,
+        });
+    }
 
     Ok(Store {
         workspaces: result_workspaces,
@@ -206,12 +237,13 @@ pub async fn save_store(pool: &SqlitePool, store: &Store) -> Result<(), String> 
 
         for conn in &ws.connections {
             let labels_json = serde_json::to_string(&conn.labels).unwrap_or_default();
+            let split_routes_json = serde_json::to_string(&conn.split_routes).unwrap_or_default();
             sqlx::query(
-                "INSERT INTO connections (id, workspace_id, name, display_name, server, username, keychain_key, shared_secret_key, service_hash, labels, connect_count, connected_since, last_connected_at, last_disconnected_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO connections (id, workspace_id, name, display_name, server, username, keychain_key, shared_secret_key, service_hash, labels, connect_count, connected_since, last_connected_at, last_disconnected_at, tunnel_mode, split_routes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             )
             .bind(&conn.id)
             .bind(&ws.id)
-            .bind(&conn.name)
+            .bind(&conn.service_name)
             .bind(&conn.display_name)
             .bind(&conn.server)
             .bind(&conn.username)
@@ -223,6 +255,8 @@ pub async fn save_store(pool: &SqlitePool, store: &Store) -> Result<(), String> 
             .bind(conn.connected_since)
             .bind(conn.last_connected_at)
             .bind(conn.last_disconnected_at)
+            .bind(&conn.tunnel_mode)
+            .bind(&split_routes_json)
             .execute(&mut *tx)
             .await
             .map_err(|e| format!("insert connection: {}", e))?;
@@ -254,7 +288,8 @@ pub async fn connections_for_workspace(
 ) -> Result<Vec<Connection>, String> {
     let rows = sqlx::query_as::<_, ConnectionRow>(
         "SELECT id, name, display_name, server, username, keychain_key, shared_secret_key, \
-         service_hash, labels, connect_count, connected_since, last_connected_at, last_disconnected_at \
+         service_hash, labels, connect_count, connected_since, last_connected_at, last_disconnected_at, \
+         tunnel_mode, split_routes \
          FROM connections WHERE workspace_id = ?",
     )
     .bind(ws_id)
@@ -269,7 +304,7 @@ pub async fn connections_for_workspace(
                 serde_json::from_str(&c.labels).unwrap_or_default();
             Connection {
                 id: c.id,
-                name: c.name,
+                service_name: c.name,
                 display_name: c.display_name,
                 server: c.server,
                 username: c.username,
@@ -281,6 +316,8 @@ pub async fn connections_for_workspace(
                 connected_since: c.connected_since,
                 last_connected_at: c.last_connected_at,
                 last_disconnected_at: c.last_disconnected_at,
+                tunnel_mode: c.tunnel_mode,
+                split_routes: serde_json::from_str(&c.split_routes).unwrap_or_default(),
             }
         })
         .collect())
@@ -375,6 +412,8 @@ struct ConnectionRow {
     connected_since: Option<i64>,
     last_connected_at: Option<i64>,
     last_disconnected_at: Option<i64>,
+    tunnel_mode: String,
+    split_routes: String,
 }
 
 #[derive(sqlx::FromRow)]

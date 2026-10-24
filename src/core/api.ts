@@ -3,6 +3,8 @@ import {
   Connection,
   ConnectionPayload,
   Label,
+  SessionMeta,
+  SessionLogs,
   VpnStatus,
   WorkspaceInfo,
 } from "../typing/definitions.ts";
@@ -24,13 +26,24 @@ export const api = {
     connect: (id: string) => invoke<void>("connect_vpn", { id }),
     disconnect: (id: string) => invoke<void>("disconnect_vpn", { id }),
     getStatus: (id: string) => invoke<VpnStatus>("get_vpn_status", { id }),
+    getAllStatuses: () => invoke<Record<string, VpnStatus>>("get_all_vpn_statuses"),
     check: (id: string) =>
       invoke<{ ping: boolean; ipsec: boolean }>("check_connection", { id }),
+    switchTunnelMode: (id: string, newMode: string) =>
+      invoke<void>("switch_tunnel_mode", { id, new_mode: newMode }),
+  },
+  logs: {
+    getHistory: (id: string) =>
+      invoke<SessionMeta[]>("get_connection_history", { id }),
+    getSession: (id: string, timestamp: number) =>
+      invoke<SessionLogs>("get_session_logs", { id, timestamp }),
   },
   sudo: {
-    authenticate: (password: string) =>
-      invoke<void>("authenticate_sudo", { password }),
+    authenticate: () =>
+      invoke<void>("authenticate_sudo"),
     checkSession: () => invoke<boolean>("check_sudo_session"),
+    checkHelper: () => invoke<boolean>("check_helper_status"),
+    getHelperStatusText: () => invoke<string>("get_helper_status_text"),
   },
   labels: {
     getAll: () => invoke<Label[]>("get_labels"),
@@ -40,6 +53,9 @@ export const api = {
   },
   app: {
     openUrl: (url: string) => invoke<void>("open_url", { url }),
+  },
+  system: {
+    checkKeychainAccess: () => invoke<boolean>("check_keychain_access"),
   },
   config: {
     import: (password: string) => invoke<boolean>("import", { password }),

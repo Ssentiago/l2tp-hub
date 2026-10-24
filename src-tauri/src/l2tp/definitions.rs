@@ -3,6 +3,7 @@
 pub enum VpnStatus {
     Connected,
     Connecting,
+    Reconnecting,
     Disconnected,
     Unknown,
 }

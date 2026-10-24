@@ -5,7 +5,8 @@ import {
 } from "../../../typing/definitions.ts";
 import { getDisplayTitle } from "../../../core/display";
 import React, { useCallback, useState, useEffect, useRef } from "react";
-import { Box, Chip, LinearProgress, TableCell, TableRow, Typography } from "@mui/material";
+import { Box, Chip, LinearProgress, TableCell, TableRow, Tooltip, Typography } from "@mui/material";
+import { ErrorOutlined } from "@mui/icons-material";
 import { ActionButtons } from "./ActionButtons.tsx";
 
 const STATUS_COLOR: Record<
@@ -14,12 +15,14 @@ const STATUS_COLOR: Record<
 > = {
   connected: "success",
   connecting: "warning",
+  reconnecting: "warning",
   disconnected: "default",
   unknown: "error"
 };
 export const STATUS_LABEL: Record<string, string> = {
   connected: "Подключён",
   connecting: "Подключение...",
+  reconnecting: "Восстановление...",
   disconnected: "Отключён",
   unknown: "Неизвестно"
 };
@@ -83,30 +86,36 @@ function LabelChips({
 
 export interface ConnectionRowProps {
   connection: ConnectionWithStatus;
+  allConnections?: ConnectionWithStatus[];
   labels: Label[];
   onConnect: (id: string) => void;
+  onConnectWithMode?: (id: string, mode: "full" | "split") => void;
   onDisconnect: (id: string) => void;
+  onSwitch: (id: string) => void;
+  onModeSwitch?: (id: string, mode: "full" | "split") => void;
   onEdit: (c: Connection) => void;
   onDelete: (id: string) => void;
-  hideCompanyLabel?: boolean;
+  onShowLogs?: (id: string) => void;
   connectingId: string | null;
   disconnectingId: string | null;
   deletingId: string | null;
-  anyActive: boolean;
 }
 
 export function ConnectionRow({
                                 connection: c,
+                                allConnections,
                                 labels,
                                 onConnect,
+                                onConnectWithMode,
                                 onDisconnect,
+                                onSwitch,
+                                onModeSwitch,
                                 onEdit,
                                 onDelete,
-                                hideCompanyLabel = false,
+                                onShowLogs,
                                 connectingId,
                                 disconnectingId,
                                 deletingId,
-                                anyActive
                               }: ConnectionRowProps) {
   const isBusy =
     connectingId === c.id ||
@@ -140,21 +149,39 @@ export function ConnectionRow({
   const onDoubleClick = useCallback(
     (e: React.MouseEvent) => {
       if ((e.target as HTMLElement).closest("button")) return;
-      console.log("[onDoubleClick] status=", c.status, "id=", c.id);
       switch (c.status) {
         case "connected":
           onDisconnect(c.id);
           break;
         case "disconnected":
         case "unknown":
-          onConnect(c.id);
+          {
+            const hasSplitRoutes = (c.split_routes?.length ?? 0) > 0;
+            const mode = (c.tunnel_mode === "split" && hasSplitRoutes) ? "split" : "full";
+            if (onConnectWithMode) {
+              onConnectWithMode(c.id, mode);
+            } else {
+              onConnect(c.id);
+            }
+          }
           break;
-        default:
-          console.log("[onDoubleClick] no action for status=", c.status);
       }
     },
-    [c.status, c.id, onDisconnect, onConnect]
+    [c.status, c.id, c.tunnel_mode, c.split_routes, onDisconnect, onConnect, onConnectWithMode]
   );
+
+  const [errorDismissed, setErrorDismissed] = useState(false);
+  const [errorKey, setErrorKey] = useState(0);
+
+  // Сброс dismissed при появлении новой ошибки
+  useEffect(() => {
+    if (c.error) {
+      setErrorDismissed(false);
+      setErrorKey((k) => k + 1);
+    }
+  }, [c.error]);
+
+  const isActive = c.status === "connected";
 
   return (
     <TableRow
@@ -163,6 +190,14 @@ export function ConnectionRow({
       sx={{
         opacity: isBusy ? 0.6 : 1,
         transition: "opacity 0.2s",
+        ...(isActive && {
+          bgcolor: "action.selected",
+          borderLeft: "3px solid",
+          borderLeftColor: "success.main",
+          "& .MuiTableCell-root": {
+            borderBottomColor: "success.dark",
+          },
+        }),
       }}
     >
       <TableCell sx={{ position: "relative" }}>
@@ -202,7 +237,58 @@ export function ConnectionRow({
               · {c.connect_count} подключ.
             </Typography>
           )}
+          {c.tunnel_mode === "split" && (
+            <Typography component="span" variant="caption" sx={{ fontSize: 10, ml: 0.5, color: "info.main", fontWeight: 500 }}>
+              · раздельный
+            </Typography>
+          )}
         </Typography>
+        {c.status === "disconnected" && c.error && !errorDismissed && (
+          <Tooltip
+            key={errorKey}
+            title={
+              <Box>
+                <Typography variant="body2" sx={{ fontWeight: 500, mb: 0.5 }}>
+                  Ошибка подключения
+                </Typography>
+                <Typography variant="caption" sx={{ opacity: 0.9 }}>
+                  {c.error}
+                </Typography>
+              </Box>
+            }
+            arrow
+            onClose={() => setErrorDismissed(true)}
+            slotProps={{
+              tooltip: { sx: { maxWidth: 320, bgcolor: "error.dark" } },
+            }}
+          >
+            <Box
+              component="span"
+              onMouseEnter={(e: React.MouseEvent) => {
+                (e.currentTarget as HTMLElement).style.animationPlayState = "paused";
+                (e.currentTarget as HTMLElement).style.transform = "scale(1.2)";
+              }}
+              onMouseLeave={(e: React.MouseEvent) => {
+                (e.currentTarget as HTMLElement).style.animationPlayState = "running";
+                (e.currentTarget as HTMLElement).style.transform = "scale(1)";
+              }}
+              sx={{
+                display: "inline-flex",
+                alignItems: "center",
+                ml: 0.5,
+                cursor: "pointer",
+                animation: "errorBounce 1.5s ease-in-out infinite",
+                transition: "transform 0.15s ease",
+                "@keyframes errorBounce": {
+                  "0%, 100%": { transform: "translateY(0)" },
+                  "50%": { transform: "translateY(-3px)" },
+                },
+              }}
+            >
+              <ErrorOutlined sx={{ fontSize: 16, color: "error.main" }} />
+            </Box>
+          </Tooltip>
+        )}
       </TableCell>
       <TableCell sx={{ width: 150, whiteSpace: "nowrap" }}>
         <Chip
@@ -219,14 +305,18 @@ export function ConnectionRow({
         <Box sx={{ display: "flex", gap: 0.5, justifyContent: "flex-end" }}>
           <ActionButtons
             connection={c}
+            allConnections={allConnections}
             onConnect={onConnect}
+            onConnectWithMode={onConnectWithMode}
             onDisconnect={onDisconnect}
+            onSwitch={onSwitch}
+            onModeSwitch={onModeSwitch}
             onEdit={onEdit}
             onDelete={onDelete}
+            onShowLogs={onShowLogs}
             connectingId={connectingId}
             disconnectingId={disconnectingId}
             deletingId={deletingId}
-            anyActive={anyActive}
           />
         </Box>
       </TableCell>

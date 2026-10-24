@@ -51,7 +51,7 @@ pub fn make_backup(store: &Store, password: &str) -> Result<Vec<u8>, String> {
 
             connections_export.push(ConnectionExport {
                 id: conn.id.clone(),
-                name: conn.name.clone(),
+                name: conn.service_name.clone(),
                 display_name: conn.display_name.clone(),
                 server: conn.server.clone(),
                 username: conn.username.clone(),
@@ -139,7 +139,7 @@ pub fn restore_backup(
 
         connections.push(Connection {
             id: exp.id,
-            name: exp.name,
+            service_name: exp.name,
             display_name: exp.display_name,
             server: exp.server,
             username: exp.username,

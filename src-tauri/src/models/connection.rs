@@ -1,9 +1,14 @@
 use serde::{Deserialize, Serialize};
 
+fn default_tunnel_mode() -> String {
+    "full".to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Connection {
     pub id: String,
-    pub name: String,
+    #[serde(alias = "name")]
+    pub service_name: String,
     #[serde(default)]
     pub display_name: String,
     pub server: String,
@@ -20,6 +25,12 @@ pub struct Connection {
     pub last_connected_at: Option<i64>,
     #[serde(default)]
     pub last_disconnected_at: Option<i64>,
+    /// Режим маршрутизации: "full" (весь трафик через VPN) или "split" (только корпоративные сети)
+    #[serde(default = "default_tunnel_mode")]
+    pub tunnel_mode: String,
+    /// Список подсетей для split-туннелинга (CIDR notation)
+    #[serde(default)]
+    pub split_routes: Vec<String>,
 }
 
 impl Connection {
