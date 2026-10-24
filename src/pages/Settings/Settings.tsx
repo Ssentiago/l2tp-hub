@@ -31,6 +31,7 @@ import {
 } from "@mui/icons-material";
 import { api } from "../../core/api";
 import type { UpdateInfo } from "../../core/api";
+import { getVersion } from "@tauri-apps/api/app";
 import { open } from "@tauri-apps/plugin-dialog";
 import toast from "react-hot-toast";
 
@@ -179,7 +180,6 @@ export function Settings() {
     setUpdateChecking(true);
     setUpdateError(null);
     try {
-      const { getVersion } = await import("@tauri-apps/api/app");
       const version = await getVersion();
       const update = await api.update.check(version);
       if (update) {

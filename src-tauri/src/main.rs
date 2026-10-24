@@ -4,6 +4,7 @@ use crate::logger::Logger;
 use fix_path_env;
 use std::sync::Arc;
 use tauri::{Emitter, Manager};
+use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
 
 pub mod backup;
 pub mod commands;
@@ -39,6 +40,14 @@ fn main() {
     state::cleanup_all_vpn_state();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .on_window_event(|window, event| {
+            // Красная кнопка = скрыть окно, не закрывать
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
+            }
+        })
         .setup(|app| {
             let logger = Arc::new(logger::Logger::new(app.handle().clone()));
             LOGGER.set(logger).ok();
@@ -70,6 +79,32 @@ fn main() {
                 .expect("Main window not found");
 
             state::init_state(app.handle().clone(), window);
+
+            // Глобальный хоткей ⌃⌥L — показать/скрыть окно
+            let shortcut = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyL);
+            let shortcut_app = app.handle().clone();
+            let _ = app.global_shortcut().on_shortcut(shortcut, move |_app, _shortcut, event| {
+                if event.state == tauri_plugin_global_shortcut::ShortcutState::Pressed {
+                    if let Some(window) = shortcut_app.get_webview_window("main") {
+                        if window.is_visible().unwrap_or(false) {
+                            let _ = window.hide();
+                        } else {
+                            // Центрируем на экране с курсором при показе
+                            if let Some(monitor) = window.current_monitor().ok().flatten() {
+                                let screen = monitor.size();
+                                let win = window.outer_size().unwrap_or(*screen);
+                                let x = (screen.width.saturating_sub(win.width)) / 2;
+                                let y = (screen.height.saturating_sub(win.height)) / 2;
+                                let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
+                            }
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                            // Уведомляем фронт — очистить поиск и фокус на поле
+                            let _ = shortcut_app.emit("app-shown", ());
+                        }
+                    }
+                }
+            });
 
             // Sleep/Wake — проверяем VPN после пробуждения
             let wake_app = app.handle().clone();
@@ -113,6 +148,7 @@ fn main() {
             commands::check_update,
             commands::apply_update,
             commands::check_keychain_access,
+            commands::quit_app,
             commands::get_workspaces,
             commands::get_active_workspace_id,
             commands::create_workspace,

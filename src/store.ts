@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { listen } from "@tauri-apps/api/event";
+import { getVersion } from "@tauri-apps/api/app";
 import { api } from "./core/api";
 import type {
   ConnectionWithStatus,
@@ -10,6 +11,16 @@ import type {
 } from "./typing/definitions";
 
 interface Store {
+  // UI mode
+  viewMode: "palette" | "manage";
+  setViewMode: (mode: "palette" | "manage") => void;
+  selectedKey: string | null;
+  setSelectedKey: (key: string | null) => void;
+  query: string;
+  setQuery: (q: string) => void;
+  groupByCompany: boolean;
+  toggleGroupByCompany: () => void;
+
   labels: Label[];
   loadLabels: () => Promise<void>;
   saveLabel: (id: string, name: string) => Promise<void>;
@@ -57,6 +68,15 @@ interface Store {
 let vpnEventUnlisten: (() => void) | null = null;
 
 export const useStore = create<Store>((set, get) => ({
+  viewMode: "palette",
+  setViewMode: (mode) => set({ viewMode: mode }),
+  selectedKey: null,
+  setSelectedKey: (key) => set({ selectedKey: key }),
+  query: "",
+  setQuery: (q) => set({ query: q }),
+  groupByCompany: false,
+  toggleGroupByCompany: () => set((s) => ({ groupByCompany: !s.groupByCompany })),
+
   labels: [],
   loadLabels: async () => {
     const labels = await api.labels.getAll();
@@ -155,7 +175,6 @@ export const useStore = create<Store>((set, get) => ({
 
   appVersion: "...",
   loadAppVersion: async () => {
-    const { getVersion } = await import("@tauri-apps/api/app");
     const version = await getVersion();
     set({ appVersion: version });
   },

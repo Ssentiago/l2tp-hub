@@ -1,37 +1,22 @@
-import { useState, useEffect } from "react";
+import { useEffect, useCallback, useState } from "react";
 import {
-  AppBar,
-  Toolbar,
-  Typography,
-  Button,
   Box,
   CssBaseline,
   ThemeProvider,
   createTheme,
   IconButton,
-  Tooltip,
 } from "@mui/material";
-import {
-  Add,
-  ArrowBack,
-  Settings as SettingsIcon,
-  Info,
-  Terminal,
-  CheckCircle,
-  Error as ErrorIcon,
-} from "@mui/icons-material";
-import { ConnectionForm } from "./pages/ConnectionForm/ConnectionForm";
+import { Close } from "@mui/icons-material";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { listen } from "@tauri-apps/api/event";
+import { PaletteView } from "./ui/PaletteView";
+import { ManageView } from "./ui/ManageView";
 import { Settings } from "./pages/Settings/Settings";
-import { About } from "./pages/About/About";
-import { LogDrawer } from "./components/LogDrawer";
-import { WorkspaceSelector } from "./components/WorkspaceSelector";
-import { Connections } from "./pages/Connections/Connections";
 import { SudoModal } from "./pages/Connections/components/SudoModal";
+import { LogDrawer } from "./components/LogDrawer";
 import { useStore } from "./store";
-import type { Connection } from "./typing/definitions";
+import { api } from "./core/api";
 import { Toaster } from "react-hot-toast";
-
-type View = "list" | "form" | "settings" | "about";
 
 const theme = createTheme({
   palette: {
@@ -44,174 +29,208 @@ const theme = createTheme({
     MuiCssBaseline: {
       styleOverrides: {
         "*": { userSelect: "none" },
+        "input, textarea": { userSelect: "text" },
       },
     },
   },
 });
 
-// ---------------------------------------------------------------------------
-// Main app — only mounts AFTER sudo is authenticated
-// ---------------------------------------------------------------------------
 function AppContent() {
-  const [view, setView] = useState<View>("list");
-  const [editingConn, setEditingConn] = useState<Connection | null>(null);
-  const [showLog, setShowLog] = useState(false);
-
   const {
-    labels,
-    loadLabels,
+    viewMode,
+    setViewMode,
+    selectedKey,
+    setSelectedKey,
+    query,
+    setQuery,
+    connections,
+    connectVpn,
+    disconnectVpn,
+    deleteConnection,
     loadConnections,
-    appVersion,
-    loadAppVersion,
+    loadLabels,
     loadWorkspaces,
     initVpnEventListener,
-    helperReady,
     checkHelper,
   } = useStore();
 
+  const [showSettings, setShowSettings] = useState(false);
+  const [showLog, setShowLog] = useState(false);
+
   useEffect(() => {
     initVpnEventListener();
-    loadAppVersion();
     loadLabels();
     loadWorkspaces();
+    loadConnections();
     checkHelper();
-    // Poll helper status каждые 5 сек
-    const interval = setInterval(checkHelper, 5000);
-    return () => clearInterval(interval);
+    const iv = setInterval(checkHelper, 5000);
+    // При показе окна — очистить поиск
+    const unlisten = listen("app-shown", () => {
+      setQuery("");
+      setViewMode("palette");
+    });
+    return () => {
+      clearInterval(iv);
+      unlisten.then((f) => f());
+    };
   }, []);
 
-  const handleEdit = (conn: Connection) => {
-    setEditingConn(conn);
-    setView("form");
-  };
+  // Global keyboard shortcuts
+  const handleGlobalKey = useCallback(
+    (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey;
 
-  const handleFormSave = async () => {
-    await loadLabels();
-    await loadConnections();
-    setView("list");
-    setEditingConn(null);
-  };
+      // Esc
+      if (e.key === "Escape") {
+        e.preventDefault();
+        if (viewMode === "manage") {
+          setViewMode("palette");
+          setQuery("");
+        } else {
+          if (query) {
+            setQuery("");
+          } else {
+            getCurrentWindow().hide();
+          }
+        }
+        return;
+      }
+
+      // ⌘Q — quit
+      if (mod && e.key === "q") {
+        e.preventDefault();
+        api.system.quitApp();
+        return;
+      }
+
+      // ⌘, — settings
+      if (mod && e.key === ",") {
+        e.preventDefault();
+        setShowSettings(true);
+        return;
+      }
+
+      // ⌘N — new connection
+      if (mod && e.key === "n") {
+        e.preventDefault();
+        setSelectedKey(null);
+        setViewMode("manage");
+        return;
+      }
+
+      // ⌘E — edit selected
+      if (mod && e.key === "e") {
+        e.preventDefault();
+        if (selectedKey) setViewMode("manage");
+        return;
+      }
+
+      // ⌘D — disconnect active
+      if (mod && e.key === "d") {
+        e.preventDefault();
+        const active = connections.find((c) => c.status === "connected");
+        if (active) disconnectVpn(active.id);
+        return;
+      }
+
+      // ⌘⌫ — delete selected
+      if (mod && (e.key === "Backspace" || e.key === "Delete")) {
+        e.preventDefault();
+        if (selectedKey) {
+          const connId = selectedKey.split(":").slice(1).join(":");
+          if (confirm("Удалить подключение?")) {
+            deleteConnection(connId);
+            setSelectedKey(null);
+          }
+        }
+        return;
+      }
+
+      // ⌘1…⌘9 — switch workspace
+      if (mod && e.key >= "1" && e.key <= "9") {
+        e.preventDefault();
+        const idx = parseInt(e.key) - 1;
+        const { workspaces, switchWorkspace } = useStore.getState();
+        if (idx < workspaces.length) switchWorkspace(workspaces[idx].id);
+        return;
+      }
+    },
+    [viewMode, query, selectedKey, connections, setViewMode, setQuery, setSelectedKey, disconnectVpn, deleteConnection],
+  );
+
+  useEffect(() => {
+    window.addEventListener("keydown", handleGlobalKey);
+    return () => window.removeEventListener("keydown", handleGlobalKey);
+  }, [handleGlobalKey]);
 
   return (
-    <>
-      <LogDrawer open={showLog} onClose={() => setShowLog(false)} />
-
-      <AppBar
-        position="static"
-        elevation={0}
-        sx={{ borderBottom: "1px solid", borderColor: "divider" }}
-      >
-        <Toolbar>
-          {view !== "list" ? (
-            <Button
-              variant="outlined"
-              startIcon={<ArrowBack />}
-              onClick={() => setView("list")}
-              sx={{ mr: 2 }}
-            >
-              Назад
-            </Button>
-          ) : (
-            <WorkspaceSelector />
-          )}
-
-          <Box sx={{ flexGrow: 1 }} />
-
-          {view === "list" && (
-            <>
-              <Tooltip title={helperReady ? "Сервис активен" : "Сервис не отвечает"}>
-                <Box sx={{ display: "flex", alignItems: "center", mr: 1 }}>
-                  {helperReady ? (
-                    <CheckCircle fontSize="small" color="success" />
-                  ) : (
-                    <ErrorIcon fontSize="small" color="error" />
-                  )}
-                </Box>
-              </Tooltip>
-              <Tooltip title="Лог / отладка">
-                <IconButton color="inherit" onClick={() => setShowLog(true)} aria-label="Лог / отладка">
-                  <Terminal />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="О приложении">
-                <IconButton color="inherit" onClick={() => setView("about")} aria-label="О приложении">
-                  <Info />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Настройки">
-                <IconButton
-                  color="inherit"
-                  onClick={() => setView("settings")}
-                  sx={{ mr: 1 }}
-                  aria-label="Настройки"
-                >
-                  <SettingsIcon />
-                </IconButton>
-              </Tooltip>
-              <Button
-                variant="contained"
-                startIcon={<Add />}
-                onClick={() => {
-                  setEditingConn(null);
-                  setView("form");
-                }}
-              >
-                Добавить
-              </Button>
-            </>
-          )}
-        </Toolbar>
-      </AppBar>
-
-      <Box component="main" sx={{ p: 2 }}>
-        {view === "form" ? (
-          <ConnectionForm
-            initialConnection={editingConn}
-            labels={labels}
-            onSave={handleFormSave}
-            onCancel={() => {
-              setView("list");
-              setEditingConn(null);
-            }}
-          />
-        ) : view === "settings" ? (
-          <Settings />
-        ) : view === "about" ? (
-          <About version={appVersion} onBack={() => setView("list")} />
-        ) : (
-          <Connections labels={labels} onEdit={handleEdit} />
-        )}
+    <Box sx={{ height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <Box sx={{ flex: 1, overflow: "hidden" }}>
+        {viewMode === "palette" ? <PaletteView /> : <ManageView />}
       </Box>
+      {/* Settings overlay */}
+      {showSettings && (
+        <Box
+          sx={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 100,
+            bgcolor: "rgba(0,0,0,0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "flex-start",
+            pt: 4,
+          }}
+          onClick={() => setShowSettings(false)}
+        >
+          <Box
+            sx={{
+              bgcolor: "background.paper",
+              borderRadius: 2,
+              width: "90%",
+              maxWidth: 700,
+              maxHeight: "85vh",
+              overflow: "auto",
+              position: "relative",
+              p: 3,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <IconButton
+              sx={{ position: "absolute", top: 8, right: 8 }}
+              onClick={() => setShowSettings(false)}
+            >
+              <Close />
+            </IconButton>
+            <Settings />
+          </Box>
+        </Box>
+      )}
+      <LogDrawer open={showLog} onClose={() => setShowLog(false)} />
       <Toaster />
-    </>
+    </Box>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Root — SudoModal gate (macOS only), nothing else renders until authenticated
-// ---------------------------------------------------------------------------
 export default function App() {
-  const { sudoReady, authenticateSudo, keychainReady, requestKeychainAccess, helperStatusText, pollHelperStatus } = useStore();
+  const {
+    sudoReady,
+    authenticateSudo,
+    keychainReady,
+    requestKeychainAccess,
+    helperStatusText,
+    pollHelperStatus,
+  } = useStore();
 
   const isMac = navigator.userAgent.includes("Mac");
 
-  // Poll helper status пока не ready (показывает "Ожидание сервиса (1/3)..." и т.д.)
   useEffect(() => {
     if (!isMac || (sudoReady && keychainReady)) return;
-    const interval = setInterval(pollHelperStatus, 1000);
-    return () => clearInterval(interval);
+    const iv = setInterval(pollHelperStatus, 1000);
+    return () => clearInterval(iv);
   }, [isMac, sudoReady, keychainReady]);
 
-  const handleSudoAuth = async () => {
-    await authenticateSudo();
-  };
-
-  const handleKeychainAuth = async () => {
-    await requestKeychainAccess();
-  };
-
-  // Windows — сразу ready, без авторизации
-  const ready = isMac ? (sudoReady && keychainReady) : true;
+  const ready = isMac ? sudoReady && keychainReady : true;
 
   return (
     <ThemeProvider theme={theme}>
@@ -221,8 +240,8 @@ export default function App() {
           sudoReady={sudoReady}
           keychainReady={keychainReady}
           helperStatusText={helperStatusText}
-          onAuthSudo={handleSudoAuth}
-          onAuthKeychain={handleKeychainAuth}
+          onAuthSudo={authenticateSudo}
+          onAuthKeychain={requestKeychainAccess}
         />
       ) : (
         <AppContent />

@@ -56,6 +56,7 @@ export const api = {
   },
   system: {
     checkKeychainAccess: () => invoke<boolean>("check_keychain_access"),
+    quitApp: () => invoke<void>("quit_app"),
   },
   config: {
     import: (password: string) => invoke<boolean>("import", { password }),
