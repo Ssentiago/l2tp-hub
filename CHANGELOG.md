@@ -1,3 +1,11 @@
+## [1.0.0] - 2026-10-25
+
+### Features
+- extract VPN core into l2tp-hub-core library ([`5d8646f`](https://github.com/Ssentiago/l2tp-hub/commit/5d8646f192d6d39162cf16f66713ff066064ec38))
+- replace table UI with Palette + Manage views ([`19e633a`](https://github.com/Ssentiago/l2tp-hub/commit/19e633ae53debf2ac4f24f52f7bb426cc5dfa106))
+- remove system tray icon entirely ([`e7fedce`](https://github.com/Ssentiago/l2tp-hub/commit/e7fedce59281441a591704a6046e80b06b9e9caf))
+- userspace L2TP/IPSec — multi-connection, split tunnel, sleep/wake, async store ([`b33eb17`](https://github.com/Ssentiago/l2tp-hub/commit/b33eb1784d2d817b1b2be5604c32052c723582ac))
+
 ## [0.8.0] - 2026-08-13
 
 ### Features
