@@ -1,6 +1,6 @@
 [package]
 name = "l2tp-hub"
-version = "0.8.0"
+version = "1.0.0"
 description = "A l2tp manager"
 authors = ["Sentiago"]
 edition = "2024"
@@ -10,7 +10,6 @@ version = "2"
 features = []
 
 [dependencies]
-l2tp-hub-core = { path = "../l2tp-hub-core" }
 serde_json = "1"
 open = "5.3.4"
 rand = "0.8.6"
@@ -22,6 +21,9 @@ tokio = "1.52.2"
 aes-gcm = "0.10"
 secrecy = "0.8"
 tauri-plugin-global-shortcut = "2"
+
+[dependencies.l2tp-hub-core]
+path = "../l2tp-hub-core"
 
 [dependencies.sqlx]
 version = "0.9.0"
