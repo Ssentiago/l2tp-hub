@@ -5,7 +5,6 @@ pub mod labels;
 pub mod sudo;
 pub mod system;
 pub mod update;
-pub mod utils;
 pub mod vpn;
 pub mod workspace;
 

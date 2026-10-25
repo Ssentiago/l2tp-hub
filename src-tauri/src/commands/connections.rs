@@ -1,13 +1,15 @@
 use crate::l2tp;
 use crate::models::connection::Connection;
 use crate::models::connection_payload::ConnectionPayload;
+#[cfg(target_os = "macos")]
 use crate::sudo::SudoSession;
 use crate::{keychain, log, store};
+#[cfg(target_os = "macos")]
 use tauri::State;
 use uuid::Uuid;
 
 #[tauri::command]
-pub async fn get_connections(_app_handle: tauri::AppHandle) -> Vec<Connection> {
+pub async fn get_connections(__app_handle: tauri::AppHandle) -> Vec<Connection> {
     log!("[get_connections] called");
     let pool = crate::DB_POOL.get().expect("DB pool not initialized");
     let ws_id = crate::db::active_workspace_id(pool).await.unwrap_or_default();
@@ -21,11 +23,11 @@ pub async fn get_connections(_app_handle: tauri::AppHandle) -> Vec<Connection> {
 
 #[tauri::command]
 pub async fn save_connection(
-    app_handle: tauri::AppHandle,
+    _app_handle: tauri::AppHandle,
     input: ConnectionPayload,
 ) -> Result<Connection, String> {
     log!("[save_connection] called, id={:?}", input.id);
-    let mut store = store::load(app_handle.config()).await;
+    let mut store = store::load(&crate::DB_POOL.get().expect("pool")).await;
 
     let id = input
         .id
@@ -84,7 +86,7 @@ pub async fn save_connection(
         ws.connections.push(conn.clone());
     }
 
-    store::save(&store).await?;
+    store::save(&crate::DB_POOL.get().expect("pool"), &store).await?;
     log!("[save_connection] success");
     Ok(conn)
 }
@@ -92,13 +94,13 @@ pub async fn save_connection(
 #[tauri::command]
 #[cfg(target_os = "macos")]
 pub async fn delete_connection(
-    app_handle: tauri::AppHandle,
+    _app_handle: tauri::AppHandle,
     id: String,
     sudo: State<'_, SudoSession>,
 ) -> Result<(), String> {
     log!("[delete_connection] (macos) called for id={}", id);
     let sudo = sudo.inner().clone();
-    let mut store = store::load(app_handle.config()).await;
+    let mut store = store::load(&crate::DB_POOL.get().expect("pool")).await;
     let ws = store.active_workspace_mut();
     if let Some(conn) = ws.connections.iter().find(|c| c.id == id) {
         let _ = keychain::delete_password(&conn.keychain_key);
@@ -106,15 +108,15 @@ pub async fn delete_connection(
         let _ = l2tp::delete_vpn_service(&sudo, &conn.service_name);
     }
     ws.connections.retain(|c| c.id != id);
-    store::save(&store).await?;
+    store::save(&crate::DB_POOL.get().expect("pool"), &store).await?;
     Ok(())
 }
 
 #[tauri::command]
 #[cfg(target_os = "windows")]
-pub async fn delete_connection(app_handle: tauri::AppHandle, id: String) -> Result<(), String> {
+pub async fn delete_connection(_app_handle: tauri::AppHandle, id: String) -> Result<(), String> {
     log!("[delete_connection] (windows) called for id={}", id);
-    let mut store = store::load(app_handle.config()).await;
+    let mut store = store::load(&crate::DB_POOL.get().expect("pool")).await;
     let ws = store.active_workspace_mut();
     if let Some(conn) = ws.connections.iter().find(|c| c.id == id) {
         let _ = keychain::delete_password(&conn.keychain_key);
@@ -122,6 +124,6 @@ pub async fn delete_connection(app_handle: tauri::AppHandle, id: String) -> Resu
         let _ = l2tp::delete_vpn_service(&conn.service_name);
     }
     ws.connections.retain(|c| c.id != id);
-    store::save(&store).await?;
+    store::save(&crate::DB_POOL.get().expect("pool"), &store).await?;
     Ok(())
 }

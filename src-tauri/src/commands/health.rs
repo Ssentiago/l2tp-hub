@@ -68,13 +68,11 @@ fn ike_probe(server: &str) -> Result<bool, String> {
 }
 
 #[tauri::command]
-pub async fn check_connection(app_handle: tauri::AppHandle, id: String, #[cfg(target_os = "macos")] sudo: tauri::State<'_, crate::sudo::SudoSession>) -> Result<HealthResult, String> {
+pub async fn check_connection(app_handle: tauri::AppHandle, id: String) -> Result<HealthResult, String> {
     log!("[health] check_connection called for id={}", id);
 
-    #[cfg(target_os = "macos")]
-    let _sudo_clone = sudo.inner().clone();
-    let app_clone = app_handle.clone();
-    let store = store::load(app_clone.config()).await;
+    let _app_clone = app_handle.clone();
+    let store = store::load(&crate::DB_POOL.get().expect("pool")).await;
     let conn = store
         .workspaces
         .iter()

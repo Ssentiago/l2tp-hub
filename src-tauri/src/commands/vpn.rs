@@ -24,7 +24,7 @@ pub async fn connect_vpn(
     match &result {
         Ok(()) => {
             // Читаем connected_since из store для фронта
-            let store = store::load(app.config()).await;
+            let store = store::load(&crate::DB_POOL.get().expect("pool")).await;
             let connected_since = store.workspaces.iter()
                 .flat_map(|ws| ws.connections.iter())
                 .find(|c| c.id == id)
@@ -61,7 +61,7 @@ pub async fn connect_vpn(
         Err(e) => {
             log!("[connect_vpn] failed: {}, emitting disconnected event", e);
             // Сохраняем логи неудачного подключения
-            let store = store::load(app.config()).await;
+            let store = store::load(&crate::DB_POOL.get().expect("pool")).await;
             if let Some(conn) = store.workspaces.iter()
                 .flat_map(|ws| ws.connections.iter())
                 .find(|c| c.id == id)
@@ -104,7 +104,7 @@ pub async fn disconnect_vpn(
     let active_ids = manager.active_connections();
     if !active_ids.is_empty() {
         log!("[disconnect_vpn] re-emitting connected for {} remaining connections", active_ids.len());
-        let store = store::load(app.config()).await;
+        let store = store::load(&crate::DB_POOL.get().expect("pool")).await;
         for active_id in &active_ids {
             let active_since = store.workspaces.iter()
                 .flat_map(|ws| ws.connections.iter())
@@ -126,56 +126,46 @@ pub async fn disconnect_vpn(
 
 #[tauri::command]
 #[cfg(target_os = "windows")]
-pub async fn connect_vpn(app_handle: tauri::AppHandle, id: String) -> Result<(), String> {
-    log!("[connect_vpn] (windows) called for id={}", id);
-    let app_clone = app_handle.clone();
-    tokio::task::spawn_blocking(move || {
-        let mut store = store::load(app_clone.config());
-        let conn = store
-            .workspaces
-            .iter()
-            .flat_map(|ws| ws.connections.iter())
-            .find(|c| c.id == id)
-            .ok_or("Подключение не найдено")?
-            .clone();
-
-        let password = crate::keychain::get_password(&conn.keychain_key)?;
-        let shared_secret = crate::keychain::get_password(&conn.shared_secret_key)?;
-
-        l2tp::create_vpn_service(
-            &conn.service_name,
-            &conn.server,
-            &conn.username,
-            &password,
-            &shared_secret,
-        )?;
-
-        l2tp::connect_vpn(&conn.service_name, &conn.username, &password)?;
-        Ok(())
-    })
-    .await
-    .map_err(|e| e.to_string())?
+pub async fn connect_vpn(
+    app_handle: tauri::AppHandle,
+    id: String,
+    manager: State<'_, L2tpManager>,
+) -> Result<(), String> {
+    log!("[connect_vpn] (windows) id={}", id);
+    let manager = manager.inner().clone();
+    let result = manager.connect(&id).await;
+    match &result {
+        Ok(()) => {
+            log!("[connect_vpn] success, emitting connected event");
+            let _ = app_handle.emit("vpn-status-changed", serde_json::json!({
+                "id": id,
+                "status": "connected"
+            }));
+        }
+        Err(e) => {
+            log!("[connect_vpn] failed: {}, emitting disconnected event", e);
+            let _ = app_handle.emit("vpn-status-changed", serde_json::json!({
+                "id": id,
+                "status": "disconnected",
+                "error": e
+            }));
+        }
+    }
+    result
 }
 
 #[tauri::command]
 #[cfg(target_os = "windows")]
-pub async fn disconnect_vpn(id: String, app_handle: tauri::AppHandle) -> Result<(), String> {
+pub async fn disconnect_vpn(
+    app_handle: tauri::AppHandle,
+    id: String,
+    manager: State<'_, L2tpManager>,
+) -> Result<(), String> {
     log!("[disconnect_vpn] (windows) id={}", id);
-    let app_clone = app_handle.clone();
-    tokio::task::spawn_blocking(move || {
-        let store = store::load(app_clone.config());
-        let conn = store
-            .workspaces
-            .iter()
-            .flat_map(|ws| ws.connections.iter())
-            .find(|c| c.id == id)
-            .ok_or("Подключение не найдено")?
-            .clone();
-        l2tp::disconnect_vpn(&conn.service_name)?;
-        Ok(())
-    })
-    .await
-    .map_err(|e| e.to_string())?
+    let manager = manager.inner().clone();
+    let result = manager.disconnect(&id).await;
+    let _ = app_handle.emit("vpn-status-changed", serde_json::json!({ "id": id, "status": "disconnected" }));
+    result
 }
 
 // ---------------------------------------------------------------------------
@@ -188,7 +178,7 @@ pub async fn get_vpn_status(
     manager: State<'_, L2tpManager>,
 ) -> Result<VpnStatus, String> {
     let manager = manager.inner().clone();
-    let store = store::load(manager.app_config()).await;
+    let store = store::load(&crate::DB_POOL.get().expect("pool")).await;
     let has_conn = store.workspaces.iter()
         .flat_map(|ws| ws.connections.iter())
         .any(|c| c.id == id);
@@ -221,7 +211,7 @@ pub async fn switch_tunnel_mode(
     log!("[switch_tunnel_mode] id={}, new_mode={}", id, new_mode);
     let manager = manager.inner().clone();
 
-    let store = store::load(manager.app_config()).await;
+    let store = store::load(&crate::DB_POOL.get().expect("pool")).await;
     let conn = store.workspaces.iter()
         .flat_map(|ws| ws.connections.iter())
         .find(|c| c.id == id)
@@ -233,7 +223,7 @@ pub async fn switch_tunnel_mode(
         return Err("Подключение не активно".to_string());
     }
 
-    let sudo = manager.sudo();
+    let sudo = manager.executor();
     let original_gw = crate::l2tp::get_default_gateway()?;
     let (original_iface, _) = crate::l2tp::macos::capture_physical_route()
         .unwrap_or_else(|_| (String::new(), original_gw.clone()));
@@ -249,13 +239,13 @@ pub async fn switch_tunnel_mode(
     )?;
 
     // Обновляем tunnel_mode в store
-    let mut store = store::load(manager.app_config()).await;
+    let mut store = store::load(&crate::DB_POOL.get().expect("pool")).await;
     for ws in &mut store.workspaces {
         if let Some(c) = ws.connections.iter_mut().find(|c| c.id == id) {
             c.tunnel_mode = new_mode.clone();
         }
     }
-    store::save(&store).await?;
+    store::save(&crate::DB_POOL.get().expect("pool"), &store).await?;
 
     Ok(())
 }

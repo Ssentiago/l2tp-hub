@@ -1,8 +1,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::process::Command;
 
-use crate::log;
-use crate::sudo::SudoSession;
+use crate::executor::PrivilegedExecutor;
 
 use super::paths::{guardian_bin, guardian_plist_resource, plist_path, GUARDIAN_LABEL};
 
@@ -11,44 +10,44 @@ static HEARTBEAT_RUNNING: AtomicBool = AtomicBool::new(false);
 
 /// Установить guardian LaunchDaemon (один раз, как helper).
 /// Вызывается при первом запуске или обновлении.
-pub fn install_guardian_daemon(sudo: &SudoSession) -> Result<(), String> {
+pub fn install_guardian_daemon(sudo: &dyn PrivilegedExecutor) -> Result<(), String> {
     let bin = guardian_bin();
     if !bin.exists() {
         return Err(format!("guardian binary not found at {}", bin.display()));
     }
 
     let dest_bin = "/Library/PrivilegedHelperTools/l2tp-hub-guardian";
-    sudo.run_sudo(&["cp", &bin.to_string_lossy(), dest_bin])?;
-    sudo.run_sudo(&["chmod", "555", dest_bin])?;
-    sudo.run_sudo(&["chown", "root:wheel", dest_bin])?;
+    sudo.run(&["cp", &bin.to_string_lossy(), dest_bin])?;
+    sudo.run(&["chmod", "555", dest_bin])?;
+    sudo.run(&["chown", "root:wheel", dest_bin])?;
 
     let plist_src = guardian_plist_resource();
     let plist_dst = plist_path(GUARDIAN_LABEL);
-    sudo.run_sudo(&["cp", &plist_src.to_string_lossy(), &plist_dst.to_string_lossy()])?;
-    sudo.run_sudo(&["chmod", "644", &plist_dst.to_string_lossy()])?;
-    sudo.run_sudo(&["chown", "root:wheel", &plist_dst.to_string_lossy()])?;
+    sudo.run(&["cp", &plist_src.to_string_lossy(), &plist_dst.to_string_lossy()])?;
+    sudo.run(&["chmod", "644", &plist_dst.to_string_lossy()])?;
+    sudo.run(&["chown", "root:wheel", &plist_dst.to_string_lossy()])?;
 
-    let _ = sudo.run_sudo(&["launchctl", "bootout", &format!("system/{}", GUARDIAN_LABEL)]);
+    let _ = sudo.run(&["launchctl", "bootout", &format!("system/{}", GUARDIAN_LABEL)]);
     std::thread::sleep(std::time::Duration::from_millis(500));
 
-    sudo.run_sudo(&["launchctl", "bootstrap", "system", &plist_dst.to_string_lossy()])?;
-    log!("[guardian] daemon installed and bootstrapped");
+    sudo.run(&["launchctl", "bootstrap", "system", &plist_dst.to_string_lossy()])?;
+    log::debug!("[guardian] daemon installed and bootstrapped");
     Ok(())
 }
 
 /// Активировать мониторинг guardian — шлём set_state через socket
 pub fn activate_guardian(server: &str, iface: &str, gateway: &str, tunnel_mode: &str, split_routes: &[String]) {
     match crate::guardian::set_state(server, iface, gateway, tunnel_mode, split_routes) {
-        Ok(resp) => log!("[guardian] set_state: ok, mode={:?}", resp.mode),
-        Err(e) => log!("[guardian] WARNING: set_state failed: {}", e),
+        Ok(resp) => log::debug!("[guardian] set_state: ok, mode={:?}", resp.mode),
+        Err(e) => log::debug!("[guardian] WARNING: set_state failed: {}", e),
     }
 }
 
 /// Деактивировать мониторинг guardian — шлём clear_state через socket
 pub fn deactivate_guardian() {
     match crate::guardian::clear_state() {
-        Ok(_) => log!("[guardian] clear_state: ok"),
-        Err(e) => log!("[guardian] WARNING: clear_state failed: {}", e),
+        Ok(_) => log::debug!("[guardian] clear_state: ok"),
+        Err(e) => log::debug!("[guardian] WARNING: clear_state failed: {}", e),
     }
 }
 
@@ -56,19 +55,19 @@ pub fn deactivate_guardian() {
 pub fn start_heartbeat_thread() {
     HEARTBEAT_RUNNING.store(true, Ordering::SeqCst);
     std::thread::spawn(|| {
-        log!("[heartbeat] thread started");
+        log::debug!("[heartbeat] thread started");
         while HEARTBEAT_RUNNING.load(Ordering::SeqCst) {
             match crate::guardian::heartbeat() {
                 Ok(resp) => {
                     if let Some(false) = resp.vpn_alive {
-                        log!("[heartbeat] guardian reports VPN dead!");
+                        log::debug!("[heartbeat] guardian reports VPN dead!");
                     }
                 }
                 Err(_) => {}
             }
             std::thread::sleep(std::time::Duration::from_secs(3));
         }
-        log!("[heartbeat] thread stopped");
+        log::debug!("[heartbeat] thread stopped");
     });
 }
 

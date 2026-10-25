@@ -1,6 +1,10 @@
+#[cfg(target_os = "macos")]
 use crate::helper;
+#[cfg(target_os = "macos")]
 use crate::log;
+#[cfg(target_os = "macos")]
 use crate::sudo::SudoSession;
+#[cfg(target_os = "macos")]
 use tauri::State;
 
 #[tauri::command]

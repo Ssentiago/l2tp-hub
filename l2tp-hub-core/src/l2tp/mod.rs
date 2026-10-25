@@ -1,5 +1,6 @@
 pub mod definitions;
 pub mod logs;
+#[cfg(target_os = "macos")]
 pub mod macos;
 #[cfg(target_os = "windows")]
 mod windows;

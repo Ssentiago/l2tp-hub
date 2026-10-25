@@ -29,7 +29,7 @@ fn main() {
         );
         tauri_build::try_build(tauri_build::Attributes::new().windows_attributes(windows))
             .expect("failed to run build script");
-        return;
     }
+    #[cfg(not(target_os = "windows"))]
     tauri_build::build()
 }

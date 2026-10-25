@@ -1,16 +1,12 @@
-use crate::log;
+use crate::env::global_env;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
-use tauri::Manager;
 
 const MAX_SESSIONS: usize = 10;
 
 fn history_dir() -> PathBuf {
-    let app = crate::state::get_state().app.clone();
-    app.path()
-        .resolve("session-logs", tauri::path::BaseDirectory::AppData)
-        .unwrap_or_else(|_| PathBuf::from("/tmp/l2tp-hub/session-logs"))
+    global_env().session_logs_dir()
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -50,7 +46,7 @@ pub fn save_session_logs(
         .join(ts.to_string());
 
     if let Err(e) = fs::create_dir_all(&session_dir) {
-        log!("[logs] failed to create session dir: {}", e);
+        log::debug!("[logs] failed to create session dir: {}", e);
         return;
     }
 
@@ -105,7 +101,7 @@ pub fn save_session_logs(
         serde_json::to_string_pretty(&meta).unwrap_or_default(),
     );
 
-    log!("[logs] saved session logs to {}", session_dir.display());
+    log::debug!("[logs] saved session logs to {}", session_dir.display());
 
     // Ротация
     rotate_sessions(connection_id);
@@ -131,7 +127,7 @@ fn rotate_sessions(connection_id: &str) {
         let dir = conn_dir.join(ts.to_string());
         let _ = fs::remove_dir_all(&dir);
     }
-    log!("[logs] rotated {} old sessions for {}", to_remove, connection_id);
+    log::debug!("[logs] rotated {} old sessions for {}", to_remove, connection_id);
 }
 
 /// Получить историю сессий для connection.

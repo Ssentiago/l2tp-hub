@@ -2,17 +2,17 @@ use crate::models::label;
 use crate::store;
 
 #[tauri::command]
-pub async fn get_labels(app_handle: tauri::AppHandle) -> Vec<label::Label> {
-    store::load(app_handle.config()).await.labels
+pub async fn get_labels(_app_handle: tauri::AppHandle) -> Vec<label::Label> {
+    store::load(&crate::DB_POOL.get().expect("pool")).await.labels
 }
 
 #[tauri::command]
 pub async fn save_label(
-    app_handle: tauri::AppHandle,
+    _app_handle: tauri::AppHandle,
     id: String,
     name: String,
 ) -> Result<label::Label, String> {
-    let mut s = store::load(app_handle.config()).await;
+    let mut s = store::load(&crate::DB_POOL.get().expect("pool")).await;
     let label = if let Some(l) = s.labels.iter_mut().find(|l| l.id == id) {
         l.name = name;
         l.clone()
@@ -25,13 +25,13 @@ pub async fn save_label(
         s.labels.push(l.clone());
         l
     };
-    store::save(&s).await?;
+    store::save(&crate::DB_POOL.get().expect("pool"), &s).await?;
     Ok(label)
 }
 
 #[tauri::command]
-pub async fn delete_label(app_handle: tauri::AppHandle, id: String) -> Result<(), String> {
-    let mut s = store::load(app_handle.config()).await;
+pub async fn delete_label(_app_handle: tauri::AppHandle, id: String) -> Result<(), String> {
+    let mut s = store::load(&crate::DB_POOL.get().expect("pool")).await;
     let label = s
         .labels
         .iter()
@@ -46,5 +46,5 @@ pub async fn delete_label(app_handle: tauri::AppHandle, id: String) -> Result<()
             conn.labels.remove(&id);
         }
     }
-    store::save(&s).await
+    store::save(&crate::DB_POOL.get().expect("pool"), &s).await
 }

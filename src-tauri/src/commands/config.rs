@@ -37,7 +37,7 @@ pub async fn import(password: String) -> Result<bool, String> {
             .await
             .map_err(|e| e.to_string())??;
 
-            let mut store = store::load(app.config()).await;
+            let mut store = store::load(&crate::DB_POOL.get().expect("pool")).await;
 
             let ws = store.active_workspace_mut();
             for imported_conn in connections {
@@ -57,7 +57,7 @@ pub async fn import(password: String) -> Result<bool, String> {
                 }
             }
 
-            store::save(&store).await?;
+            store::save(&crate::DB_POOL.get().expect("pool"), &store).await?;
             log!("[import_config_dialog] done");
             Ok(true)
         }
@@ -69,7 +69,7 @@ pub async fn import(password: String) -> Result<bool, String> {
 pub async fn import_file(file_path: String, password: String) -> Result<bool, String> {
     log!("[import_file] called with path={}", file_path);
 
-    let app = crate::state::get_state().app.clone();
+    let _app = crate::state::get_state().app.clone();
     let path_buf = std::path::PathBuf::from(&file_path);
     let data = tokio::fs::read(&path_buf)
         .await
@@ -81,7 +81,7 @@ pub async fn import_file(file_path: String, password: String) -> Result<bool, St
     .await
     .map_err(|e| e.to_string())??;
 
-    let mut store = store::load(app.config()).await;
+    let mut store = store::load(&crate::DB_POOL.get().expect("pool")).await;
     let ws = store.active_workspace_mut();
     for imported_conn in connections {
         if let Some(idx) = ws.connections.iter().position(|c| c.id == imported_conn.id) {
@@ -99,7 +99,7 @@ pub async fn import_file(file_path: String, password: String) -> Result<bool, St
         }
     }
 
-    store::save(&store).await?;
+    store::save(&crate::DB_POOL.get().expect("pool"), &store).await?;
     log!("[import_file] done");
     Ok(true)
 }
@@ -109,7 +109,7 @@ pub async fn export(password: String) -> Result<bool, String> {
     log!("[export_config_dialog] called");
 
     let app = get_state().app.clone();
-    let store = store::load(app.config()).await;
+    let store = store::load(&crate::DB_POOL.get().expect("pool")).await;
 
     // CPU-heavy crypto in spawn_blocking
     let bytes = tokio::task::spawn_blocking(move || {
@@ -147,11 +147,14 @@ pub async fn export(password: String) -> Result<bool, String> {
 
 #[tauri::command]
 pub async fn reset(
-    app_handle: tauri::AppHandle,
+    _app_handle: tauri::AppHandle,
     sudo: State<'_, SudoSession>,
 ) -> Result<(), String> {
     log!("[reset] called");
+    #[cfg(target_os = "macos")]
     let sudo = sudo.inner().clone();
+    #[cfg(target_os = "windows")]
+    let _ = &sudo;
 
     let vpn_services = l2tp::list_vpn_services();
     for service in vpn_services {
@@ -169,14 +172,14 @@ pub async fn reset(
         }
     }
 
-    let store = store::load(app_handle.config()).await;
+    let store = store::load(&crate::DB_POOL.get().expect("pool")).await;
     for ws in &store.workspaces {
         for conn in &ws.connections {
             let _ = keychain::delete_password(&conn.keychain_key);
             let _ = keychain::delete_password(&conn.shared_secret_key);
         }
     }
-    store::save(&store::Store::default()).await?;
+    store::save(&crate::DB_POOL.get().expect("pool"), &store::Store::default()).await?;
 
     Ok(())
 }

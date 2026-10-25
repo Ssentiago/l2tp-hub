@@ -1,7 +1,6 @@
 use std::process::Command;
 
-use crate::log;
-use crate::sudo::SudoSession;
+use crate::executor::PrivilegedExecutor;
 
 use super::paths::{CHARON_LABEL, XL2TPD_LABEL};
 
@@ -10,14 +9,14 @@ use super::paths::{CHARON_LABEL, XL2TPD_LABEL};
 // ---------------------------------------------------------------------------
 
 pub fn log_system_state(name: &str) {
-    log!("[l2tp] ===== SYSTEM STATE DUMP ({}) =====", name);
+    log::debug!("[l2tp] ===== SYSTEM STATE DUMP ({}) =====", name);
 
     if let Ok(output) = Command::new("route").args(["-n", "get", "default"]).output() {
-        log!("[l2tp] --- default gateway ---\n{}", String::from_utf8_lossy(&output.stdout));
+        log::debug!("[l2tp] --- default gateway ---\n{}", String::from_utf8_lossy(&output.stdout));
     }
 
     if let Ok(output) = Command::new("netstat").args(["-rn"]).output() {
-        log!("[l2tp] --- routing table ---\n{}", String::from_utf8_lossy(&output.stdout));
+        log::debug!("[l2tp] --- routing table ---\n{}", String::from_utf8_lossy(&output.stdout));
     }
 
     if let Ok(output) = Command::new("ifconfig").output() {
@@ -32,9 +31,9 @@ pub fn log_system_state(name: &str) {
             .map(|(_, line)| line)
             .collect();
         if filtered.is_empty() {
-            log!("[l2tp] --- ppp/utun interfaces: NONE ---");
+            log::debug!("[l2tp] --- ppp/utun interfaces: NONE ---");
         } else {
-            log!("[l2tp] --- ppp/utun interfaces ---\n{}", filtered.join("\n"));
+            log::debug!("[l2tp] --- ppp/utun interfaces ---\n{}", filtered.join("\n"));
         }
     }
 
@@ -44,9 +43,9 @@ pub fn log_system_state(name: &str) {
             .filter(|l| l.contains("charon") || l.contains("xl2tpd") || l.contains("pppd"))
             .collect();
         if vpn_procs.is_empty() {
-            log!("[l2tp] --- VPN processes: NONE ---");
+            log::debug!("[l2tp] --- VPN processes: NONE ---");
         } else {
-            log!("[l2tp] --- VPN processes ---\n{}", vpn_procs.join("\n"));
+            log::debug!("[l2tp] --- VPN processes ---\n{}", vpn_procs.join("\n"));
         }
     }
 
@@ -58,13 +57,13 @@ pub fn log_system_state(name: &str) {
             let stdout = String::from_utf8_lossy(&output.stdout);
             for line in stdout.lines() {
                 if line.contains("state =") || line.contains("pid =") || line.contains("exit") {
-                    log!("[l2tp] launchd {} → {}", label, line.trim());
+                    log::debug!("[l2tp] launchd {} → {}", label, line.trim());
                 }
             }
         }
     }
 
-    log!("[l2tp] ===== END SYSTEM STATE =====");
+    log::debug!("[l2tp] ===== END SYSTEM STATE =====");
 }
 
 pub fn is_process_running_global(name: &str) -> bool {
@@ -123,14 +122,14 @@ pub fn count_ppp_interfaces() -> usize {
 
 /// Destroy stale ppp interfaces — macOS оставляет pppN после убийства pppd.
 /// Без destroy следующий pppd с `unit N` падает: "Couldn't create new ppp unit"
-pub fn destroy_stale_ppp_interfaces(sudo: &SudoSession) {
+pub fn destroy_stale_ppp_interfaces(sudo: &dyn PrivilegedExecutor) {
     if let Ok(output) = Command::new("ifconfig").output() {
         let stdout = String::from_utf8_lossy(&output.stdout);
         for line in stdout.lines() {
             if line.starts_with("ppp") {
                 if let Some(iface) = line.split(':').next() {
-                    log!("[l2tp] destroying stale PPP interface: {}", iface);
-                    sudo.run_sudo(&["ifconfig", iface, "destroy"]).ok();
+                    log::debug!("[l2tp] destroying stale PPP interface: {}", iface);
+                    sudo.run(&["ifconfig", iface, "destroy"]).ok();
                 }
             }
         }
@@ -138,11 +137,11 @@ pub fn destroy_stale_ppp_interfaces(sudo: &SudoSession) {
 }
 
 /// Проверяет, жив ли IPSec SA для данного подключения.
-pub fn check_ipsec_sa_alive(sudo: &crate::sudo::SudoSession, _name: &str) -> bool {
+pub fn check_ipsec_sa_alive(sudo: &dyn crate::executor::PrivilegedExecutor, _name: &str) -> bool {
     use super::paths::{active_dir, swanctl_bin};
 
     if !is_process_running_global("charon") || !is_process_running_global("pppd") {
-        log!("[sleep-wake] VPN processes dead (charon={}, pppd={})",
+        log::debug!("[sleep-wake] VPN processes dead (charon={}, pppd={})",
             is_process_running_global("charon"), is_process_running_global("pppd"));
         return false;
     }
@@ -151,7 +150,7 @@ pub fn check_ipsec_sa_alive(sudo: &crate::sudo::SudoSession, _name: &str) -> boo
     let strongswan_conf = active.join("strongswan.conf");
     let swanctl = swanctl_bin();
 
-    let list_result = sudo.run_sudo(&[
+    let list_result = sudo.run(&[
         "env",
         &format!("STRONGSWAN_CONF={}", strongswan_conf.to_string_lossy()),
         &swanctl.to_string_lossy(),
@@ -161,11 +160,11 @@ pub fn check_ipsec_sa_alive(sudo: &crate::sudo::SudoSession, _name: &str) -> boo
     match list_result {
         Ok(stdout) => {
             let alive = stdout.contains("ESTABLISHED");
-            log!("[sleep-wake] SA check: ESTABLISHED={}, output: {}", alive, stdout.trim());
+            log::debug!("[sleep-wake] SA check: ESTABLISHED={}, output: {}", alive, stdout.trim());
             alive
         }
         Err(stderr) => {
-            log!("[sleep-wake] SA check failed: {}", stderr);
+            log::debug!("[sleep-wake] SA check failed: {}", stderr);
             false
         }
     }

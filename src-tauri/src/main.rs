@@ -8,18 +8,16 @@ use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut}
 
 pub mod backup;
 pub mod commands;
-pub mod db;
-pub mod guardian;
+#[cfg(target_os = "macos")]
 pub mod helper;
-pub mod keychain;
-pub mod l2tp;
 pub mod logger;
-pub mod models;
 pub mod startup;
 mod sleep_wake;
 mod state;
-mod store;
 mod sudo;
+
+// Re-exports from core
+pub use l2tp_hub_core::{db, guardian, keychain, l2tp, models, store};
 
 pub static LOGGER: std::sync::OnceLock<Arc<Logger>> = std::sync::OnceLock::new();
 pub static DB_POOL: std::sync::OnceLock<sqlx::SqlitePool> = std::sync::OnceLock::new();
@@ -52,18 +50,15 @@ fn main() {
             let logger = Arc::new(logger::Logger::new(app.handle().clone()));
             LOGGER.set(logger).ok();
 
-            // SudoSession — управление privileged helper
-            let sudo = sudo::SudoSession::new();
-            app.manage(sudo.clone());
+            // Инициализируем AppEnv — пути приложения
+            let app_data_dir = app.path().app_data_dir().expect("app_data_dir");
+            let resource_dir = app.path().resource_dir().expect("resource_dir");
+            let db_path = app_data_dir.join("l2tp-hub.db");
+            l2tp_hub_core::env::init_env(
+                l2tp_hub_core::AppEnv::with_paths(app_data_dir, db_path.clone(), resource_dir),
+            );
 
-            // Регистрируем L2tpManager — централизованный VPN-менеджер
-            let manager = l2tp::manager::L2tpManager::new(sudo, app.handle().clone());
-            app.manage(manager);
-
-            let db_path = app
-                .path()
-                .resolve("l2tp-hub.db", tauri::path::BaseDirectory::AppData)
-                .expect("db path");
+            // SQLite pool
             let pool = tauri::async_runtime::block_on(db::init_pool(&db_path))?;
             if tauri::async_runtime::block_on(db::store_is_empty(&pool)).unwrap_or(false) {
                 let json_path = app
@@ -72,7 +67,20 @@ fn main() {
                     .expect("json path");
                 let _ = tauri::async_runtime::block_on(db::migrate_from_json(&pool, &json_path));
             }
-            DB_POOL.set(pool).ok();
+            DB_POOL.set(pool.clone()).ok();
+
+            // SudoSession — управление privileged helper
+            let sudo = sudo::SudoSession::new();
+            app.manage(sudo.clone());
+
+            // L2tpManager — централизованный VPN-менеджер
+            let executor: Arc<dyn l2tp_hub_core::PrivilegedExecutor> = Arc::new(sudo.clone());
+            let manager = l2tp::manager::L2tpManager::new(
+                executor,
+                l2tp_hub_core::env::global_env().clone(),
+                pool,
+            );
+            app.manage(manager);
 
             let window = app
                 .get_webview_window("main")
@@ -237,7 +245,7 @@ fn do_wake_check(app: &tauri::AppHandle) -> Result<(), String> {
     }
 
     // Проверяем SA для каждого активного подключения
-    let store = rt.block_on(store::load(app.config()));
+    let store = rt.block_on(store::load(&crate::DB_POOL.get().expect("pool")));
     let sudo = app.state::<sudo::SudoSession>().inner().clone();
     let mut any_dead = false;
 
@@ -249,7 +257,7 @@ fn do_wake_check(app: &tauri::AppHandle) -> Result<(), String> {
 
         if let Some(name) = conn_name {
             crate::log!("[sleep-wake] checking SA for: {}", name);
-            let alive = crate::l2tp::macos::check_ipsec_sa_alive(&sudo, &name);
+            let alive = crate::l2tp::check_ipsec_sa_alive(&sudo, &name);
             if !alive {
                 crate::log!("[sleep-wake] SA dead for {}, will reconnect", name);
                 any_dead = true;

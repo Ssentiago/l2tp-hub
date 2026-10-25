@@ -10,7 +10,7 @@ pub struct WorkspaceInfo {
 }
 
 #[tauri::command]
-pub async fn get_workspaces(_app_handle: tauri::AppHandle) -> Vec<WorkspaceInfo> {
+pub async fn get_workspaces(__app_handle: tauri::AppHandle) -> Vec<WorkspaceInfo> {
     let pool = crate::DB_POOL.get().expect("DB pool not initialized");
     crate::db::workspace_infos(pool)
         .await
@@ -25,13 +25,13 @@ pub async fn get_workspaces(_app_handle: tauri::AppHandle) -> Vec<WorkspaceInfo>
 }
 
 #[tauri::command]
-pub async fn get_active_workspace_id(app_handle: tauri::AppHandle) -> String {
-    store::load(app_handle.config()).await.active_workspace_id
+pub async fn get_active_workspace_id(_app_handle: tauri::AppHandle) -> String {
+    store::load(&crate::DB_POOL.get().expect("pool")).await.active_workspace_id
 }
 
 #[tauri::command]
-pub async fn create_workspace(app_handle: tauri::AppHandle, name: String) -> Result<WorkspaceInfo, String> {
-    let mut s = store::load(app_handle.config()).await;
+pub async fn create_workspace(_app_handle: tauri::AppHandle, name: String) -> Result<WorkspaceInfo, String> {
+    let mut s = store::load(&crate::DB_POOL.get().expect("pool")).await;
     let ws = Workspace::new(&name);
     let info = WorkspaceInfo {
         id: ws.id.clone(),
@@ -39,21 +39,21 @@ pub async fn create_workspace(app_handle: tauri::AppHandle, name: String) -> Res
         group_by: ws.group_by.clone(),
     };
     s.workspaces.push(ws);
-    store::save(&s).await?;
+    store::save(&crate::DB_POOL.get().expect("pool"), &s).await?;
     Ok(info)
 }
 
 #[tauri::command]
-pub async fn rename_workspace(app_handle: tauri::AppHandle, id: String, name: String) -> Result<(), String> {
-    let mut s = store::load(app_handle.config()).await;
+pub async fn rename_workspace(_app_handle: tauri::AppHandle, id: String, name: String) -> Result<(), String> {
+    let mut s = store::load(&crate::DB_POOL.get().expect("pool")).await;
     let ws = s.workspaces.iter_mut().find(|w| w.id == id).ok_or("Workspace not found")?;
     ws.name = name;
-    store::save(&s).await
+    store::save(&crate::DB_POOL.get().expect("pool"), &s).await
 }
 
 #[tauri::command]
-pub async fn delete_workspace(app_handle: tauri::AppHandle, id: String) -> Result<(), String> {
-    let mut s = store::load(app_handle.config()).await;
+pub async fn delete_workspace(_app_handle: tauri::AppHandle, id: String) -> Result<(), String> {
+    let mut s = store::load(&crate::DB_POOL.get().expect("pool")).await;
     if s.workspaces.len() <= 1 {
         return Err("Нельзя удалить последнее пространство".into());
     }
@@ -62,15 +62,15 @@ pub async fn delete_workspace(app_handle: tauri::AppHandle, id: String) -> Resul
     if s.active_workspace_id == id {
         s.active_workspace_id = s.workspaces[0].id.clone();
     }
-    store::save(&s).await
+    store::save(&crate::DB_POOL.get().expect("pool"), &s).await
 }
 
 #[tauri::command]
-pub async fn switch_workspace(app_handle: tauri::AppHandle, id: String) -> Result<(), String> {
-    let mut s = store::load(app_handle.config()).await;
+pub async fn switch_workspace(_app_handle: tauri::AppHandle, id: String) -> Result<(), String> {
+    let mut s = store::load(&crate::DB_POOL.get().expect("pool")).await;
     if !s.workspaces.iter().any(|w| w.id == id) {
         return Err("Workspace not found".into());
     }
     s.active_workspace_id = id;
-    store::save(&s).await
+    store::save(&crate::DB_POOL.get().expect("pool"), &s).await
 }

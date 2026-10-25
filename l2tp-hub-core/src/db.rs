@@ -1,4 +1,4 @@
-use crate::log;
+
 use crate::models::connection::Connection;
 use crate::models::label::Label;
 use crate::models::workspace::Workspace;
@@ -350,7 +350,7 @@ pub async fn migrate_from_json(
     // Try new Store format first
     if let Ok(store) = serde_json::from_str::<Store>(&data) {
         save_store(pool, &store).await?;
-        log!("[db] migrated {} workspaces from JSON (Store format)", store.workspaces.len());
+        log::debug!("[db] migrated {} workspaces from JSON (Store format)", store.workspaces.len());
         return Ok(true);
     }
 
@@ -375,7 +375,7 @@ pub async fn migrate_from_json(
             labels: legacy.labels,
         };
         save_store(pool, &store).await?;
-        log!("[db] migrated legacy store, {} connections", store.workspaces[0].connections.len());
+        log::debug!("[db] migrated legacy store, {} connections", store.workspaces[0].connections.len());
         return Ok(true);
     }
 

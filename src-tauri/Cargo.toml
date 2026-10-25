@@ -10,6 +10,7 @@ version = "2"
 features = []
 
 [dependencies]
+l2tp-hub-core = { path = "../l2tp-hub-core" }
 serde_json = "1"
 open = "5.3.4"
 rand = "0.8.6"

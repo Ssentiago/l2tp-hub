@@ -1,7 +1,6 @@
 use std::fs;
 
-use crate::log;
-use crate::sudo::SudoSession;
+use crate::executor::PrivilegedExecutor;
 
 use super::paths::{charon_bin, charon_lib_dir, xl2tpd_bin, active_dir, plist_path, CHARON_LABEL, XL2TPD_LABEL};
 
@@ -88,40 +87,40 @@ pub fn generate_xl2tpd_plist() -> String {
 // ---------------------------------------------------------------------------
 
 /// Установить LaunchDaemon plist в /Library/LaunchDaemons и bootstrap.
-pub fn install_daemon(sudo: &SudoSession, label: &str, plist_content: &str) -> Result<(), String> {
+pub fn install_daemon(sudo: &dyn PrivilegedExecutor, label: &str, plist_content: &str) -> Result<(), String> {
     let path = plist_path(label);
     let tmp_path = format!("/tmp/{}.plist", label);
 
     fs::write(&tmp_path, plist_content)
         .map_err(|e| format!("write plist {}: {}", tmp_path, e))?;
 
-    sudo.run_sudo(&["cp", &tmp_path, &path.to_string_lossy()])?;
-    sudo.run_sudo(&["chmod", "644", &path.to_string_lossy()])?;
-    sudo.run_sudo(&["chown", "root:wheel", &path.to_string_lossy()])?;
+    sudo.run(&["cp", &tmp_path, &path.to_string_lossy()])?;
+    sudo.run(&["chmod", "644", &path.to_string_lossy()])?;
+    sudo.run(&["chown", "root:wheel", &path.to_string_lossy()])?;
 
-    match sudo.run_sudo(&["launchctl", "bootout", &format!("system/{}", label)]) {
-        Ok(out) => log!("[l2tp] launchctl bootout {}: ok{}", label, if out.trim().is_empty() { String::new() } else { format!(" — {}", out.trim()) }),
-        Err(e) => log!("[l2tp] launchctl bootout {} (expected if not registered): {}", label, e.trim()),
+    match sudo.run(&["launchctl", "bootout", &format!("system/{}", label)]) {
+        Ok(out) => log::debug!("[l2tp] launchctl bootout {}: ok{}", label, if out.trim().is_empty() { String::new() } else { format!(" — {}", out.trim()) }),
+        Err(e) => log::debug!("[l2tp] launchctl bootout {} (expected if not registered): {}", label, e.trim()),
     }
     std::thread::sleep(std::time::Duration::from_millis(500));
 
-    match sudo.run_sudo(&["launchctl", "bootstrap", "system", &path.to_string_lossy()]) {
-        Ok(out) => log!("[l2tp] launchctl bootstrap {}: ok{}", label, if out.trim().is_empty() { String::new() } else { format!(" — {}", out.trim()) }),
+    match sudo.run(&["launchctl", "bootstrap", "system", &path.to_string_lossy()]) {
+        Ok(out) => log::debug!("[l2tp] launchctl bootstrap {}: ok{}", label, if out.trim().is_empty() { String::new() } else { format!(" — {}", out.trim()) }),
         Err(e) => {
-            log!("[l2tp] ERROR launchctl bootstrap {}: {}", label, e);
+            log::debug!("[l2tp] ERROR launchctl bootstrap {}: {}", label, e);
             return Err(format!("launchctl bootstrap {}: {}", label, e));
         }
     }
-    log!("[l2tp] daemon installed: {}", label);
+    log::debug!("[l2tp] daemon installed: {}", label);
     Ok(())
 }
 
 /// Запустить демон через launchctl kickstart.
-pub fn start_daemon(sudo: &SudoSession, label: &str) -> Result<(), String> {
-    match sudo.run_sudo(&["launchctl", "kickstart", &format!("system/{}", label)]) {
-        Ok(out) => log!("[l2tp] launchctl kickstart {}: ok{}", label, if out.trim().is_empty() { String::new() } else { format!(" — {}", out.trim()) }),
+pub fn start_daemon(sudo: &dyn PrivilegedExecutor, label: &str) -> Result<(), String> {
+    match sudo.run(&["launchctl", "kickstart", &format!("system/{}", label)]) {
+        Ok(out) => log::debug!("[l2tp] launchctl kickstart {}: ok{}", label, if out.trim().is_empty() { String::new() } else { format!(" — {}", out.trim()) }),
         Err(e) => {
-            log!("[l2tp] ERROR launchctl kickstart {}: {}", label, e);
+            log::debug!("[l2tp] ERROR launchctl kickstart {}: {}", label, e);
             return Err(format!("launchctl kickstart {}: {}", label, e));
         }
     }
@@ -129,18 +128,18 @@ pub fn start_daemon(sudo: &SudoSession, label: &str) -> Result<(), String> {
 }
 
 /// Остановить демон через launchctl kill SIGTERM.
-pub fn stop_daemon(sudo: &SudoSession, label: &str) {
-    match sudo.run_sudo(&["launchctl", "kill", "SIGTERM", &format!("system/{}", label)]) {
-        Ok(out) => log!("[l2tp] launchctl kill {}: ok{}", label, if out.trim().is_empty() { String::new() } else { format!(" — {}", out.trim()) }),
-        Err(e) => log!("[l2tp] launchctl kill {} (may not be running): {}", label, e.trim()),
+pub fn stop_daemon(sudo: &dyn PrivilegedExecutor, label: &str) {
+    match sudo.run(&["launchctl", "kill", "SIGTERM", &format!("system/{}", label)]) {
+        Ok(out) => log::debug!("[l2tp] launchctl kill {}: ok{}", label, if out.trim().is_empty() { String::new() } else { format!(" — {}", out.trim()) }),
+        Err(e) => log::debug!("[l2tp] launchctl kill {} (may not be running): {}", label, e.trim()),
     }
 }
 
 /// Удалить LaunchDaemon (bootout + rm plist).
-pub fn uninstall_daemon(sudo: &SudoSession, label: &str) {
-    match sudo.run_sudo(&["launchctl", "bootout", &format!("system/{}", label)]) {
-        Ok(out) => log!("[l2tp] launchctl bootout {}: ok{}", label, if out.trim().is_empty() { String::new() } else { format!(" — {}", out.trim()) }),
-        Err(e) => log!("[l2tp] launchctl bootout {} (may not exist): {}", label, e.trim()),
+pub fn uninstall_daemon(sudo: &dyn PrivilegedExecutor, label: &str) {
+    match sudo.run(&["launchctl", "bootout", &format!("system/{}", label)]) {
+        Ok(out) => log::debug!("[l2tp] launchctl bootout {}: ok{}", label, if out.trim().is_empty() { String::new() } else { format!(" — {}", out.trim()) }),
+        Err(e) => log::debug!("[l2tp] launchctl bootout {} (may not exist): {}", label, e.trim()),
     }
-    let _ = sudo.run_sudo(&["rm", "-f", &plist_path(label).to_string_lossy()]);
+    let _ = sudo.run(&["rm", "-f", &plist_path(label).to_string_lossy()]);
 }

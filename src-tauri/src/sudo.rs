@@ -1,14 +1,15 @@
-use crate::helper;
-use crate::state;
 use std::sync::{Arc, Mutex};
 
 // ---------------------------------------------------------------------------
-// SudoSession — управление privileged helper через unix socket
-// Хелпер — LaunchDaemon с root-правами, слушает /var/run/l2tp-hub-helper.sock
-// Один раз устанавливается через osascript, дальше работает постоянно.
+// SudoSession — управление привилегированными командами
+// macOS: privileged helper (LaunchDaemon, unix socket /var/run/l2tp-hub-helper.sock)
+// Windows: приложение запущено от администратора (requireAdministrator manifest) —
+//          команды выполняются напрямую.
 // ---------------------------------------------------------------------------
 
+#[cfg(target_os = "macos")]
 const HELPER_CONNECT_RETRIES: u32 = 3;
+#[cfg(target_os = "macos")]
 const HELPER_CONNECT_DELAY: std::time::Duration = std::time::Duration::from_secs(1);
 
 #[derive(Clone)]
@@ -41,7 +42,10 @@ impl SudoSession {
     }
 
     /// Проверяет связь с хелпером и версию. Устанавливает/обновляет если нужно.
+    #[cfg(target_os = "macos")]
     pub fn authenticate(&self) -> Result<(), String> {
+        use crate::helper;
+
         const EXPECTED_VERSION: &str = env!("CARGO_PKG_VERSION");
 
         // Шаг 1: хелпер запущен и отвечает?
@@ -66,8 +70,19 @@ impl SudoSession {
         self.wait_for_helper_after_install(EXPECTED_VERSION)
     }
 
+    /// Windows: процесс уже elevated (requireAdministrator manifest).
+    #[cfg(target_os = "windows")]
+    pub fn authenticate(&self) -> Result<(), String> {
+        *self.authenticated.lock().unwrap() = true;
+        self.set_status("Запущено от имени администратора");
+        Ok(())
+    }
+
     /// Проверяет версию уже запущенного хелпера
+    #[cfg(target_os = "macos")]
     fn check_version_and_auth(&self, expected: &str) -> Result<(), String> {
+        use crate::helper;
+
         match helper::query_helper_version() {
             Ok(v) if v == expected => {
                 *self.authenticated.lock().unwrap() = true;
@@ -90,7 +105,10 @@ impl SudoSession {
     }
 
     /// Ждёт запуска хелпера после установки: 3 попытки по 5 секунд
+    #[cfg(target_os = "macos")]
     fn wait_for_helper_after_install(&self, expected_version: &str) -> Result<(), String> {
+        use crate::helper;
+
         for attempt in 1..=HELPER_CONNECT_RETRIES {
             self.set_status(&format!("Ожидание сервиса ({}/{})...", attempt, HELPER_CONNECT_RETRIES));
             std::thread::sleep(HELPER_CONNECT_DELAY);
@@ -124,7 +142,10 @@ impl SudoSession {
     }
 
     /// Ждёт запуска уже установленного хелпера (после start_helper)
+    #[cfg(target_os = "macos")]
     fn wait_for_helper(&self, expected_version: &str) -> Result<bool, String> {
+        use crate::helper;
+
         for attempt in 1..=HELPER_CONNECT_RETRIES {
             self.set_status(&format!("Ожидание сервиса ({}/{})...", attempt, HELPER_CONNECT_RETRIES));
             std::thread::sleep(HELPER_CONNECT_DELAY);
@@ -156,23 +177,41 @@ impl SudoSession {
     }
 
     /// Выполнить команду от root через helper socket
+    #[cfg(target_os = "macos")]
     pub fn run_sudo(&self, args: &[&str]) -> Result<String, String> {
-        let resp = helper::send_command(args)?;
+        let resp = crate::helper::send_command(args)?;
         if resp.ok {
             Ok(resp.stdout)
         } else {
             Err(resp.stderr)
         }
     }
+
+    /// Выполнить команду напрямую — процесс уже от администратора.
+    #[cfg(target_os = "windows")]
+    pub fn run_sudo(&self, args: &[&str]) -> Result<String, String> {
+        let (cmd, rest) = args.split_first().ok_or("run_sudo: empty command")?;
+        let output = std::process::Command::new(cmd)
+            .args(rest)
+            .output()
+            .map_err(|e| format!("run_sudo: {}", e))?;
+        if output.status.success() {
+            Ok(String::from_utf8_lossy(&output.stdout).to_string())
+        } else {
+            Err(String::from_utf8_lossy(&output.stderr).to_string())
+        }
+    }
 }
 
 /// Проверяет, установлен ли хелпер в системе
+#[cfg(target_os = "macos")]
 fn helper_installed() -> bool {
     std::path::Path::new("/Library/PrivilegedHelperTools/l2tp-hub-helper").exists()
         && std::path::Path::new("/Library/LaunchDaemons/com.sentiago.l2tp-hub.helper.plist").exists()
 }
 
 /// Запустить уже установленный хелпер через launchctl
+#[cfg(target_os = "macos")]
 fn start_helper() -> Result<(), String> {
     // Сначала пробуем bootstrap
     let output = std::process::Command::new("launchctl")
@@ -187,7 +226,7 @@ fn start_helper() -> Result<(), String> {
         || stderr.contains("in domain")
         || stderr.contains("System domain already bootstrapped")
     {
-        // Demон уже загружен — kickstart для перезапуска
+        // Демон уже загружен — kickstart для перезапуска
         let _ = std::process::Command::new("launchctl")
             .args(["kickstart", "-k", "system/com.sentiago.l2tp-hub.helper"])
             .output();
@@ -214,6 +253,7 @@ fn start_helper() -> Result<(), String> {
 }
 
 /// Переустановить хелпер: остановить старый, установить новый через osascript
+#[cfg(target_os = "macos")]
 fn reinstall_helper() -> Result<(), String> {
     crate::log!("[helper] reinstalling: stopping old daemon...");
     let _ = std::process::Command::new("launchctl")
@@ -224,7 +264,9 @@ fn reinstall_helper() -> Result<(), String> {
 }
 
 /// Установить хелпер: скопировать бинарник + plist, bootstrap через osascript
+#[cfg(target_os = "macos")]
 fn install_helper() -> Result<(), String> {
+    use crate::state;
     use tauri::Manager;
 
     let app = &state::get_state().app;
@@ -266,5 +308,11 @@ fn install_helper() -> Result<(), String> {
         } else {
             Err(format!("Установка хелпера не удалась: {}", stderr))
         }
+    }
+}
+
+impl l2tp_hub_core::PrivilegedExecutor for SudoSession {
+    fn run(&self, args: &[&str]) -> Result<String, String> {
+        self.run_sudo(args)
     }
 }

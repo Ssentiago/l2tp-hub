@@ -1,8 +1,8 @@
 use crate::keychain;
 
 #[tauri::command]
-pub fn quit_app(app: tauri::AppHandle) {
-    app.exit(0);
+pub fn quit_app(_app: tauri::AppHandle) {
+    _app.exit(0);
 }
 
 #[tauri::command]

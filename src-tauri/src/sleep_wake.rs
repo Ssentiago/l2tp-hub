@@ -14,6 +14,10 @@ where
             }
         });
     }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (on_sleep, on_wake);
+    }
 }
 
 #[cfg(target_os = "macos")]

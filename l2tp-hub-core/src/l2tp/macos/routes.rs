@@ -2,8 +2,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
-use crate::log;
-use crate::sudo::SudoSession;
+use crate::executor::PrivilegedExecutor;
 
 use super::guardian::get_default_gateway;
 
@@ -29,7 +28,7 @@ pub fn capture_physical_route() -> Result<(String, String), String> {
     let interface = parse_route_field(&text, "interface")?;
     let gateway = parse_route_field(&text, "gateway")?;
 
-    log!("[route] captured physical route: iface={}, gw={}", interface, gateway);
+    log::debug!("[route] captured physical route: iface={}, gw={}", interface, gateway);
     Ok((interface, gateway))
 }
 
@@ -48,25 +47,25 @@ fn parse_route_field(text: &str, field: &str) -> Result<String, String> {
 
 /// Сохранить состояние маршрутизации на диск (для crash recovery)
 /// Формат: server\ninterface\ngateway\ntunnel_mode\nroute1,route2,...
-pub fn save_route_state(sudo: &SudoSession, server: &str, iface: &str, gateway: &str, tunnel_mode: &str, split_routes: &[String]) -> Result<(), String> {
+pub fn save_route_state(sudo: &dyn PrivilegedExecutor, server: &str, iface: &str, gateway: &str, tunnel_mode: &str, split_routes: &[String]) -> Result<(), String> {
     let routes_str = split_routes.join(",");
     let content = format!("{}\n{}\n{}\n{}\n{}\n", server, iface, gateway, tunnel_mode, routes_str);
     let path = route_state_path();
     let tmp = "/tmp/l2tp-route.state";
     fs::write(tmp, &content).map_err(|e| format!("write route state: {}", e))?;
-    sudo.run_sudo(&["mkdir", "-p", &path.parent().unwrap().to_string_lossy()])?;
-    sudo.run_sudo(&["cp", tmp, &path.to_string_lossy()])?;
-    sudo.run_sudo(&["chmod", "600", &path.to_string_lossy()])?;
-    sudo.run_sudo(&["chown", "root:wheel", &path.to_string_lossy()])?;
+    sudo.run(&["mkdir", "-p", &path.parent().unwrap().to_string_lossy()])?;
+    sudo.run(&["cp", tmp, &path.to_string_lossy()])?;
+    sudo.run(&["chmod", "600", &path.to_string_lossy()])?;
+    sudo.run(&["chown", "root:wheel", &path.to_string_lossy()])?;
     let _ = fs::remove_file(tmp);
-    log!("[route] saved state: server={}, iface={}, gw={}, mode={}, routes={}", server, iface, gateway, tunnel_mode, routes_str);
+    log::debug!("[route] saved state: server={}, iface={}, gw={}, mode={}, routes={}", server, iface, gateway, tunnel_mode, routes_str);
     Ok(())
 }
 
 /// Загрузить сохранённое состояние маршрутизации с диска
-pub fn load_route_state(sudo: &SudoSession) -> Option<(String, String, String, String, Vec<String>)> {
+pub fn load_route_state(sudo: &dyn PrivilegedExecutor) -> Option<(String, String, String, String, Vec<String>)> {
     let path = route_state_path();
-    let output = sudo.run_sudo(&["cat", &path.to_string_lossy()]).ok()?;
+    let output = sudo.run(&["cat", &path.to_string_lossy()]).ok()?;
     let mut lines = output.lines();
     let server = lines.next()?.trim().to_string();
     let iface = lines.next()?.trim().to_string();
@@ -89,9 +88,9 @@ pub fn load_route_state(sudo: &SudoSession) -> Option<(String, String, String, S
 }
 
 /// Удалить файл состояния маршрутизации
-pub fn clear_route_state(sudo: &SudoSession) {
-    let _ = sudo.run_sudo(&["rm", "-f", &route_state_path().to_string_lossy()]);
-    log!("[route] state cleared");
+pub fn clear_route_state(sudo: &dyn PrivilegedExecutor) {
+    let _ = sudo.run(&["rm", "-f", &route_state_path().to_string_lossy()]);
+    log::debug!("[route] state cleared");
 }
 
 /// Умное восстановление route: проверяет жив ли исходный интерфейс,
@@ -109,26 +108,26 @@ pub fn resolve_restore_gateway(original_iface: &str, original_gw: &str) -> Optio
 
     if iface_active {
         if let Some(gw) = get_gateway_for_interface(original_iface) {
-            log!("[route] original iface {} still active, gw={}", original_iface, gw);
+            log::debug!("[route] original iface {} still active, gw={}", original_iface, gw);
             return Some(gw);
         }
     }
 
     if !original_gw.is_empty() {
-        log!("[route] original iface {} not active, trying saved gw={}", original_iface, original_gw);
+        log::debug!("[route] original iface {} not active, trying saved gw={}", original_iface, original_gw);
         let ping_ok = Command::new("ping")
             .args(["-c", "1", "-t", "2", original_gw])
             .output()
             .map(|o| o.status.success())
             .unwrap_or(false);
         if ping_ok {
-            log!("[route] saved gateway {} is reachable", original_gw);
+            log::debug!("[route] saved gateway {} is reachable", original_gw);
             return Some(original_gw.to_string());
         }
-        log!("[route] saved gateway {} is unreachable", original_gw);
+        log::debug!("[route] saved gateway {} is unreachable", original_gw);
     }
 
-    log!("[route] searching for alternative active interface");
+    log::debug!("[route] searching for alternative active interface");
     find_any_active_physical_gateway()
 }
 
@@ -152,7 +151,7 @@ fn find_any_active_physical_gateway() -> Option<String> {
             .unwrap_or(false);
         if active {
             if let Some(gw) = get_gateway_for_interface(iface) {
-                log!("[route] found active physical iface {} with gw={}", iface, gw);
+                log::debug!("[route] found active physical iface {} with gw={}", iface, gw);
                 return Some(gw);
             }
         }
@@ -164,7 +163,7 @@ fn find_any_active_physical_gateway() -> Option<String> {
             if line.contains("IPv4 default") {
                 if let Some(iface) = line.split(':').last().map(|s| s.trim()) {
                     if let Some(gw) = get_gateway_for_interface(iface) {
-                        log!("[route] scutil nwi: primary iface {} gw={}", iface, gw);
+                        log::debug!("[route] scutil nwi: primary iface {} gw={}", iface, gw);
                         return Some(gw);
                     }
                 }
@@ -172,38 +171,38 @@ fn find_any_active_physical_gateway() -> Option<String> {
         }
     }
 
-    log!("[route] WARNING: no active physical interface found");
+    log::debug!("[route] WARNING: no active physical interface found");
     None
 }
 
 /// Восстановить route — умная версия
-pub fn restore_routes(sudo: &SudoSession, server: &str, original_iface: &str, original_gw: &str, tunnel_mode: &str, split_routes: &[String]) {
-    log!("[route] restoring: server={}, iface={}, gw={}, mode={}", server, original_iface, original_gw, tunnel_mode);
+pub fn restore_routes(sudo: &dyn PrivilegedExecutor, server: &str, original_iface: &str, original_gw: &str, tunnel_mode: &str, split_routes: &[String]) {
+    log::debug!("[route] restoring: server={}, iface={}, gw={}, mode={}", server, original_iface, original_gw, tunnel_mode);
 
-    let r1 = sudo.run_sudo(&["route", "delete", "-host", server]);
-    log!("[route] route delete -host {}: {:?}", server, r1);
+    let r1 = sudo.run(&["route", "delete", "-host", server]);
+    log::debug!("[route] route delete -host {}: {:?}", server, r1);
 
     if tunnel_mode == "split" {
-        log!("[route] split mode — removing {} subnet routes", split_routes.len());
+        log::debug!("[route] split mode — removing {} subnet routes", split_routes.len());
         for route in split_routes {
-            let r = sudo.run_sudo(&["route", "delete", "-net", route]);
-            log!("[route] route delete -net {}: {:?}", route, r);
+            let r = sudo.run(&["route", "delete", "-net", route]);
+            log::debug!("[route] route delete -net {}: {:?}", route, r);
         }
     } else {
         match resolve_restore_gateway(original_iface, original_gw) {
             Some(ref gw) => {
-                let r_del = sudo.run_sudo(&["route", "delete", "default"]);
-                log!("[route] route delete default: {:?}", r_del);
-                let r_add = sudo.run_sudo(&["route", "add", "default", gw]);
-                log!("[route] route add default {}: {:?}", gw, r_add);
+                let r_del = sudo.run(&["route", "delete", "default"]);
+                log::debug!("[route] route delete default: {:?}", r_del);
+                let r_add = sudo.run(&["route", "add", "default", gw]);
+                log::debug!("[route] route add default {}: {:?}", gw, r_add);
                 match get_default_gateway() {
-                    Ok(gw) => log!("[route] current default gateway after restore: {}", gw),
-                    Err(e) => log!("[route] WARNING: can't verify gateway after restore: {}", e),
+                    Ok(gw) => log::debug!("[route] current default gateway after restore: {}", gw),
+                    Err(e) => log::debug!("[route] WARNING: can't verify gateway after restore: {}", e),
                 }
             }
             None => {
-                log!("[route] WARNING: cannot resolve restore gateway — route NOT restored");
-                let _ = sudo.run_sudo(&["route", "delete", "default"]);
+                log::debug!("[route] WARNING: cannot resolve restore gateway — route NOT restored");
+                let _ = sudo.run(&["route", "delete", "default"]);
             }
         }
     }

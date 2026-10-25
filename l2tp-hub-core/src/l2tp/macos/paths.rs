@@ -1,9 +1,8 @@
 use std::fs;
 use std::path::PathBuf;
-use tauri::{AppHandle, Manager};
 
-use crate::state;
-use crate::sudo::SudoSession;
+use crate::env::global_env;
+use crate::executor::PrivilegedExecutor;
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -17,33 +16,23 @@ pub const GUARDIAN_LABEL: &str = "com.sentiago.l2tp-hub.guardian";
 // Path helpers
 // ---------------------------------------------------------------------------
 
-pub fn app() -> &'static AppHandle {
-    &state::get_state().app
-}
-
 pub fn config_dir(name: &str) -> PathBuf {
-    let base = app()
-        .path()
-        .app_data_dir()
-        .expect("app_data_dir")
-        .join("ipsec")
-        .join(name);
+    let base = global_env().config_dir(name);
     fs::create_dir_all(&base).ok();
     base
 }
 
 /// Фиксированная директория для активного конфига.
-/// /private/var/root/ — только root имеет доступ. Конфиги содержат PSK и пароли.
 pub fn active_dir() -> PathBuf {
     PathBuf::from("/private/var/root/l2tp-hub/active")
 }
 
 /// Создать active dir с правами 700 (только root)
-pub fn ensure_active_dir(sudo: &SudoSession) -> Result<(), String> {
+pub fn ensure_active_dir(executor: &dyn PrivilegedExecutor) -> Result<(), String> {
     let dir = active_dir();
-    sudo.run_sudo(&["mkdir", "-p", &dir.to_string_lossy()])?;
-    sudo.run_sudo(&["chmod", "700", &dir.to_string_lossy()])?;
-    sudo.run_sudo(&["chown", "root:wheel", &dir.to_string_lossy()])?;
+    executor.run(&["mkdir", "-p", &dir.to_string_lossy()])?;
+    executor.run(&["chmod", "700", &dir.to_string_lossy()])?;
+    executor.run(&["chown", "root:wheel", &dir.to_string_lossy()])?;
     Ok(())
 }
 
@@ -54,10 +43,7 @@ pub fn find_resource(relative: &str) -> PathBuf {
     if dev_path.exists() {
         return dev_path;
     }
-    app().path()
-        .resource_dir()
-        .expect("resource_dir")
-        .join(relative)
+    global_env().resource_dir.join(relative)
 }
 
 pub fn charon_bin() -> PathBuf {

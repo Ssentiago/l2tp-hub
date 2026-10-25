@@ -2,8 +2,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::os::unix::fs::PermissionsExt;
 
-use crate::log;
-use crate::sudo::SudoSession;
+use crate::executor::PrivilegedExecutor;
 
 use super::error::ConnData;
 use super::paths::{config_dir, active_dir, ensure_active_dir, sanitize_name};
@@ -157,7 +156,7 @@ password "{password}"
 }
 
 /// Скопировать конфиги из connection dir в active dir (через sudo — dir принадлежит root)
-pub fn deploy_configs_to_active(sudo: &SudoSession, name: &str) -> Result<(), String> {
+pub fn deploy_configs_to_active(sudo: &dyn PrivilegedExecutor, name: &str) -> Result<(), String> {
     let src = config_dir(name);
     let dst = active_dir();
     ensure_active_dir(sudo)?;
@@ -166,7 +165,7 @@ pub fn deploy_configs_to_active(sudo: &SudoSession, name: &str) -> Result<(), St
         let from = src.join(file);
         if from.exists() {
             let to = dst.join(file);
-            sudo.run_sudo(&["cp", &from.to_string_lossy(), &to.to_string_lossy()])?;
+            sudo.run(&["cp", &from.to_string_lossy(), &to.to_string_lossy()])?;
         }
     }
 
@@ -177,14 +176,14 @@ pub fn deploy_configs_to_active(sudo: &SudoSession, name: &str) -> Result<(), St
             if fname.starts_with("options-") && fname.ends_with(".xl2tpd") {
                 let from = entry.path();
                 let to = dst.join(&fname);
-                sudo.run_sudo(&["cp", &from.to_string_lossy(), &to.to_string_lossy()])?;
+                sudo.run(&["cp", &from.to_string_lossy(), &to.to_string_lossy()])?;
             }
         }
     }
 
-    sudo.run_sudo(&["chmod", "-R", "600", &dst.to_string_lossy()]).ok();
-    sudo.run_sudo(&["chown", "-R", "root:wheel", &dst.to_string_lossy()]).ok();
-    log!("[l2tp] configs deployed to {} (chmod 600, root:wheel)", dst.display());
+    sudo.run(&["chmod", "-R", "600", &dst.to_string_lossy()]).ok();
+    sudo.run(&["chown", "-R", "root:wheel", &dst.to_string_lossy()]).ok();
+    log::debug!("[l2tp] configs deployed to {} (chmod 600, root:wheel)", dst.display());
     Ok(())
 }
 

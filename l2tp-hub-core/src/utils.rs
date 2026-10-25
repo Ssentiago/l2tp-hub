@@ -1,6 +1,7 @@
-use crate::models::connection::Connection;
+use crate::models::Connection;
 
-pub(crate) fn service_hash(conn: &Connection, password: &str, shared_secret: &str) -> String {
+/// Хеш конфигурации сервиса для определения необходимости пересоздания.
+pub fn service_hash(conn: &Connection, password: &str, shared_secret: &str) -> String {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
     let mut h = DefaultHasher::new();

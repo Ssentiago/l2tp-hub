@@ -1,5 +1,4 @@
 use crate::keychain::SERVICE;
-use crate::log;
 use keyring::Entry;
 use std::collections::HashMap;
 
@@ -27,7 +26,7 @@ fn save_all_passwords(map: &HashMap<String, String>) -> Result<(), String> {
 
 #[cfg(target_os = "macos")]
 pub fn set_password(key: &str, password: &str) -> Result<(), String> {
-    log!("[set_password] key='{}'", key);
+    log::debug!("[set_password] key='{}'", key);
     let mut map = get_all_passwords();
     map.insert(key.to_string(), password.to_string());
     save_all_passwords(&map)
@@ -35,7 +34,7 @@ pub fn set_password(key: &str, password: &str) -> Result<(), String> {
 
 #[cfg(target_os = "macos")]
 pub fn get_password(key: &str) -> Result<String, String> {
-    log!("[get_password] key='{}'", key);
+    log::debug!("[get_password] key='{}'", key);
     let map = get_all_passwords();
     map.get(key)
         .cloned()
@@ -44,7 +43,7 @@ pub fn get_password(key: &str) -> Result<String, String> {
 
 #[cfg(target_os = "macos")]
 pub fn delete_password(key: &str) -> Result<(), String> {
-    log!("[delete_password] key='{}'", key);
+    log::debug!("[delete_password] key='{}'", key);
     let mut map = get_all_passwords();
     map.remove(key);
     save_all_passwords(&map)

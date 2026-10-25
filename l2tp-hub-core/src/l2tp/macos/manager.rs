@@ -1,11 +1,11 @@
+use crate::env::AppEnv;
+use crate::executor::PrivilegedExecutor;
+use crate::keychain;
 use crate::l2tp;
 use crate::l2tp::VpnStatus;
-use crate::log;
-use crate::sudo::SudoSession;
-use crate::{keychain, store};
+use crate::store;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
-use tauri::AppHandle;
 
 /// Сериализация запуска VPN демонов.
 /// Предотвращает параллельный запуск charon/xl2tpd при одновременных подключениях.
@@ -18,16 +18,18 @@ static DAEMON_STARTUP: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(()
 /// Вызывающий код обязан оборачивать в spawn_blocking.
 #[derive(Clone)]
 pub struct L2tpManager {
-    sudo: SudoSession,
-    app: AppHandle,
+    executor: Arc<dyn PrivilegedExecutor>,
+    env: AppEnv,
+    pool: sqlx::SqlitePool,
     active: Arc<Mutex<HashSet<String>>>,
 }
 
 impl L2tpManager {
-    pub fn new(sudo: SudoSession, app: AppHandle) -> Self {
+    pub fn new(executor: Arc<dyn PrivilegedExecutor>, env: AppEnv, pool: sqlx::SqlitePool) -> Self {
         Self {
-            sudo,
-            app,
+            executor,
+            env,
+            pool,
             active: Arc::new(Mutex::new(HashSet::new())),
         }
     }
@@ -37,12 +39,12 @@ impl L2tpManager {
         self.active.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
-    pub fn app_config(&self) -> &tauri::Config {
-        self.app.config()
+    pub fn env(&self) -> &AppEnv {
+        &self.env
     }
 
-    pub fn sudo(&self) -> &SudoSession {
-        &self.sudo
+    pub fn executor(&self) -> &dyn PrivilegedExecutor {
+        self.executor.as_ref()
     }
 
     /// Все активные подключения
@@ -83,7 +85,7 @@ impl L2tpManager {
     /// Full — только если нет других активных подключений.
     pub async fn connect(&self, id: &str) -> Result<(), String> {
         // Загружаем connection для проверки tunnel_mode
-        let store = store::load(self.app.config()).await;
+        let store = store::load(&self.pool).await;
         let conn = store.workspaces.iter()
             .flat_map(|ws| ws.connections.iter())
             .find(|c| c.id == id)
@@ -124,15 +126,15 @@ impl L2tpManager {
     }
 
     async fn do_connect(&self, id: &str, conn: &crate::models::connection::Connection) -> Result<(), String> {
-        log!("[manager] connect: id={}, mode={}", id, conn.tunnel_mode);
+        log::debug!("[manager] connect: id={}, mode={}", id, conn.tunnel_mode);
 
         let password = keychain::get_password(&conn.keychain_key)?;
         let shared_secret = keychain::get_password(&conn.shared_secret_key)?;
         let original_gateway = l2tp::get_default_gateway()?;
-        log!("[manager] original_gateway={}", original_gateway);
+        log::debug!("[manager] original_gateway={}", original_gateway);
 
         l2tp::create_vpn_service(
-            &self.sudo,
+            self.executor.as_ref(),
             &conn.service_name,
             &conn.server,
             &conn.username,
@@ -141,16 +143,16 @@ impl L2tpManager {
             &original_gateway,
         )?;
 
-        let mut store = store::load(self.app.config()).await;
+        let mut store = store::load(&self.pool).await;
 
-        let hash = crate::commands::utils::service_hash(conn, &password, &shared_secret);
+        let hash = crate::utils::service_hash(conn, &password, &shared_secret);
         if conn.service_hash.as_deref() != Some(hash.as_str()) {
             for ws in &mut store.workspaces {
                 if let Some(c) = ws.connections.iter_mut().find(|c| c.id == id) {
                     c.service_hash = Some(hash.clone());
                 }
             }
-            store::save(&store).await?;
+            store::save(&self.pool, &store).await?;
         }
 
         // Собираем ConnData для ВСЕХ активных подключений (включая новое)
@@ -164,7 +166,7 @@ impl L2tpManager {
         let connect_result = tokio::time::timeout(
                 std::time::Duration::from_secs(60),
                 l2tp::connect_vpn(
-                    &self.sudo,
+                    self.executor.as_ref(),
                     &all_conns,
                     is_first,
                     &original_gateway,
@@ -174,7 +176,7 @@ impl L2tpManager {
         match connect_result {
             Ok(inner) => inner?,
             Err(_) => {
-                log!("[manager] connect timed out after 60s");
+                log::debug!("[manager] connect timed out after 60s");
                 crate::l2tp::macos::stop_heartbeat_thread();
                 crate::l2tp::macos::deactivate_guardian();
                 return Err("Превышен таймаут подключения (60 сек)".to_string());
@@ -182,9 +184,9 @@ impl L2tpManager {
         }
 
         update_connect_stats(&mut store, id);
-        store::save(&store).await?;
+        store::save(&self.pool, &store).await?;
 
-        log!("[manager] connect done: {}", conn.service_name);
+        log::debug!("[manager] connect done: {}", conn.service_name);
         Ok(())
     }
 
@@ -256,9 +258,9 @@ impl L2tpManager {
 
     /// Отключить VPN по id. Если это последнее активное — останавливает демонов.
     pub async fn disconnect(&self, id: &str) -> Result<(), String> {
-        log!("[manager] disconnect: id={}", id);
+        log::debug!("[manager] disconnect: id={}", id);
 
-        let mut store = store::load(self.app.config()).await;
+        let mut store = store::load(&self.pool).await;
         let conn = store.workspaces.iter()
             .flat_map(|ws| ws.connections.iter())
             .find(|c| c.id == id)
@@ -277,14 +279,14 @@ impl L2tpManager {
 
         if is_last {
             // Последнее подключение — полная остановка
-            l2tp::disconnect_vpn(&self.sudo, &conn.service_name).await?;
+            l2tp::disconnect_vpn(self.executor.as_ref(), &conn.service_name).await?;
         } else {
             let original_gw = l2tp::get_default_gateway().unwrap_or_default();
             // Собираем ConnData для оставшихся активных (без текущего)
             let remaining = self.collect_remaining_conn_data(&store, id)?;
             // Не последнее — restart xl2tpd с оставшимися LAC
             crate::l2tp::macos::disconnect_single(
-                &self.sudo,
+                self.executor.as_ref(),
                 &conn.service_name,
                 &conn.server,
                 &conn.split_routes,
@@ -296,9 +298,9 @@ impl L2tpManager {
         self.active_lock().remove(id);
 
         update_disconnect_stats(&mut store, id);
-        store::save(&store).await?;
+        store::save(&self.pool, &store).await?;
 
-        log!("[manager] disconnect done: {}", conn.service_name);
+        log::debug!("[manager] disconnect done: {}", conn.service_name);
         Ok(())
     }
 
@@ -310,7 +312,7 @@ impl L2tpManager {
             }
         }
 
-        let store = store::load(self.app.config()).await;
+        let store = store::load(&self.pool).await;
         if let Some(conn) = store.workspaces.iter()
             .flat_map(|ws| ws.connections.iter())
             .find(|c| c.id == id)
@@ -330,7 +332,7 @@ impl L2tpManager {
     }
 
     pub async fn all_statuses(&self) -> HashMap<String, VpnStatus> {
-        let store = store::load(self.app.config()).await;
+        let store = store::load(&self.pool).await;
         let active = self.active_lock();
         let mut map = HashMap::new();
 
@@ -415,7 +417,7 @@ fn update_connect_stats(store: &mut store::Store, id: &str) {
             c.connect_count += 1;
             c.connected_since = Some(now);
             c.last_connected_at = Some(now);
-            log!("[stats] connected_since={}, connect_count={}", now, c.connect_count);
+            log::debug!("[stats] connected_since={}, connect_count={}", now, c.connect_count);
             return;
         }
     }
@@ -425,7 +427,7 @@ fn update_disconnect_stats(store: &mut store::Store, id: &str) {
     let now = now_secs();
     for ws in &mut store.workspaces {
         if let Some(c) = ws.connections.iter_mut().find(|c| c.id == id) {
-            log!("[stats] disconnect: clearing connected_since, was={:?}", c.connected_since);
+            log::debug!("[stats] disconnect: clearing connected_since, was={:?}", c.connected_since);
             c.connected_since = None;
             c.last_disconnected_at = Some(now);
             return;
