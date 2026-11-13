@@ -1,15 +1,25 @@
 use std::io::{BufRead, BufReader, Write};
+use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::UnixListener;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
+mod allowlist;
+mod peercred;
+
 const SOCKET_PATH: &str = "/var/run/l2tp-hub-helper.sock";
 const HELPER_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+// gid группы admin на macOS.
+const ADMIN_GID: u32 = 80;
 
 fn main() {
     // Удаляем старый сокет если остался
     let _ = std::fs::remove_file(SOCKET_PATH);
 
+    // umask на время bind, чтобы сокет не появился с широкими правами
+    // даже на мгновение до set_permissions.
+    let old_umask = unsafe { libc::umask(0o077) };
     let listener = match UnixListener::bind(SOCKET_PATH) {
         Ok(l) => l,
         Err(e) => {
@@ -17,19 +27,36 @@ fn main() {
             std::process::exit(1);
         }
     };
+    unsafe { libc::umask(old_umask) };
 
-    // Сокет доступен всем (Tauri-процесс под пользователем должен стучаться)
-    let _ = std::fs::set_permissions(
-        SOCKET_PATH,
-        std::os::unix::fs::PermissionsExt::from_mode(0o777),
-    );
+    // Сокет доступен только root и группе admin; дополнительно каждый
+    // коннект проверяется по peer credentials (см. peercred).
+    if let Err(e) = std::fs::set_permissions(SOCKET_PATH, std::fs::Permissions::from_mode(0o660))
+    {
+        eprintln!("Failed to set socket permissions: {}", e);
+        std::process::exit(1);
+    }
+    if let Err(e) = std::os::unix::fs::chown(SOCKET_PATH, Some(0), Some(ADMIN_GID)) {
+        eprintln!("Failed to set socket owner: {}", e);
+        std::process::exit(1);
+    }
 
     eprintln!("l2tp-hub-helper v{} listening on {}", HELPER_VERSION, SOCKET_PATH);
 
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
-                let peer = stream.peer_addr().ok();
+                let uid = match peercred::peer_allowed(&stream) {
+                    Ok(uid) => uid,
+                    Err(reason) => {
+                        eprintln!("Connection rejected: {}", reason);
+                        let mut writer = stream;
+                        let _ = writer
+                            .write_all(b"{\"ok\":false,\"stderr\":\"peer not allowed\"}\n");
+                        continue;
+                    }
+                };
+
                 let mut reader = BufReader::new(&stream);
                 let mut line = String::new();
 
@@ -37,13 +64,14 @@ fn main() {
                     continue;
                 }
 
-                let response = handle_command(line.trim());
+                let command = line.trim().to_string();
+                eprintln!("[audit] uid={} cmd={}", uid, command);
+
+                let response = handle_command(&command);
                 let mut writer = stream;
                 let _ = writer.write_all(response.as_bytes());
                 let _ = writer.write_all(b"\n");
                 let _ = writer.flush();
-
-                let _ = peer; // suppress unused warning
             }
             Err(e) => {
                 eprintln!("Connection error: {}", e);
@@ -64,6 +92,13 @@ fn handle_command(line: &str) -> String {
 
     if args.is_empty() {
         return serde_json::json!({"ok": false, "stderr": "empty command"}).to_string();
+    }
+
+    // Белый список команд: всё вне разрешённых форм отбрасывается до запуска.
+    if let Err(reason) = allowlist::check(&args) {
+        eprintln!("[audit] rejected: {}", reason);
+        return serde_json::json!({"ok": false, "stderr": format!("command rejected: {}", reason)})
+            .to_string();
     }
 
     // Специальная команда: version — возвращает версию хелпера

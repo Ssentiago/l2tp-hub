@@ -21,7 +21,7 @@ LaunchDaemon'ы под root.
 | Фронтенд `src/` | React, выполняется в webview     | Интерфейс, зовёт команды через invoke   |
 | `src-tauri`     | Rust, процесс приложения         | Команды, state, события, жизненный цикл |
 | `l2tp-hub-core` | Rust-библиотека                  | Модели, база, ключи, L2TP-логика        |
-| helper          | Rust, отдельный процесс под root | Выполняет произвольные команды от root  |
+| helper          | Rust, отдельный процесс под root | Выполняет команды из allowlist от root |
 | route-guardian  | Rust, отдельный процесс под root | Мониторит сеть и VPN, делает cleanup    |
 | charon          | bundled strongSwan               | IKE и IPSec                             |
 | xl2tpd          | bundled, с патчами               | L2TP, поднимает pppd                    |
@@ -56,8 +56,11 @@ charon и xl2tpd (root, на время подключения). LaunchDaemon'ы
 
 Приложение и helper. Unix socket `/var/run/l2tp-hub-helper.sock`. Запрос: одна строка
 JSON-массива argv, например `["cp", "a", "b"]`. Ответ: одна строка JSON вида
-`{"ok": bool, "stdout": string, "stderr": string}`. Специальные команды `version` и
-`guardian_start` перехватываются, остальное выполняется как есть от root.
+`{"ok": bool, "stdout": string, "stderr": string}`. Права сокета 0660 (root:admin),
+каждое подключение проверяется по peer credentials: разрешены root и консольный
+пользователь. Команды проходят allowlist с валидацией аргументов
+(`helper/src/allowlist.rs`); `version` и `guardian_start` обрабатываются отдельно,
+всё остальное выполняется от root только в разрешённых формах.
 
 Приложение и guardian. Unix socket `/tmp/l2tp-hub-guardian.sock`. Запрос: строка JSON
 `{"cmd": "...", ...}`. Ответ: строка JSON `{"ok": bool, ...}` с полями состояния.
