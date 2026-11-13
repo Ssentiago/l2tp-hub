@@ -26,9 +26,11 @@ strongSwan, xl2tpd), патчи, итоговый бандл и автомати
 
 `build:deps` запускает `build.sh` (полная сборка нативных зависимостей).
 `build:deps:skip-ssl` переиспользует уже собранный OpenSSL. `build:deps:clean`
-очищает артефакты. `build:helper` и `build:guardian` собирают Rust-демоны и копируют
-бинари с plist в `src-tauri/resources`. `build:all` цепляет всё вместе с фронтом и
-Tauri.
+очищает артефакты. `build:helper` собирает helper как universal-бинарь (arm64 и
+x86_64, склейка через `lipo`), `build:guardian` собирает guardian; оба копируют бинари
+с plist в `src-tauri/resources`. `build:all` цепляет всё вместе с фронтом и Tauri.
+Для `build:helper` нужен rustup с установленными таргетами `aarch64-apple-darwin` и
+`x86_64-apple-darwin`.
 
 ## Порядок build.sh
 
@@ -115,13 +117,16 @@ root-директории.
 `Ssentiago/l2tp-hub`, ветка `main`, changelog в стиле conventional в `CHANGELOG.md`,
 режим релиза через CI.
 
-Два компонента с версией, которые поднимаются вместе: `backend-tauri` (версия в
-`src-tauri/Cargo.toml` и `src-tauri/tauri.conf.json`) и `frontend` (версия в
-`package.json`). Упаковкой занимается CI, jrit только поднимает версии и пишет
-changelog.
+Три компонента с версией, которые поднимаются вместе: `backend-tauri` (версия в
+`src-tauri/Cargo.toml` и `src-tauri/tauri.conf.json`), `frontend` (версия в
+`package.json`) и `helper` (версия в `helper/Cargo.toml`). Упаковкой занимается CI,
+jrit только поднимает версии и пишет changelog: в режиме `ci` поля `build` и
+`artifact` компонентов jrit игнорирует.
 
 Версия приложения (1.0.0) именно отсюда, именно её `sudo.rs` сравнивает с версией
-helper при рукопожатии.
+helper при рукопожатии. Версии поднимаются вместе, поэтому helper переустанавливается
+при обновлении приложения, а не при каждом запуске. Helper собирается в CI шагом
+`bun run build:helper` перед упаковкой (macOS, universal-бинарь).
 
 ## Сборка приложения
 

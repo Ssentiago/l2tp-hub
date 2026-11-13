@@ -35,6 +35,10 @@ jobs:
 
       - run: bun install
 
+      - name: Build helper (universal)
+        if: runner.os == 'macOS'
+        run: bun run build:helper
+
       - uses: tauri-apps/tauri-action@v0
         if: startsWith(github.ref, 'refs/tags/')
         env:

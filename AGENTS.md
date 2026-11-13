@@ -49,7 +49,7 @@ VPN-логика по ОС), `models` (структуры данных), `store`
 managed state, регистрирует команды, эмитит события, управляет выходом и сном.
 Зависит от `l2tp-hub-core` по пути.
 
-`helper` (пакет `l2tp-hub-helper`, версия 0.8.0). Демон с root-правами, слушает unix
+`helper` (пакет `l2tp-hub-helper`, версия 1.0.0). Демон с root-правами, слушает unix
 socket `/var/run/l2tp-hub-helper.sock`. Выполняет команды от имени root. Зависимости:
 serde, serde_json, libc (для проверки peer и umask), security-framework и
 core-foundation (проверка кодовой подписи пира, только релизная сборка). Debug-сборка
@@ -68,7 +68,7 @@ cleanup при пропаже heartbeat или смерти Tauri.
 | ------------------------ | ---------------------------------------------------------------------- |
 | `npm run tauri:dev`      | Запуск в режиме разработки                                             |
 | `npm run tauri:build`    | Продакшн-сборка приложения                                             |
-| `npm run build:helper`   | Собирает helper, кладёт бинарь и plist в `src-tauri/resources/helper/`   |
+| `npm run build:helper`   | Собирает helper (universal arm64+x86_64), кладёт бинарь и plist в `src-tauri/resources/helper/` |
 | `npm run build:helper:dev` | Собирает dev-helper (debug) в `helper/target/debug`, в ресурсы не кладёт |
 | `npm run build:guardian` | Собирает guardian, кладёт в `src-tauri/resources/guardian/`            |
 | `npm run build:deps`     | Собирает нативные зависимости (strongSwan, xl2tpd, OpenSSL)            |
@@ -138,9 +138,13 @@ cleanup при пропаже heartbeat или смерти Tauri.
 
 ## Опасные места
 
-Версии helper. `helper/Cargo.toml` сейчас 0.8.0, а приложение ждёт версию из
-`src-tauri/Cargo.toml` (1.0.0). При несовпадении `authenticate()` переустанавливает
-helper. При изменении протокола helper его версия поднимается осознанно.
+Версии helper. `authenticate()` сравнивает версию helper (команда `version`) с версией
+приложения из `src-tauri/Cargo.toml`. Версии всех компонентов поднимаются вместе через
+`jrit` (компонент `helper` в `jrit.toml`), поэтому совпадают всегда, а helper
+переустанавливается при обновлении приложения: это же перезаписывает файл доверия с
+cdhash нового билда (см. ниже). Если версии разошлись, например helper собирали
+вручную, минуя jrit, helper переустанавливается при каждом запуске. Helper собирается
+в CI шагом `bun run build:helper` (universal-бинарь) перед упаковкой.
 
 Сокет helper защищён: права 0660 root:admin, проверка пира через getpeereid (разрешены
 root и консольный пользователь), allowlist команд с валидацией аргументов в

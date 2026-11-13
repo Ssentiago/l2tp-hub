@@ -29,3 +29,13 @@ zip = false
 
 [[components.version_files]]
 file = "package.json"
+
+[[components]]
+name = "helper"
+path = "helper/"
+build = ""
+artifact = ""
+zip = false
+
+[[components.version_files]]
+file = "Cargo.toml"
