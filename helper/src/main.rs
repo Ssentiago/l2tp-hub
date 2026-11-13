@@ -7,6 +7,11 @@ use std::time::{Duration, Instant};
 mod allowlist;
 mod peercred;
 
+// Debug-сборка обслуживает dev-приложение через отдельный сокет и label
+// (см. com.sentiago.l2tp-hub.dev.plist), чтобы не пересекаться с релизным.
+#[cfg(debug_assertions)]
+const SOCKET_PATH: &str = "/var/run/l2tp-hub-helper-dev.sock";
+#[cfg(not(debug_assertions))]
 const SOCKET_PATH: &str = "/var/run/l2tp-hub-helper.sock";
 const HELPER_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -30,7 +35,7 @@ fn main() {
     unsafe { libc::umask(old_umask) };
 
     // Сокет доступен только root и группе admin; дополнительно каждый
-    // коннект проверяется по peer credentials (см. peercred).
+    // коннект проверяется по peer credentials и кодовой подписи (см. peercred).
     if let Err(e) = std::fs::set_permissions(SOCKET_PATH, std::fs::Permissions::from_mode(0o660))
     {
         eprintln!("Failed to set socket permissions: {}", e);

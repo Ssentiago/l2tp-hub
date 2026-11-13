@@ -37,6 +37,8 @@ LaunchDaemon'ы под root.
 helper (root, постоянный). LaunchDaemon `com.sentiago.l2tp-hub.helper`. Слушает unix
 socket `/var/run/l2tp-hub-helper.sock`. Получает от приложения argv в виде JSON-массива,
 выполняет команду от root и возвращает результат. Работает всегда, пока установлен.
+Debug-сборка helper работает как отдельный dev-helper с сокетом
+`/var/run/l2tp-hub-helper-dev.sock` и меткой `com.sentiago.l2tp-hub.dev`.
 
 route-guardian (root, постоянный). LaunchDaemon `com.sentiago.l2tp-hub.guardian`.
 Слушает `/tmp/l2tp-hub-guardian.sock`. Мониторит физическую сеть и VPN-процессы.
@@ -57,10 +59,12 @@ charon и xl2tpd (root, на время подключения). LaunchDaemon'ы
 Приложение и helper. Unix socket `/var/run/l2tp-hub-helper.sock`. Запрос: одна строка
 JSON-массива argv, например `["cp", "a", "b"]`. Ответ: одна строка JSON вида
 `{"ok": bool, "stdout": string, "stderr": string}`. Права сокета 0660 (root:admin),
-каждое подключение проверяется по peer credentials: разрешены root и консольный
-пользователь. Команды проходят allowlist с валидацией аргументов
-(`helper/src/allowlist.rs`); `version` и `guardian_start` обрабатываются отдельно,
-всё остальное выполняется от root только в разрешённых формах.
+каждое подключение проверяется в два шага: peer credentials (разрешены root и
+консольный пользователь) и кодовая подпись пира по audit token против файла доверия
+с зачисленным cdhash приложения (подробности в `docs/daemons.md`). Команды проходят
+allowlist с валидацией аргументов (`helper/src/allowlist.rs`); `version` и
+`guardian_start` обрабатываются отдельно, всё остальное выполняется от root только в
+разрешённых формах.
 
 Приложение и guardian. Unix socket `/tmp/l2tp-hub-guardian.sock`. Запрос: строка JSON
 `{"cmd": "...", ...}`. Ответ: строка JSON `{"ok": bool, ...}` с полями состояния.

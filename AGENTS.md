@@ -51,7 +51,10 @@ managed state, регистрирует команды, эмитит событ�
 
 `helper` (пакет `l2tp-hub-helper`, версия 0.8.0). Демон с root-правами, слушает unix
 socket `/var/run/l2tp-hub-helper.sock`. Выполняет команды от имени root. Зависимости:
-serde, serde_json и libc (для проверки peer и umask).
+serde, serde_json, libc (для проверки peer и umask), security-framework и
+core-foundation (проверка кодовой подписи пира, только релизная сборка). Debug-сборка
+работает как отдельный dev-helper: сокет `/var/run/l2tp-hub-helper-dev.sock`, метка
+`com.sentiago.l2tp-hub.dev`, проверка подписи не компилируется.
 
 `route-guardian` (пакет `l2tp-hub-guardian`, версия 0.8.0). Демон с root-правами,
 слушает `/tmp/l2tp-hub-guardian.sock`. Мониторит VPN и физическую сеть, делает
@@ -65,7 +68,8 @@ cleanup при пропаже heartbeat или смерти Tauri.
 | ------------------------ | ---------------------------------------------------------------------- |
 | `npm run tauri:dev`      | Запуск в режиме разработки                                             |
 | `npm run tauri:build`    | Продакшн-сборка приложения                                             |
-| `npm run build:helper`   | Собирает helper, кладёт бинарь и plist в `src-tauri/resources/helper/` |
+| `npm run build:helper`   | Собирает helper, кладёт бинарь и plist в `src-tauri/resources/helper/`   |
+| `npm run build:helper:dev` | Собирает dev-helper (debug) в `helper/target/debug`, в ресурсы не кладёт |
 | `npm run build:guardian` | Собирает guardian, кладёт в `src-tauri/resources/guardian/`            |
 | `npm run build:deps`     | Собирает нативные зависимости (strongSwan, xl2tpd, OpenSSL)            |
 | `npm run build:all`      | helper + guardian + зависимости + tsc + vite + tauri                   |
@@ -140,11 +144,18 @@ helper. При изменении протокола helper его версия 
 
 Сокет helper защищён: права 0660 root:admin, проверка пира через getpeereid (разрешены
 root и консольный пользователь), allowlist команд с валидацией аргументов в
-`helper/src/allowlist.rs`. Остаточный риск: любой процесс консольного пользователя
-может вызывать разрешённые VPN-команды. Allowlist повторяет формы команд из ядра:
-при изменении вызовов в `l2tp-hub-core` его нужно синхронно править, иначе helper
-начнёт отклонять команды приложения. Сокет route-guardian (`/tmp/l2tp-hub-guardian.sock`)
-остаётся 0777 без проверки пира, это отдельная неустранённая дыра.
+`helper/src/allowlist.rs`. Релизная сборка дополнительно проверяет кодовую подпись
+пира: audit token через `getsockopt LOCAL_PEERTOKEN`, затем `SecCodeCheckValidity` по
+требованию из `/Library/PrivilegedHelperTools/l2tp-hub-helper.trust` (зачисленный
+cdhash приложения, файл пишет root при установке helper). Приложение подписано
+ad-hoc (`signingIdentity: "-"` в tauri.conf.json), поэтому обновление приложения
+меняет cdhash и зачисляет его через переустановку helper; dev-сборки идут через
+отдельный dev-helper без проверки подписи. Остаточный риск: любой, кто может
+переустановить helper (пароль администратора), зачисляет произвольный бинарь.
+Allowlist повторяет формы команд из ядра: при изменении вызовов в `l2tp-hub-core`
+его нужно синхронно править, иначе helper начнёт отклонять команды приложения. Сокет
+route-guardian (`/tmp/l2tp-hub-guardian.sock`) остаётся 0777 без проверки пира, это
+отдельная неустранённая дыра.
 
 Маршрутизация. Полный туннель перехватывает default route. При сбое проверки ping
 маршрут откатывается. Состояние маршрутов пишется в

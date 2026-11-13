@@ -97,6 +97,9 @@ macOS 13+ и Xcode Command Line Tools.
 Ресурс `route-guardian.sh` лежит в корне resources, но не входит в карту бандла и не
 используется, это устаревший механизм.
 
+Dev-helper (`npm run build:helper:dev`) собирается в `helper/target/debug` и в ресурсы
+не кладётся: в релизный бандл он физически не попадает.
+
 Поиск ресурсов во время выполнения идёт через `find_resource` в `l2tp/macos/paths.rs`:
 в dev-сборке берётся путь `l2tp-hub-core/resources`, иначе `resource_dir` приложения.
 
@@ -125,6 +128,13 @@ helper при рукопожатии.
 `tauri.conf.json`: имя продукта L2TP Hub, идентификатор `com.sentiago.l2tp-hub`, одно
 окно 640 на 480, CSP ограничена. Перед dev-сборкой запускается `bun run dev`, перед
 продакшн `bun run build`, фронт берётся из `dist`.
+
+Бандл подписывается ad-hoc: `bundle.macOS.signingIdentity: "-"`. Это не сертификат
+Developer ID, но даёт бандлу валидную кодовую подпись с identifier
+`com.sentiago.l2tp-hub` и CDHash. На этой подписи держится проверка пира в helper:
+`sudo.rs` берёт CDHash текущего бинаря при установке и зачисляет его в файл доверия
+(см. `docs/daemons.md`). Без подписи установка helper падает с ошибкой, а неподписанные
+dev-бинари идут через отдельный dev-helper без проверки.
 
 На Windows `build.rs` встраивает манифест с `requireAdministrator`, поэтому
 привилегированный запуск идёт напрямую без helper.

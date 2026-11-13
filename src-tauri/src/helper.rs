@@ -15,6 +15,10 @@ mod imp {
     use std::io::{BufRead, BufReader, Write};
     use std::os::unix::net::UnixStream;
 
+    // Debug-сборка общается с dev-helper по отдельному сокету (см. sudo.rs).
+    #[cfg(debug_assertions)]
+    const SOCKET_PATH: &str = "/var/run/l2tp-hub-helper-dev.sock";
+    #[cfg(not(debug_assertions))]
     const SOCKET_PATH: &str = "/var/run/l2tp-hub-helper.sock";
 
     /// Проверяет, запущен ли хелпер (сокет существует и отвечает)

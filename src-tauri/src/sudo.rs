@@ -12,6 +12,36 @@ const HELPER_CONNECT_RETRIES: u32 = 3;
 #[cfg(target_os = "macos")]
 const HELPER_CONNECT_DELAY: std::time::Duration = std::time::Duration::from_secs(1);
 
+// Имена и пути helper. Debug-сборка ставит отдельный dev-helper с отдельным
+// сокетом и label, чтобы dev не пересекался с релизным и не подменял его.
+#[cfg(target_os = "macos")]
+mod hp {
+    #[cfg(debug_assertions)]
+    pub const LABEL: &str = "com.sentiago.l2tp-hub.dev";
+    #[cfg(not(debug_assertions))]
+    pub const LABEL: &str = "com.sentiago.l2tp-hub.helper";
+
+    #[cfg(debug_assertions)]
+    pub const BIN: &str = "/Library/PrivilegedHelperTools/l2tp-hub-helper-dev";
+    #[cfg(not(debug_assertions))]
+    pub const BIN: &str = "/Library/PrivilegedHelperTools/l2tp-hub-helper";
+
+    pub fn plist() -> String {
+        format!("/Library/LaunchDaemons/{}.plist", LABEL)
+    }
+}
+
+/// Bundle identifier приложения: входит в требование к подписи клиента.
+#[cfg(target_os = "macos")]
+#[cfg(not(debug_assertions))]
+const APP_IDENTIFIER: &str = "com.sentiago.l2tp-hub";
+
+/// Файл доверия helper: требование к кодовой подписи клиента. Пишется root
+/// при установке helper, читается helper при каждом подключении.
+#[cfg(target_os = "macos")]
+#[cfg(not(debug_assertions))]
+const TRUST_FILE: &str = "/Library/PrivilegedHelperTools/l2tp-hub-helper.trust";
+
 #[derive(Clone)]
 pub struct SudoSession {
     authenticated: Arc<Mutex<bool>>,
@@ -206,16 +236,18 @@ impl SudoSession {
 /// Проверяет, установлен ли хелпер в системе
 #[cfg(target_os = "macos")]
 fn helper_installed() -> bool {
-    std::path::Path::new("/Library/PrivilegedHelperTools/l2tp-hub-helper").exists()
-        && std::path::Path::new("/Library/LaunchDaemons/com.sentiago.l2tp-hub.helper.plist").exists()
+    std::path::Path::new(hp::BIN).exists() && std::path::Path::new(&hp::plist()).exists()
 }
 
 /// Запустить уже установленный хелпер через launchctl
 #[cfg(target_os = "macos")]
 fn start_helper() -> Result<(), String> {
+    let plist = hp::plist();
+    let label_ref = format!("system/{}", hp::LABEL);
+
     // Сначала пробуем bootstrap
     let output = std::process::Command::new("launchctl")
-        .args(["bootstrap", "system", "/Library/LaunchDaemons/com.sentiago.l2tp-hub.helper.plist"])
+        .args(["bootstrap", "system", &plist])
         .output()
         .map_err(|e| e.to_string())?;
 
@@ -228,24 +260,24 @@ fn start_helper() -> Result<(), String> {
     {
         // Демон уже загружен — kickstart для перезапуска
         let _ = std::process::Command::new("launchctl")
-            .args(["kickstart", "-k", "system/com.sentiago.l2tp-hub.helper"])
+            .args(["kickstart", "-k", &label_ref])
             .output();
         Ok(())
     } else {
         // bootstrap не удался — пробуем bootout + bootstrap заново
         let _ = std::process::Command::new("launchctl")
-            .args(["bootout", "system/com.sentiago.l2tp-hub.helper"])
+            .args(["bootout", &label_ref])
             .output();
         std::thread::sleep(std::time::Duration::from_millis(500));
         let output = std::process::Command::new("launchctl")
-            .args(["bootstrap", "system", "/Library/LaunchDaemons/com.sentiago.l2tp-hub.helper.plist"])
+            .args(["bootstrap", "system", &plist])
             .output()
             .map_err(|e| e.to_string())?;
         if output.status.success() {
             Ok(())
         } else {
             let _ = std::process::Command::new("launchctl")
-                .args(["kickstart", "-k", "system/com.sentiago.l2tp-hub.helper"])
+                .args(["kickstart", "-k", &label_ref])
                 .output();
             Ok(())
         }
@@ -257,26 +289,17 @@ fn start_helper() -> Result<(), String> {
 fn reinstall_helper() -> Result<(), String> {
     crate::log!("[helper] reinstalling: stopping old daemon...");
     let _ = std::process::Command::new("launchctl")
-        .args(["bootout", "system/com.sentiago.l2tp-hub.helper"])
+        .args(["bootout", &format!("system/{}", hp::LABEL)])
         .output();
     std::thread::sleep(std::time::Duration::from_millis(500));
     install_helper()
 }
 
-/// Установить хелпер: скопировать бинарник + plist, bootstrap через osascript
+/// Установить хелпер: скопировать бинарник + plist, записать файл доверия,
+/// bootstrap через osascript.
 #[cfg(target_os = "macos")]
 fn install_helper() -> Result<(), String> {
-    use crate::state;
-    use tauri::Manager;
-
-    let app = &state::get_state().app;
-    let resource_dir = app
-        .path()
-        .resource_dir()
-        .map_err(|e| format!("resource_dir: {}", e))?;
-
-    let helper_bin = resource_dir.join("helper").join("l2tp-hub-helper");
-    let helper_plist = resource_dir.join("helper").join("com.sentiago.l2tp-hub.helper.plist");
+    let (helper_bin, helper_plist) = helper_source_files()?;
 
     if !helper_bin.exists() {
         return Err(format!("Helper binary not found: {:?}", helper_bin));
@@ -287,10 +310,17 @@ fn install_helper() -> Result<(), String> {
 
     let bin_str = helper_bin.to_string_lossy();
     let plist_str = helper_plist.to_string_lossy();
+    let plist_target = hp::plist();
+    let trust_step = trust_file_step()?;
 
     let script = format!(
-        r#"do shell script "mkdir -p /Library/PrivilegedHelperTools && cp '{}' /Library/PrivilegedHelperTools/l2tp-hub-helper && chmod 544 /Library/PrivilegedHelperTools/l2tp-hub-helper && cp '{}' /Library/LaunchDaemons/com.sentiago.l2tp-hub.helper.plist && chmod 644 /Library/LaunchDaemons/com.sentiago.l2tp-hub.helper.plist && launchctl bootout system/com.sentiago.l2tp-hub.helper 2>/dev/null; launchctl bootstrap system /Library/LaunchDaemons/com.sentiago.l2tp-hub.helper.plist && launchctl kickstart system/com.sentiago.l2tp-hub.helper" with administrator privileges"#,
-        bin_str, plist_str
+        r#"do shell script "mkdir -p /Library/PrivilegedHelperTools && cp '{bin}' {target} && chmod 544 {target} && cp '{plist}' {plist_target} && chmod 644 {plist_target} && {trust_step}launchctl bootout system/{label} 2>/dev/null; launchctl bootstrap system {plist_target} && launchctl kickstart system/{label}" with administrator privileges"#,
+        bin = bin_str,
+        target = hp::BIN,
+        plist = plist_str,
+        plist_target = plist_target,
+        trust_step = trust_step,
+        label = hp::LABEL,
     );
 
     let output = std::process::Command::new("osascript")
@@ -309,6 +339,96 @@ fn install_helper() -> Result<(), String> {
             Err(format!("Установка хелпера не удалась: {}", stderr))
         }
     }
+}
+
+/// Исходники helper для установки: релиз берёт бинарник и plist из ресурсов
+/// бандла, debug — из каталога сборки helper. Dev-helper в ресурсы не
+/// складывается, чтобы не попадать в релизный бандл.
+#[cfg(target_os = "macos")]
+#[cfg(not(debug_assertions))]
+fn helper_source_files() -> Result<(std::path::PathBuf, std::path::PathBuf), String> {
+    use crate::state;
+    use tauri::Manager;
+
+    let app = &state::get_state().app;
+    let resource_dir = app
+        .path()
+        .resource_dir()
+        .map_err(|e| format!("resource_dir: {}", e))?;
+
+    Ok((
+        resource_dir.join("helper").join("l2tp-hub-helper"),
+        resource_dir
+            .join("helper")
+            .join("com.sentiago.l2tp-hub.helper.plist"),
+    ))
+}
+
+#[cfg(target_os = "macos")]
+#[cfg(debug_assertions)]
+fn helper_source_files() -> Result<(std::path::PathBuf, std::path::PathBuf), String> {
+    // Dev-helper собирается командой npm run build:helper:dev.
+    Ok((
+        std::path::PathBuf::from(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../helper/target/debug/l2tp-hub-helper"
+        )),
+        std::path::PathBuf::from(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../helper/com.sentiago.l2tp-hub.dev.plist"
+        )),
+    ))
+}
+
+/// Шаг записи файла доверия для install-скрипта: helper пускает только
+/// клиентов, чья кодовая подпись соответствует требованию из этого файла.
+#[cfg(target_os = "macos")]
+#[cfg(not(debug_assertions))]
+fn trust_file_step() -> Result<String, String> {
+    let requirement = client_requirement()?.replace('"', "\\\"");
+    Ok(format!(
+        "printf '%s' '{req}' > {path} && chown root:wheel {path} && chmod 600 {path} && ",
+        req = requirement,
+        path = TRUST_FILE,
+    ))
+}
+
+/// Dev-helper проверку подписи не выполняет, файл доверия не нужен.
+#[cfg(target_os = "macos")]
+#[cfg(debug_assertions)]
+fn trust_file_step() -> Result<String, String> {
+    Ok(String::new())
+}
+
+/// Требование к подписи клиента для файла доверия: identifier приложения и
+/// cdhash текущего бинаря. Берётся подпись этого процесса: к сокету helper
+/// подключается само приложение.
+#[cfg(target_os = "macos")]
+#[cfg(not(debug_assertions))]
+fn client_requirement() -> Result<String, String> {
+    let exe = std::env::current_exe().map_err(|e| format!("current_exe: {}", e))?;
+    let output = std::process::Command::new("codesign")
+        .arg("-d")
+        .arg("--verbose=4")
+        .arg(&exe)
+        .output()
+        .map_err(|e| format!("codesign: {}", e))?;
+    let info = String::from_utf8_lossy(&output.stderr);
+    let cdhash = info
+        .lines()
+        .find_map(|line| line.strip_prefix("CDHash="))
+        .map(|h| h.trim().to_string())
+        .filter(|h| !h.is_empty())
+        .ok_or_else(|| {
+            format!(
+                "codesign: CDHash не найден для {:?}, приложение не подписано",
+                exe
+            )
+        })?;
+    Ok(format!(
+        "identifier \"{}\" and cdhash H\"{}\"",
+        APP_IDENTIFIER, cdhash
+    ))
 }
 
 impl l2tp_hub_core::PrivilegedExecutor for SudoSession {
