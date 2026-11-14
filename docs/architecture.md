@@ -84,7 +84,7 @@ kickstart`, `launchctl kill`, `launchctl bootout`.
 5. В managed state кладутся `SudoSession` и `L2tpManager`.
 6. Регистрируется глобальный шорткат показа окна.
 7. Подписка на события сна и пробуждения через IOKit.
-8. Регистрируются 33 команды и плагины dialog, fs, global-shortcut.
+8. Регистрируются 33 команды и плагины dialog, fs, global-shortcut, single-instance.
 
 ## Поток данных при подключении
 
