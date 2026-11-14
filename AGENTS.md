@@ -66,8 +66,9 @@ cleanup при пропаже heartbeat или смерти Tauri.
 
 | Команда                  | Что делает                                                             |
 | ------------------------ | ---------------------------------------------------------------------- |
-| `npm run tauri:dev`      | Запуск в режиме разработки                                             |
-| `npm run tauri:build`    | Продакшн-сборка приложения                                             |
+| `npm run tauri:dev`      | Запуск в режиме разработки (плюс dev-helper и генерация TS-типов)     |
+| `npm run tauri:build`    | Продакшн-сборка приложения (плюс генерация TS-типов)                  |
+| `npm run gen:types`      | Генерация TypeScript-типов из Rust (specta) в `src/typing/bindings.ts` |
 | `npm run build:helper`   | Собирает helper (universal arm64+x86_64), кладёт бинарь и plist в `src-tauri/resources/helper/` |
 | `npm run build:helper:dev` | Собирает dev-helper (debug) в `helper/target/debug`, в ресурсы не кладёт |
 | `npm run build:guardian` | Собирает guardian, кладёт в `src-tauri/resources/guardian/`            |
@@ -122,6 +123,15 @@ cleanup при пропаже heartbeat или смерти Tauri.
 
 Именование. Поле `Connection.service_name` в коде раньше называлось `name`. В JSON
 остался алиас `#[serde(alias = "name")]`. В бэкенде используется `service_name`.
+
+Типы фронта. Все типы данных во фронте генерятся из Rust через specta и tauri-specta
+в `src/typing/bindings.ts` (команда `npm run gen:types`, cargo-тест `export_bindings`,
+в dev перегенерация при старте приложения). Файл генерённый, руками не правится.
+Модели ядра и DTO помечены `#[derive(specta::Type)]`, команды атрибутом
+`#[specta::specta]`, единственный список команд в `specta_builder()` (`main.rs`), он же
+уходит в `invoke_handler`. Руками пишутся только UI-типы: пропсы компонентов и
+композиты вида вроде `ConnectionWithStatus`. Режимы туннеля типизированы enum
+`TunnelMode` (`split`, `full`), строками в моделях они не являются.
 
 Секреты. Пароли и общие ключи не хранятся в базе. В базе лежат только ключи
 `password_{id}` и `shared_{id}`, сами значения в системной связке ключей (сервис

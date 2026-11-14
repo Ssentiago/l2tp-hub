@@ -4,7 +4,7 @@ use std::io::Write;
 
 const REPO: &str = "Ssentiago/l2tp-hub";
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 pub struct UpdateInfo {
     pub latest_version: String,
     pub download_url: String,
@@ -16,6 +16,7 @@ fn cache_dir() -> std::path::PathBuf {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn check_update(current_version: String) -> Result<Option<UpdateInfo>, String> {
     log!("[check_update] current={}", current_version);
 
@@ -76,6 +77,7 @@ pub async fn check_update(current_version: String) -> Result<Option<UpdateInfo>,
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn apply_update(download_url: String, asset_name: String) -> Result<(), String> {
     let file_path = cache_dir().join(&asset_name);
 

@@ -9,7 +9,7 @@ fn history_dir() -> PathBuf {
     global_env().session_logs_dir()
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
 pub struct SessionMeta {
     pub timestamp: i64,
     pub started_at: Option<i64>,
@@ -19,7 +19,7 @@ pub struct SessionMeta {
     pub server: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
 pub struct SessionLogs {
     pub meta: SessionMeta,
     pub charon: String,

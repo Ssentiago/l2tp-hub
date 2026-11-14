@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Box, Typography, IconButton, Tooltip, CircularProgress } from "@mui/material";
 import { StopCircle } from "@mui/icons-material";
-import type { ConnectionWithStatus } from "../typing/definitions";
+import type { ConnectionWithStatus } from "../store";
 import { getTitle } from "../core/display";
 
 interface Props {

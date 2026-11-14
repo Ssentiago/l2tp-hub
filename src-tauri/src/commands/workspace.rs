@@ -2,7 +2,7 @@ use crate::models::workspace::Workspace;
 use crate::store;
 use serde::Serialize;
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 pub struct WorkspaceInfo {
     pub id: String,
     pub name: String,
@@ -10,6 +10,7 @@ pub struct WorkspaceInfo {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn get_workspaces(__app_handle: tauri::AppHandle) -> Vec<WorkspaceInfo> {
     let pool = crate::DB_POOL.get().expect("DB pool not initialized");
     crate::db::workspace_infos(pool)
@@ -25,11 +26,13 @@ pub async fn get_workspaces(__app_handle: tauri::AppHandle) -> Vec<WorkspaceInfo
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn get_active_workspace_id(_app_handle: tauri::AppHandle) -> String {
     store::load(&crate::DB_POOL.get().expect("pool")).await.active_workspace_id
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn create_workspace(_app_handle: tauri::AppHandle, name: String) -> Result<WorkspaceInfo, String> {
     let ws = Workspace::new(&name);
     let info = WorkspaceInfo {
@@ -49,6 +52,7 @@ pub async fn create_workspace(_app_handle: tauri::AppHandle, name: String) -> Re
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn rename_workspace(_app_handle: tauri::AppHandle, id: String, name: String) -> Result<(), String> {
     crate::STORE
         .get()
@@ -67,6 +71,7 @@ pub async fn rename_workspace(_app_handle: tauri::AppHandle, id: String, name: S
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn delete_workspace(_app_handle: tauri::AppHandle, id: String) -> Result<(), String> {
     crate::STORE
         .get()
@@ -91,6 +96,7 @@ pub async fn delete_workspace(_app_handle: tauri::AppHandle, id: String) -> Resu
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn switch_workspace(_app_handle: tauri::AppHandle, id: String) -> Result<(), String> {
     crate::STORE
         .get()

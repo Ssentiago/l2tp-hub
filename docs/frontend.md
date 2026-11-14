@@ -21,20 +21,35 @@
 | `src/core/api.ts` | Обёртка над invoke, все вызовы команд |
 | `src/core/display.ts` | Форматирование и подсветка |
 | `src/core/subnet.ts` | Парсинг и валидация CIDR |
-| `src/typing/definitions.ts` | Общие типы |
+| `src/typing/bindings.ts` | Генерённые TS-типы и обёртки команд (tauri-specta), руками не правится |
 | `src/ui/` | Презентационные компоненты |
 | `src/pages/` | Экраны и их компоненты |
 | `src/components/` | Переиспользуемые компоненты |
 
 ## Слой команд (api.ts)
 
-Единственный файл, который импортирует `invoke` из `@tauri-apps/api/core`. Экспортирует
-пространство имён `api` с группами методов. Всего вызывается 33 команды, перечисленные
-в `backend.md`. Группы: `connections`, `vpn`, `logs`, `sudo`, `labels`, `app`, `system`,
-`config`, `update`, `workspaces`.
+`api.ts` экспортирует пространство имён `api` с группами методов и делегирует в
+сгенерированные обёртки `commands` из `src/typing/bindings.ts`. `invoke` из
+`@tauri-apps/api/core` импортирует только сгенерённый `bindings.ts`. Группы:
+`connections`, `vpn`, `logs`, `sudo`, `labels`, `app`, `system`, `config`, `update`,
+`workspaces`.
 
-Все обращения к бэкенду идут только через этот файл. Прямые вызовы `invoke` из
+Все обращения к бэкенду идут только через `api.ts`. Прямые вызовы `invoke` из
 компонентов не допускаются.
+
+## Типы (bindings.ts)
+
+Все типы данных фронта генерятся из Rust через specta и tauri-specta: модели ядра
+помечены `#[derive(specta::Type)]`, команды атрибутом `#[specta::specta]`. Файл
+`src/typing/bindings.ts` перезаписывается генератором, править его руками нельзя.
+Ручными остаются только UI-типы: пропсы компонентов, `ConnectionWithStatus` в
+`store.ts`, структуры вида.
+
+Генерация запускается командой `npm run gen:types` (cargo-тест `export_bindings`),
+вшита в `tauri:dev` и `tauri:build`, а в dev-сборке биндинги перегенерируются при
+каждом старте приложения. i64 экспортируется как `number`
+(`dangerously_cast_bigints_to_number`). Аргументы команд на проводе идут в
+camelCase, сгенерённые обёртки передают ключи сами.
 
 ## Store (store.ts)
 

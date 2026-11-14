@@ -5,6 +5,7 @@ use tokio::sync::Notify;
 
 use crate::executor::PrivilegedExecutor;
 use crate::l2tp::VpnStatus;
+use crate::models::tunnel_mode::TunnelMode;
 
 use super::error::{ConnData, classify_connect_failure, read_log_tail};
 use super::paths::{config_dir, active_dir, sanitize_name, swanctl_bin, CHARON_LABEL, XL2TPD_LABEL};
@@ -88,7 +89,7 @@ pub async fn connect_vpn(
     };
 
     // Сохраняем route state
-    save_route_state(sudo, &this.server, &original_iface, &original_gw, &this.tunnel_mode, &this.split_routes)?;
+    save_route_state(sudo, &this.server, &original_iface, &original_gw, this.tunnel_mode.as_str(), &this.split_routes)?;
 
     // Очищаем логи
     let _ = fs::remove_file(format!("/tmp/l2tp/{}-xl2tpd.log", sanitize_name(&this.service_name)));
@@ -287,13 +288,13 @@ pub async fn connect_vpn(
         let r1 = sudo.run(&["route", "add", "-host", &conn.server, &original_gateway]);
         log::debug!("[l2tp] route add -host {} {}: {:?}", conn.server, original_gateway, r1);
 
-        if conn.tunnel_mode == "split" && !conn.split_routes.is_empty() {
+        if conn.tunnel_mode == TunnelMode::Split && !conn.split_routes.is_empty() {
             log::debug!("[l2tp] split tunnel — adding {} routes for {}", conn.split_routes.len(), conn.service_name);
             for route in &conn.split_routes {
                 let r = sudo.run(&["route", "add", "-net", route, "-interface", &ppp_iface]);
                 log::debug!("[l2tp] route add -net {} -interface {}: {:?}", route, ppp_iface, r);
             }
-        } else if conn.tunnel_mode == "full" {
+        } else if conn.tunnel_mode == TunnelMode::Full {
             log::debug!("[l2tp] full tunnel — changing default route for {}", conn.service_name);
             let r2 = sudo.run(&["route", "change", "default", "-interface", &ppp_iface]);
             log::debug!("[l2tp] route change default -interface {}: {:?}", ppp_iface, r2);
@@ -333,7 +334,7 @@ pub async fn connect_vpn(
     // Guardian + heartbeat (только при первом подключении)
     if is_first && is_process_running_global("pppd") {
         let _ = fs::write("/tmp/l2tp/tauri.pid", std::process::id().to_string());
-        activate_guardian(&this.server, &original_iface, &original_gw, &this.tunnel_mode, &this.split_routes);
+        activate_guardian(&this.server, &original_iface, &original_gw, this.tunnel_mode.as_str(), &this.split_routes);
         start_heartbeat_thread();
     }
 
@@ -513,11 +514,11 @@ pub async fn disconnect_single(
             log::debug!("[l2tp] re-adding routes for {} on {}", conn.service_name, ppp_iface);
             let _ = sudo.run(&["route", "add", "-host", &conn.server, original_gateway]);
 
-            if conn.tunnel_mode == "split" && !conn.split_routes.is_empty() {
+            if conn.tunnel_mode == TunnelMode::Split && !conn.split_routes.is_empty() {
                 for route in &conn.split_routes {
                     let _ = sudo.run(&["route", "add", "-net", route, "-interface", &ppp_iface]);
                 }
-            } else if conn.tunnel_mode == "full" {
+            } else if conn.tunnel_mode == TunnelMode::Full {
                 let _ = sudo.run(&["route", "change", "default", "-interface", &ppp_iface]);
             }
         }
@@ -533,8 +534,8 @@ pub fn switch_tunnel_mode(
     server: &str,
     original_iface: &str,
     original_gw: &str,
-    current_mode: &str,
-    new_mode: &str,
+    current_mode: TunnelMode,
+    new_mode: TunnelMode,
     split_routes: &[String],
 ) -> Result<(), String> {
     log::debug!("[l2tp] switch_tunnel_mode: {} → {}", current_mode, new_mode);
@@ -546,7 +547,7 @@ pub fn switch_tunnel_mode(
         return Ok(());
     }
 
-    if new_mode == "split" {
+    if new_mode == TunnelMode::Split {
         log::debug!("[l2tp] switching to split: removing VPN default, adding subnet routes");
         let _ = sudo.run(&["route", "delete", "default"]);
         let _ = sudo.run(&["route", "add", "default", original_gw]);
@@ -563,7 +564,7 @@ pub fn switch_tunnel_mode(
         log::debug!("[l2tp] route change default -interface {}: {:?}", ppp_iface, r);
     }
 
-    save_route_state(sudo, server, original_iface, original_gw, new_mode, split_routes)?;
+    save_route_state(sudo, server, original_iface, original_gw, new_mode.as_str(), split_routes)?;
 
     log::debug!("[l2tp] switch_tunnel_mode done");
     Ok(())

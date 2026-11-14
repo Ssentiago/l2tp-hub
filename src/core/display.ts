@@ -1,4 +1,4 @@
-import type { Connection, ConnectionWithStatus } from "../typing/definitions";
+import type { Connection_Serialize as Connection } from "../typing/bindings";
 
 export function getTitle(conn: Connection): string {
   const company = conn.labels["company"] ?? "";
@@ -59,7 +59,7 @@ export function absoluteTime(ts: number | null): string {
   });
 }
 
-/** Проверяет совпадение поиска по company + branch + ip + name */
+/** Проверяет совпадение поиска по company + branch + ip + service_name */
 export function matchesQuery(conn: Connection, query: string): boolean {
   if (!query.trim()) return true;
   const q = query.toLowerCase();
@@ -70,7 +70,7 @@ export function matchesQuery(conn: Connection, query: string): boolean {
     branch.toLowerCase().includes(q) ||
     conn.server.toLowerCase().includes(q) ||
     conn.display_name.toLowerCase().includes(q) ||
-    conn.name.toLowerCase().includes(q)
+    conn.service_name.toLowerCase().includes(q)
   );
 }
 

@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use crate::models::connection::Connection;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct Workspace {
     pub id: String,
     pub name: String,

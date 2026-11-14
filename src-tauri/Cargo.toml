@@ -23,6 +23,9 @@ argon2 = "0.5"
 secrecy = "0.8"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-single-instance = "2"
+tauri-specta = { version = "=2.0.0-rc.29", features = ["derive", "typescript"] }
+specta = { version = "=2.0.0-rc.28", features = ["derive", "function"] }
+specta-typescript = "=0.0.15"
 
 [dependencies.l2tp-hub-core]
 path = "../l2tp-hub-core"

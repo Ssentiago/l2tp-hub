@@ -30,7 +30,7 @@ import {
   SystemUpdate,
 } from "@mui/icons-material";
 import { api } from "../../core/api";
-import type { UpdateInfo } from "../../core/api";
+import type { UpdateInfo } from "../../typing/bindings";
 import { getVersion } from "@tauri-apps/api/app";
 import { open } from "@tauri-apps/plugin-dialog";
 import toast from "react-hot-toast";

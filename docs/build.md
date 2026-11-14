@@ -29,6 +29,8 @@ strongSwan, xl2tpd), патчи, итоговый бандл и автомати
 очищает артефакты. `build:helper` собирает helper как universal-бинарь (arm64 и
 x86_64, склейка через `lipo`), `build:guardian` собирает guardian; оба копируют бинари
 с plist в `src-tauri/resources`. `build:all` цепляет всё вместе с фронтом и Tauri.
+Перед фронтом генерятся TypeScript-типы (`npm run gen:types`), этот шаг также вшит в
+`tauri:dev` и `tauri:build`.
 Для `build:helper` нужен rustup с установленными таргетами `aarch64-apple-darwin` и
 `x86_64-apple-darwin`.
 

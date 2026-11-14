@@ -1,3 +1,4 @@
+use crate::models::tunnel_mode::TunnelMode;
 use serde::Serialize;
 use std::fs;
 
@@ -10,7 +11,7 @@ pub struct ConnData {
     pub username: String,
     pub password: String,
     pub shared_secret: String,
-    pub tunnel_mode: String,
+    pub tunnel_mode: TunnelMode,
     pub split_routes: Vec<String>,
 }
 

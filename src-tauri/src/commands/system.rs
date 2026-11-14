@@ -1,11 +1,13 @@
 use crate::keychain;
 
 #[tauri::command]
+#[specta::specta]
 pub fn quit_app(_app: tauri::AppHandle) {
     _app.exit(0);
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn open_url(url: String) -> Result<(), String> {
     tokio::task::spawn_blocking(move || open::that(url).map_err(|e| e.to_string()))
         .await
@@ -15,6 +17,7 @@ pub async fn open_url(url: String) -> Result<(), String> {
 /// Проверяет доступ к связке ключей — пробует прочитать/создать тестовую запись.
 /// macOS покажет системный диалог "разрешить доступ" при первом обращении.
 #[tauri::command]
+#[specta::specta]
 pub async fn check_keychain_access() -> Result<bool, String> {
     tokio::task::spawn_blocking(|| {
         let test_key = "_l2tp_hub_access_test";

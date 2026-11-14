@@ -9,6 +9,7 @@ use tauri::State;
 use uuid::Uuid;
 
 #[tauri::command]
+#[specta::specta]
 pub async fn get_connections(__app_handle: tauri::AppHandle) -> Vec<Connection> {
     log!("[get_connections] called");
     let pool = crate::DB_POOL.get().expect("DB pool not initialized");
@@ -22,6 +23,7 @@ pub async fn get_connections(__app_handle: tauri::AppHandle) -> Vec<Connection> 
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn save_connection(
     _app_handle: tauri::AppHandle,
     input: ConnectionPayload,
@@ -101,6 +103,7 @@ pub async fn save_connection(
 }
 
 #[tauri::command]
+#[specta::specta]
 #[cfg(target_os = "macos")]
 pub async fn delete_connection(
     _app_handle: tauri::AppHandle,
@@ -131,6 +134,7 @@ pub async fn delete_connection(
 }
 
 #[tauri::command]
+#[specta::specta]
 #[cfg(target_os = "windows")]
 pub async fn delete_connection(_app_handle: tauri::AppHandle, id: String) -> Result<(), String> {
     log!("[delete_connection] (windows) called for id={}", id);

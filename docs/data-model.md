@@ -26,11 +26,15 @@
 | `connected_since` | number | Момент текущего подключения (unix секунды) |
 | `last_connected_at` | number | Последнее подключение |
 | `last_disconnected_at` | number | Последнее отключение |
-| `tunnel_mode` | string | Режим маршрутизации: `full` или `split` |
+| `tunnel_mode` | `TunnelMode` | Режим маршрутизации: enum `split` или `full` |
 | `split_routes` | array | Подсети для split-туннеля в нотации CIDR |
 
 Поле `service_name` ранее называлось `name`. Для совместимости оставлен алиас
 `#[serde(alias = "name")]`, поэтому старые данные десериализуются корректно.
+
+Поле `tunnel_mode` имеет тип `TunnelMode` (`l2tp-hub-core/src/models/tunnel_mode.rs`):
+enum со значениями `split` и `full`, serde-имена в нижнем регистре, значение по
+умолчанию `full`. В TypeScript он генерится как юнион `"split" | "full"`.
 
 ### Workspace
 
@@ -71,7 +75,9 @@
 workspaces с каскадным удалением), `name`, `display_name`, `server`, `username`,
 `keychain_key`, `shared_secret_key`, `service_hash`, `labels` (JSON), `connect_count`,
 `connected_since`, `last_connected_at`, `last_disconnected_at`, `tunnel_mode`,
-`split_routes` (JSON).
+`split_routes` (JSON). Колонка `tunnel_mode` хранит текстовое имя режима; при чтении
+значение строго парсится в `TunnelMode`, незнакомое значение приводит к ошибке
+загрузки.
 
 Таблица `settings`: `key` (первичный ключ), `value`. Хранит
 `active_workspace_id`.

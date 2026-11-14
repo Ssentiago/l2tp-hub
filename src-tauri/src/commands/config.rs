@@ -5,6 +5,7 @@ use tauri::State;
 use tauri_plugin_dialog::DialogExt;
 
 #[tauri::command]
+#[specta::specta]
 pub async fn import(password: String) -> Result<bool, String> {
     log!("[import_config_dialog] called");
 
@@ -69,6 +70,7 @@ pub async fn import(password: String) -> Result<bool, String> {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn import_file(file_path: String, password: String) -> Result<bool, String> {
     log!("[import_file] called with path={}", file_path);
 
@@ -112,6 +114,7 @@ pub async fn import_file(file_path: String, password: String) -> Result<bool, St
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn export(password: String) -> Result<bool, String> {
     log!("[export_config_dialog] called");
 
@@ -153,6 +156,7 @@ pub async fn export(password: String) -> Result<bool, String> {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn reset(
     _app_handle: tauri::AppHandle,
     sudo: State<'_, SudoSession>,

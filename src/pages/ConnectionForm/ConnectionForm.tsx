@@ -2,7 +2,11 @@ import { useState } from "react";
 import { Box, Button, Paper, TextField, Typography } from "@mui/material";
 import { api } from "../../core/api";
 import { SubnetEditor } from "../../components/SubnetEditor";
-import { Connection, ConnectionPayload, Label } from "../../typing/definitions";
+import type {
+  Connection_Serialize as Connection,
+  ConnectionPayload_Deserialize as ConnectionPayload,
+  Label,
+} from "../../typing/bindings";
 import toast from "react-hot-toast";
 
 interface ConnectionFormProps {

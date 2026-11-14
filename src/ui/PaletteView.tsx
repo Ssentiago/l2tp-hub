@@ -4,7 +4,7 @@ import { ChevronRight, ExpandMore } from "@mui/icons-material";
 import { useStore } from "../store";
 import { api } from "../core/api";
 import { matchesQuery } from "../core/display";
-import type { ConnectionWithStatus } from "../typing/definitions";
+import type { ConnectionWithStatus } from "../store";
 import { SearchInput } from "./SearchInput";
 import { ActiveConnectionBar } from "./ActiveConnectionBar";
 import { ConnectionRow } from "./ConnectionRow";

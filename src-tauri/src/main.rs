@@ -33,11 +33,65 @@ macro_rules! log {
     };
 }
 
+fn bindings_path() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../src/typing/bindings.ts")
+}
+
+/// Сборщик команд: invoke_handler и экспорт TS-биндингов берутся отсюда.
+fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
+    tauri_specta::Builder::new()
+        .commands(tauri_specta::collect_commands![
+        commands::get_connections,
+        commands::save_connection,
+        commands::delete_connection,
+        commands::connect_vpn,
+        commands::disconnect_vpn,
+        commands::get_vpn_status,
+        commands::get_all_vpn_statuses,
+        commands::check_connection,
+        commands::authenticate_sudo,
+        commands::check_sudo_session,
+        commands::check_helper_status,
+        commands::get_helper_status_text,
+        commands::get_labels,
+        commands::open_url,
+        commands::save_label,
+        commands::delete_label,
+        commands::import,
+        commands::import_file,
+        commands::export,
+        commands::reset,
+        commands::check_update,
+        commands::apply_update,
+        commands::check_keychain_access,
+        commands::quit_app,
+        commands::get_workspaces,
+        commands::get_active_workspace_id,
+        commands::create_workspace,
+        commands::rename_workspace,
+        commands::delete_workspace,
+        commands::switch_workspace,
+        commands::switch_tunnel_mode,
+        commands::get_connection_history,
+        commands::get_session_logs,
+    ])
+        // Метки времени на проводе это JSON-числа, i64 экспортируется как number
+        .dangerously_cast_bigints_to_number()
+}
+
 fn main() {
     let _ = fix_path_env::fix();
 
     // Глобальная очистка при старте — убить сиротские процессы от прошлого запуска
     state::cleanup_all_vpn_state();
+
+    let cmd_builder = specta_builder();
+
+    // В dev-сборке биндинги перегенерируются при каждом старте приложения
+    #[cfg(debug_assertions)]
+    cmd_builder
+        .export(specta_typescript::Typescript::default(), bindings_path())
+        .expect("failed to export typescript bindings");
 
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -149,41 +203,7 @@ fn main() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![
-            commands::get_connections,
-            commands::save_connection,
-            commands::delete_connection,
-            commands::connect_vpn,
-            commands::disconnect_vpn,
-            commands::get_vpn_status,
-            commands::get_all_vpn_statuses,
-            commands::check_connection,
-            commands::authenticate_sudo,
-            commands::check_sudo_session,
-            commands::check_helper_status,
-            commands::get_helper_status_text,
-            commands::get_labels,
-            commands::open_url,
-            commands::save_label,
-            commands::delete_label,
-            commands::import,
-            commands::import_file,
-            commands::export,
-            commands::reset,
-            commands::check_update,
-            commands::apply_update,
-            commands::check_keychain_access,
-            commands::quit_app,
-            commands::get_workspaces,
-            commands::get_active_workspace_id,
-            commands::create_workspace,
-            commands::rename_workspace,
-            commands::delete_workspace,
-            commands::switch_workspace,
-            commands::switch_tunnel_mode,
-            commands::get_connection_history,
-            commands::get_session_logs,
-        ])
+        .invoke_handler(cmd_builder.invoke_handler())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .build(tauri::generate_context!())
@@ -317,4 +337,15 @@ fn do_wake_check(app: &tauri::AppHandle) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod bindings_tests {
+    /// Перезаписывает src/typing/bindings.ts актуальными TS-типами из Rust.
+    #[test]
+    fn export_bindings() {
+        super::specta_builder()
+            .export(specta_typescript::Typescript::default(), super::bindings_path())
+            .expect("failed to export typescript bindings");
+    }
 }

@@ -24,7 +24,8 @@ import {
 } from "@mui/icons-material";
 import { useStore } from "../store";
 import { api } from "../core/api";
-import type { ConnectionWithStatus, Connection } from "../typing/definitions";
+import type { ConnectionWithStatus } from "../store";
+import type { Connection_Serialize as Connection } from "../typing/bindings";
 import { getTitle } from "../core/display";
 import { StatusDot } from "./StatusDot";
 import { ModeSegment } from "./ModeSegment";

@@ -2,11 +2,13 @@ use crate::models::label;
 use crate::store;
 
 #[tauri::command]
+#[specta::specta]
 pub async fn get_labels(_app_handle: tauri::AppHandle) -> Vec<label::Label> {
     store::load(&crate::DB_POOL.get().expect("pool")).await.labels
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn save_label(
     _app_handle: tauri::AppHandle,
     id: String,
@@ -37,6 +39,7 @@ pub async fn save_label(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn delete_label(_app_handle: tauri::AppHandle, id: String) -> Result<(), String> {
     crate::STORE
         .get()

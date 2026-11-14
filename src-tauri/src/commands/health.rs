@@ -9,7 +9,7 @@ use tauri::Manager;
 
 const IKE_SA_INIT_PAYLOAD: &[u8] = include_bytes!("../../../ike-sa-init-payload.bin");
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, specta::Type)]
 pub struct HealthResult {
     pub ping: bool,
     pub ipsec: bool,
@@ -68,6 +68,7 @@ fn ike_probe(server: &str) -> Result<bool, String> {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn check_connection(app_handle: tauri::AppHandle, id: String) -> Result<HealthResult, String> {
     log!("[health] check_connection called for id={}", id);
 

@@ -1,14 +1,15 @@
 import { Box, Tooltip } from "@mui/material";
+import type { TunnelMode } from "../typing/bindings";
 
 interface Props {
-  value: "split" | "full";
-  onChange?: (mode: "split" | "full") => void;
+  value: TunnelMode;
+  onChange?: (mode: TunnelMode) => void;
   disabled?: boolean;
-  disabledModes?: ("split" | "full")[];
+  disabledModes?: TunnelMode[];
   size?: "sm" | "md";
 }
 
-const MODE_DESC: Record<"split" | "full", string> = {
+const MODE_DESC: Record<TunnelMode, string> = {
   split: "Раздельный туннель — только подсети через VPN",
   full: "Полный туннель — весь трафик через VPN",
 };
@@ -18,7 +19,7 @@ export function ModeSegment({ value, onChange, disabled, disabledModes = [], siz
   const px = size === "sm" ? 1 : 1.5;
   const fontSize = size === "sm" ? 11 : 12;
 
-  const btn = (mode: "split" | "full", label: string) => {
+  const btn = (mode: TunnelMode, label: string) => {
     const active = value === mode;
     const isDisabled = disabled || disabledModes.includes(mode);
 

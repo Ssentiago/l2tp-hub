@@ -3,12 +3,18 @@ import { listen } from "@tauri-apps/api/event";
 import { getVersion } from "@tauri-apps/api/app";
 import { api } from "./core/api";
 import type {
-  ConnectionWithStatus,
-  ConnectionPayload,
+  Connection_Serialize as Connection,
+  ConnectionPayload_Deserialize as ConnectionPayload,
   Label,
   VpnStatus,
   WorkspaceInfo,
-} from "./typing/definitions";
+} from "./typing/bindings";
+
+/** UI-композит: подключение вместе с текущим VPN-статусом. */
+export interface ConnectionWithStatus extends Connection {
+  status: VpnStatus;
+  error?: string;
+}
 
 interface Store {
   // UI mode

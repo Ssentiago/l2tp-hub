@@ -1,6 +1,7 @@
 
 use crate::models::connection::Connection;
 use crate::models::label::Label;
+use crate::models::tunnel_mode::TunnelMode;
 use crate::models::workspace::Workspace;
 use crate::store::Store;
 use sqlx::sqlite::{SqliteConnection, SqlitePool, SqlitePoolOptions};
@@ -144,7 +145,7 @@ pub(crate) async fn load_store_conn(db_conn: &mut SqliteConnection) -> Result<St
                 .map(|c| {
                     let labels_map: std::collections::HashMap<String, String> =
                         serde_json::from_str(&c.labels).unwrap_or_default();
-                    Connection {
+                    Ok(Connection {
                         id: c.id,
                         service_name: c.name,
                         display_name: c.display_name,
@@ -158,11 +159,11 @@ pub(crate) async fn load_store_conn(db_conn: &mut SqliteConnection) -> Result<St
                         connected_since: c.connected_since,
                         last_connected_at: c.last_connected_at,
                         last_disconnected_at: c.last_disconnected_at,
-                        tunnel_mode: c.tunnel_mode,
+                        tunnel_mode: c.tunnel_mode.parse()?,
                         split_routes: serde_json::from_str(&c.split_routes).unwrap_or_default(),
-                    }
+                    })
                 })
-                .collect(),
+                .collect::<Result<Vec<_>, String>>()?,
         });
     }
 
@@ -318,7 +319,7 @@ pub(crate) async fn save_store_tx(db_conn: &mut SqliteConnection, store: &Store)
             .bind(conn.connected_since)
             .bind(conn.last_connected_at)
             .bind(conn.last_disconnected_at)
-            .bind(&conn.tunnel_mode)
+            .bind(conn.tunnel_mode.as_str())
             .bind(&split_routes_json)
             .execute(&mut *db_conn)
             .await
@@ -378,7 +379,7 @@ fn connection_matches(row: &ConnectionRow, ws_id: &str, conn: &Connection) -> bo
         && row.connected_since == conn.connected_since
         && row.last_connected_at == conn.last_connected_at
         && row.last_disconnected_at == conn.last_disconnected_at
-        && row.tunnel_mode == conn.tunnel_mode
+        && row.tunnel_mode == conn.tunnel_mode.as_str()
         && split_routes_match
 }
 
@@ -405,12 +406,12 @@ pub async fn connections_for_workspace(
     .await
     .map_err(|e| format!("query connections: {}", e))?;
 
-    Ok(rows
+    rows
         .into_iter()
         .map(|c| {
             let labels_map: std::collections::HashMap<String, String> =
                 serde_json::from_str(&c.labels).unwrap_or_default();
-            Connection {
+            Ok(Connection {
                 id: c.id,
                 service_name: c.name,
                 display_name: c.display_name,
@@ -424,11 +425,11 @@ pub async fn connections_for_workspace(
                 connected_since: c.connected_since,
                 last_connected_at: c.last_connected_at,
                 last_disconnected_at: c.last_disconnected_at,
-                tunnel_mode: c.tunnel_mode,
+                tunnel_mode: c.tunnel_mode.parse()?,
                 split_routes: serde_json::from_str(&c.split_routes).unwrap_or_default(),
-            }
+            })
         })
-        .collect())
+        .collect::<Result<Vec<_>, String>>()
 }
 
 pub async fn workspace_infos(pool: &SqlitePool) -> Result<Vec<WorkspaceInfoRow>, String> {
@@ -564,7 +565,7 @@ mod tests {
             connected_since: Some(100),
             last_connected_at: Some(200),
             last_disconnected_at: Some(300),
-            tunnel_mode: "split".into(),
+            tunnel_mode: TunnelMode::Split,
             split_routes: vec!["10.0.0.0/8".into()],
         }
     }
@@ -624,7 +625,7 @@ mod tests {
         let c1 = ws1.connections.iter().find(|c| c.id == "c-1").unwrap();
         assert_eq!(c1.service_name, "svc-c-1");
         assert_eq!(c1.display_name, "Display c-1");
-        assert_eq!(c1.tunnel_mode, "split");
+        assert_eq!(c1.tunnel_mode, TunnelMode::Split);
         assert_eq!(c1.split_routes, vec!["10.0.0.0/8".to_string()]);
         assert_eq!(c1.labels.get("company").map(String::as_str), Some("ACME"));
         assert_eq!(c1.connect_count, 3);

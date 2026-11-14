@@ -3,6 +3,7 @@ use crate::executor::PrivilegedExecutor;
 use crate::keychain;
 use crate::l2tp;
 use crate::l2tp::VpnStatus;
+use crate::models::tunnel_mode::TunnelMode;
 use crate::store;
 use crate::store_actor::StoreHandle;
 use std::collections::{HashMap, HashSet};
@@ -59,7 +60,7 @@ impl L2tpManager {
             store.workspaces.iter()
                 .flat_map(|ws| ws.connections.iter())
                 .find(|c| c.id == *id)
-                .map(|c| c.tunnel_mode == "full")
+                .map(|c| c.tunnel_mode == TunnelMode::Full)
                 .unwrap_or(false)
         })
     }
@@ -73,7 +74,7 @@ impl L2tpManager {
                 .flat_map(|ws| ws.connections.iter())
                 .find(|c| c.id == *id)
             {
-                if conn.tunnel_mode == "split" {
+                if conn.tunnel_mode == TunnelMode::Split {
                     routes.extend(conn.split_routes.iter().cloned());
                 }
             }
@@ -99,15 +100,15 @@ impl L2tpManager {
             if active.contains(id) {
                 // OK — reconnect существующего
             } else {
-                if conn.tunnel_mode == "full" && !active.is_empty() {
+                if conn.tunnel_mode == TunnelMode::Full && !active.is_empty() {
                     return Err("Невозможно подключить полный туннель: есть активные подключения. Сначала отключите.".to_string());
                 }
 
-                if conn.tunnel_mode == "split" && self.has_active_full_inner(&store, &active) {
+                if conn.tunnel_mode == TunnelMode::Split && self.has_active_full_inner(&store, &active) {
                     return Err("Невозможно подключить раздельный туннель: активен полный туннель.".to_string());
                 }
 
-                if conn.tunnel_mode == "split" && !conn.split_routes.is_empty() {
+                if conn.tunnel_mode == TunnelMode::Split && !conn.split_routes.is_empty() {
                     let existing = self.active_split_routes_inner(&store, &active, id);
                     if let Some(overlap) = find_overlap(&conn.split_routes, &existing) {
                         return Err(format!("Подсеть {} уже используется активным подключением", overlap));
@@ -214,7 +215,7 @@ impl L2tpManager {
                     username: new_conn.username.clone(),
                     password: keychain::get_password(&new_conn.keychain_key)?,
                     shared_secret: keychain::get_password(&new_conn.shared_secret_key)?,
-                    tunnel_mode: new_conn.tunnel_mode.clone(),
+                    tunnel_mode: new_conn.tunnel_mode,
                     split_routes: new_conn.split_routes.clone(),
                 });
             } else {
@@ -230,7 +231,7 @@ impl L2tpManager {
                         username: c.username.clone(),
                         password: keychain::get_password(&c.keychain_key)?,
                         shared_secret: keychain::get_password(&c.shared_secret_key)?,
-                        tunnel_mode: c.tunnel_mode.clone(),
+                        tunnel_mode: c.tunnel_mode,
                         split_routes: c.split_routes.clone(),
                     });
                 }
@@ -257,7 +258,7 @@ impl L2tpManager {
                     username: c.username.clone(),
                     password: keychain::get_password(&c.keychain_key)?,
                     shared_secret: keychain::get_password(&c.shared_secret_key)?,
-                    tunnel_mode: c.tunnel_mode.clone(),
+                    tunnel_mode: c.tunnel_mode,
                     split_routes: c.split_routes.clone(),
                 });
             }

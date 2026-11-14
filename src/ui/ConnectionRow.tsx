@@ -1,5 +1,5 @@
 import { Box, Typography, Tooltip, CircularProgress } from "@mui/material";
-import type { ConnectionWithStatus } from "../typing/definitions";
+import type { ConnectionWithStatus } from "../store";
 import { StatusDot } from "./StatusDot";
 import { ModeSegment } from "./ModeSegment";
 import { getDisplayParts, highlightMatch, relativeTime, absoluteTime } from "../core/display";

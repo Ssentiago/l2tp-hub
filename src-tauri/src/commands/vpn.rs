@@ -1,6 +1,7 @@
 use crate::l2tp::VpnStatus;
 use crate::l2tp::manager::L2tpManager;
 use crate::log;
+use crate::models::tunnel_mode::TunnelMode;
 use crate::store;
 use tauri::{Emitter, State};
 
@@ -9,6 +10,7 @@ use tauri::{Emitter, State};
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
+#[specta::specta]
 #[cfg(target_os = "macos")]
 pub async fn connect_vpn(
     app_handle: tauri::AppHandle,
@@ -85,6 +87,7 @@ pub async fn connect_vpn(
 }
 
 #[tauri::command]
+#[specta::specta]
 #[cfg(target_os = "macos")]
 pub async fn disconnect_vpn(
     app_handle: tauri::AppHandle,
@@ -125,6 +128,7 @@ pub async fn disconnect_vpn(
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
+#[specta::specta]
 #[cfg(target_os = "windows")]
 pub async fn connect_vpn(
     app_handle: tauri::AppHandle,
@@ -155,6 +159,7 @@ pub async fn connect_vpn(
 }
 
 #[tauri::command]
+#[specta::specta]
 #[cfg(target_os = "windows")]
 pub async fn disconnect_vpn(
     app_handle: tauri::AppHandle,
@@ -173,6 +178,7 @@ pub async fn disconnect_vpn(
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
+#[specta::specta]
 pub async fn get_vpn_status(
     id: String,
     manager: State<'_, L2tpManager>,
@@ -190,6 +196,7 @@ pub async fn get_vpn_status(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn get_all_vpn_statuses(
     manager: State<'_, L2tpManager>,
 ) -> Result<std::collections::HashMap<String, VpnStatus>, String> {
@@ -202,10 +209,11 @@ pub async fn get_all_vpn_statuses(
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
+#[specta::specta]
 #[cfg(target_os = "macos")]
 pub async fn switch_tunnel_mode(
     id: String,
-    new_mode: String,
+    new_mode: TunnelMode,
     manager: State<'_, L2tpManager>,
 ) -> Result<(), String> {
     log!("[switch_tunnel_mode] id={}, new_mode={}", id, new_mode);
@@ -233,8 +241,8 @@ pub async fn switch_tunnel_mode(
         &conn.server,
         &original_iface,
         &original_gw,
-        &conn.tunnel_mode,
-        &new_mode,
+        conn.tunnel_mode,
+        new_mode,
         &conn.split_routes,
     )?;
 
@@ -245,7 +253,7 @@ pub async fn switch_tunnel_mode(
         .mutate(move |s| {
             for ws in &mut s.workspaces {
                 if let Some(c) = ws.connections.iter_mut().find(|c| c.id == id) {
-                    c.tunnel_mode = new_mode.clone();
+                    c.tunnel_mode = new_mode;
                 }
             }
             Ok(())
@@ -256,8 +264,9 @@ pub async fn switch_tunnel_mode(
 }
 
 #[tauri::command]
+#[specta::specta]
 #[cfg(target_os = "windows")]
-pub async fn switch_tunnel_mode(_id: String, _new_mode: String) -> Result<(), String> {
+pub async fn switch_tunnel_mode(_id: String, _new_mode: TunnelMode) -> Result<(), String> {
     Err("Split tunneling не поддерживается на Windows".to_string())
 }
 
@@ -266,6 +275,7 @@ pub async fn switch_tunnel_mode(_id: String, _new_mode: String) -> Result<(), St
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
+#[specta::specta]
 pub async fn get_connection_history(
     id: String,
 ) -> Result<Vec<crate::l2tp::logs::SessionMeta>, String> {
@@ -273,6 +283,7 @@ pub async fn get_connection_history(
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn get_session_logs(
     id: String,
     timestamp: i64,

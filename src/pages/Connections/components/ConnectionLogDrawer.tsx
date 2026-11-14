@@ -6,7 +6,10 @@ import {
 import { Close, ContentCopy, Refresh } from "@mui/icons-material";
 import { api } from "../../../core/api";
 import toast from "react-hot-toast";
-import type { SessionMeta, SessionLogs } from "../../../typing/definitions";
+import type {
+  SessionMeta_Serialize as SessionMeta,
+  SessionLogs_Serialize as SessionLogs,
+} from "../../../typing/bindings";
 
 interface Props {
   open: boolean;

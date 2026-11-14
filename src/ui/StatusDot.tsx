@@ -1,5 +1,5 @@
 import { Box } from "@mui/material";
-import type { VpnStatus } from "../typing/definitions";
+import type { VpnStatus } from "../typing/bindings";
 
 const COLOR: Record<VpnStatus, string> = {
   connected: "success.main",

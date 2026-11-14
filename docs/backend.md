@@ -44,8 +44,16 @@
 
 ## Полный список команд
 
-Команды регистрируются в `generate_handler!`. Всего 33 команды. Каждая реализована в
+Команды регистрируются через `tauri_specta::Builder` (`specta_builder()` в `main.rs`,
+список в `collect_commands!`). Тот же список уходит в `invoke_handler` и в генератор
+TypeScript-биндингов, так что точки расхождения нет. Каждая команда помечена
+`#[tauri::command]` и `#[specta::specta]`. Всего 33 команды. Каждая реализована в
 `commands/` и зовёт функции ядра.
+
+Сигнатуры команд и модели генерятся в TypeScript в `src/typing/bindings.ts`
+(tauri-specta, `npm run gen:types`). Модели помечены `#[derive(specta::Type)]`.
+Аргументы на проводе идут в camelCase: Rust-параметр `new_mode` принимается как
+`newMode`, сгенерённые обёртки это соблюдают.
 
 ### Подключения
 

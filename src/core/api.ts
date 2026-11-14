@@ -1,84 +1,62 @@
-import { invoke } from "@tauri-apps/api/core";
-import {
-  Connection,
-  ConnectionPayload,
-  Label,
-  SessionMeta,
-  SessionLogs,
-  VpnStatus,
-  WorkspaceInfo,
-} from "../typing/definitions.ts";
-
-export interface UpdateInfo {
-  latest_version: string;
-  download_url: string;
-  asset_name: string;
-}
+import { commands } from "../typing/bindings";
 
 export const api = {
   connections: {
-    getAll: () => invoke<Connection[]>("get_connections"),
-    save: (input: ConnectionPayload) =>
-      invoke<Connection>("save_connection", { input }),
-    delete: (id: string) => invoke<void>("delete_connection", { id }),
+    getAll: () => commands.getConnections(),
+    save: (input: Parameters<typeof commands.saveConnection>[0]) =>
+      commands.saveConnection(input),
+    delete: (id: string) => commands.deleteConnection(id),
   },
   vpn: {
-    connect: (id: string) => invoke<void>("connect_vpn", { id }),
-    disconnect: (id: string) => invoke<void>("disconnect_vpn", { id }),
-    getStatus: (id: string) => invoke<VpnStatus>("get_vpn_status", { id }),
-    getAllStatuses: () => invoke<Record<string, VpnStatus>>("get_all_vpn_statuses"),
-    check: (id: string) =>
-      invoke<{ ping: boolean; ipsec: boolean }>("check_connection", { id }),
-    switchTunnelMode: (id: string, newMode: string) =>
-      invoke<void>("switch_tunnel_mode", { id, new_mode: newMode }),
+    connect: (id: string) => commands.connectVpn(id),
+    disconnect: (id: string) => commands.disconnectVpn(id),
+    getStatus: (id: string) => commands.getVpnStatus(id),
+    getAllStatuses: () => commands.getAllVpnStatuses(),
+    check: (id: string) => commands.checkConnection(id),
+    switchTunnelMode: (id: string, newMode: Parameters<typeof commands.switchTunnelMode>[1]) =>
+      commands.switchTunnelMode(id, newMode),
   },
   logs: {
-    getHistory: (id: string) =>
-      invoke<SessionMeta[]>("get_connection_history", { id }),
+    getHistory: (id: string) => commands.getConnectionHistory(id),
     getSession: (id: string, timestamp: number) =>
-      invoke<SessionLogs>("get_session_logs", { id, timestamp }),
+      commands.getSessionLogs(id, timestamp),
   },
   sudo: {
-    authenticate: () =>
-      invoke<void>("authenticate_sudo"),
-    checkSession: () => invoke<boolean>("check_sudo_session"),
-    checkHelper: () => invoke<boolean>("check_helper_status"),
-    getHelperStatusText: () => invoke<string>("get_helper_status_text"),
+    authenticate: () => commands.authenticateSudo(),
+    checkSession: () => commands.checkSudoSession(),
+    checkHelper: () => commands.checkHelperStatus(),
+    getHelperStatusText: () => commands.getHelperStatusText(),
   },
   labels: {
-    getAll: () => invoke<Label[]>("get_labels"),
-    save: (id: string, name: string) =>
-      invoke<Label>("save_label", { id, name }),
-    delete: (id: string) => invoke<void>("delete_label", { id }),
+    getAll: () => commands.getLabels(),
+    save: (id: string, name: string) => commands.saveLabel(id, name),
+    delete: (id: string) => commands.deleteLabel(id),
   },
   app: {
-    openUrl: (url: string) => invoke<void>("open_url", { url }),
+    openUrl: (url: string) => commands.openUrl(url),
   },
   system: {
-    checkKeychainAccess: () => invoke<boolean>("check_keychain_access"),
-    quitApp: () => invoke<void>("quit_app"),
+    checkKeychainAccess: () => commands.checkKeychainAccess(),
+    quitApp: () => commands.quitApp(),
   },
   config: {
-    import: (password: string) => invoke<boolean>("import", { password }),
+    import: (password: string) => commands.import(password),
     importFile: (filePath: string, password: string) =>
-      invoke<boolean>("import_file", { filePath, password }),
-    export: (password: string) => invoke<boolean>("export", { password }),
-    reset: () => invoke<void>("reset"),
+      commands.importFile(filePath, password),
+    export: (password: string) => commands.export(password),
+    reset: () => commands.reset(),
   },
   update: {
-    check: (currentVersion: string) =>
-      invoke<UpdateInfo | null>("check_update", { currentVersion }),
+    check: (currentVersion: string) => commands.checkUpdate(currentVersion),
     apply: (downloadUrl: string, assetName: string) =>
-      invoke<void>("apply_update", { downloadUrl, assetName }),
+      commands.applyUpdate(downloadUrl, assetName),
   },
   workspaces: {
-    list: () => invoke<WorkspaceInfo[]>("get_workspaces"),
-    getActiveId: () => invoke<string>("get_active_workspace_id"),
-    create: (name: string) =>
-      invoke<WorkspaceInfo>("create_workspace", { name }),
-    rename: (id: string, name: string) =>
-      invoke<void>("rename_workspace", { id, name }),
-    delete: (id: string) => invoke<void>("delete_workspace", { id }),
-    switch: (id: string) => invoke<void>("switch_workspace", { id }),
+    list: () => commands.getWorkspaces(),
+    getActiveId: () => commands.getActiveWorkspaceId(),
+    create: (name: string) => commands.createWorkspace(name),
+    rename: (id: string, name: string) => commands.renameWorkspace(id, name),
+    delete: (id: string) => commands.deleteWorkspace(id),
+    switch: (id: string) => commands.switchWorkspace(id),
   },
 };
