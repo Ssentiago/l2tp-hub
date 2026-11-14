@@ -117,7 +117,7 @@ pub async fn load_store(pool: &SqlitePool) -> Result<Store, String> {
     let mut result_workspaces = Vec::new();
     for ws_row in &workspaces {
         let conns = sqlx::query_as::<_, ConnectionRow>(
-            "SELECT id, name, display_name, server, username, keychain_key, shared_secret_key, service_hash, labels, connect_count, connected_since, last_connected_at, last_disconnected_at, tunnel_mode, split_routes FROM connections WHERE workspace_id = ?",
+            "SELECT id, workspace_id, name, display_name, server, username, keychain_key, shared_secret_key, service_hash, labels, connect_count, connected_since, last_connected_at, last_disconnected_at, tunnel_mode, split_routes FROM connections WHERE workspace_id = ?",
         )
         .bind(&ws_row.id)
         .fetch_all(pool)
@@ -200,46 +200,86 @@ pub async fn load_store(pool: &SqlitePool) -> Result<Store, String> {
 pub async fn save_store(pool: &SqlitePool, store: &Store) -> Result<(), String> {
     let mut tx = pool.begin().await.map_err(|e| format!("begin tx: {}", e))?;
 
-    // Labels: delete all, re-insert
-    sqlx::query("DELETE FROM labels")
-        .execute(&mut *tx)
+    // Labels: upsert только изменившихся, удаление только исчезнувших
+    let existing_labels = sqlx::query_as::<_, LabelRow>("SELECT id, name, built_in FROM labels")
+        .fetch_all(&mut *tx)
         .await
-        .map_err(|e| format!("delete labels: {}", e))?;
+        .map_err(|e| format!("load labels: {}", e))?;
     for label in &store.labels {
-        sqlx::query("INSERT INTO labels (id, name, built_in) VALUES (?, ?, ?)")
+        let unchanged = existing_labels
+            .iter()
+            .any(|row| row.id == label.id && row.name == label.name && (row.built_in != 0) == label.built_in);
+        if unchanged {
+            continue;
+        }
+        sqlx::query("INSERT OR REPLACE INTO labels (id, name, built_in) VALUES (?, ?, ?)")
             .bind(&label.id)
             .bind(&label.name)
             .bind(label.built_in as i32)
             .execute(&mut *tx)
             .await
-            .map_err(|e| format!("insert label: {}", e))?;
+            .map_err(|e| format!("upsert label: {}", e))?;
+    }
+    for row in &existing_labels {
+        if !store.labels.iter().any(|l| l.id == row.id) {
+            sqlx::query("DELETE FROM labels WHERE id = ?")
+                .bind(&row.id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| format!("delete label: {}", e))?;
+        }
     }
 
-    // Workspaces and connections: delete all, re-insert
-    sqlx::query("DELETE FROM connections")
-        .execute(&mut *tx)
-        .await
-        .map_err(|e| format!("delete connections: {}", e))?;
-    sqlx::query("DELETE FROM workspaces")
-        .execute(&mut *tx)
-        .await
-        .map_err(|e| format!("delete workspaces: {}", e))?;
-
+    // Workspaces: upsert изменившихся, удаление отложено до обновления connections
+    let existing_workspaces =
+        sqlx::query_as::<_, WorkspaceRow>("SELECT id, name, group_by FROM workspaces")
+            .fetch_all(&mut *tx)
+            .await
+            .map_err(|e| format!("load workspaces: {}", e))?;
     for ws in &store.workspaces {
+        let unchanged = existing_workspaces.iter().any(|row| {
+            if row.id != ws.id || row.name != ws.name {
+                return false;
+            }
+            serde_json::from_str::<Vec<String>>(&row.group_by)
+                .map(|g| g == ws.group_by)
+                .unwrap_or(false)
+        });
+        if unchanged {
+            continue;
+        }
         let group_by = serde_json::to_string(&ws.group_by).unwrap_or_default();
-        sqlx::query("INSERT INTO workspaces (id, name, group_by) VALUES (?, ?, ?)")
+        sqlx::query("INSERT OR REPLACE INTO workspaces (id, name, group_by) VALUES (?, ?, ?)")
             .bind(&ws.id)
             .bind(&ws.name)
             .bind(&group_by)
             .execute(&mut *tx)
             .await
-            .map_err(|e| format!("insert workspace: {}", e))?;
+            .map_err(|e| format!("upsert workspace: {}", e))?;
+    }
 
+    // Connections: upsert изменившихся и переехавших, удаление исчезнувших
+    let existing_connections = sqlx::query_as::<_, ConnectionRow>(
+        "SELECT id, workspace_id, name, display_name, server, username, keychain_key, shared_secret_key, service_hash, labels, connect_count, connected_since, last_connected_at, last_disconnected_at, tunnel_mode, split_routes FROM connections",
+    )
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(|e| format!("load connections: {}", e))?;
+
+    let mut live_ids = std::collections::HashSet::new();
+    for ws in &store.workspaces {
         for conn in &ws.connections {
+            live_ids.insert(conn.id.as_str());
+            let unchanged = existing_connections
+                .iter()
+                .any(|row| row.id == conn.id && connection_matches(row, &ws.id, conn));
+            if unchanged {
+                continue;
+            }
             let labels_json = serde_json::to_string(&conn.labels).unwrap_or_default();
             let split_routes_json = serde_json::to_string(&conn.split_routes).unwrap_or_default();
             sqlx::query(
-                "INSERT INTO connections (id, workspace_id, name, display_name, server, username, keychain_key, shared_secret_key, service_hash, labels, connect_count, connected_since, last_connected_at, last_disconnected_at, tunnel_mode, split_routes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT OR REPLACE INTO connections (id, workspace_id, name, display_name, server, username, keychain_key, shared_secret_key, service_hash, labels, connect_count, connected_since, last_connected_at, last_disconnected_at, tunnel_mode, split_routes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             )
             .bind(&conn.id)
             .bind(&ws.id)
@@ -259,7 +299,28 @@ pub async fn save_store(pool: &SqlitePool, store: &Store) -> Result<(), String> 
             .bind(&split_routes_json)
             .execute(&mut *tx)
             .await
-            .map_err(|e| format!("insert connection: {}", e))?;
+            .map_err(|e| format!("upsert connection: {}", e))?;
+        }
+    }
+    for row in &existing_connections {
+        if !live_ids.contains(row.id.as_str()) {
+            sqlx::query("DELETE FROM connections WHERE id = ?")
+                .bind(&row.id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| format!("delete connection: {}", e))?;
+        }
+    }
+
+    // Удаление воркспейсов после connections, чтобы переехавшие подключения
+    // не сносились каскадом до обновления workspace_id
+    for row in &existing_workspaces {
+        if !store.workspaces.iter().any(|w| w.id == row.id) {
+            sqlx::query("DELETE FROM workspaces WHERE id = ?")
+                .bind(&row.id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| format!("delete workspace: {}", e))?;
         }
     }
 
@@ -272,6 +333,31 @@ pub async fn save_store(pool: &SqlitePool, store: &Store) -> Result<(), String> 
 
     tx.commit().await.map_err(|e| format!("commit tx: {}", e))?;
     Ok(())
+}
+
+fn connection_matches(row: &ConnectionRow, ws_id: &str, conn: &Connection) -> bool {
+    let labels_match = serde_json::from_str::<std::collections::HashMap<String, String>>(&row.labels)
+        .map(|m| m == conn.labels)
+        .unwrap_or(false);
+    let split_routes_match = serde_json::from_str::<Vec<String>>(&row.split_routes)
+        .map(|r| r == conn.split_routes)
+        .unwrap_or(false);
+
+    row.workspace_id == ws_id
+        && row.name == conn.service_name
+        && row.display_name == conn.display_name
+        && row.server == conn.server
+        && row.username == conn.username
+        && row.keychain_key == conn.keychain_key
+        && row.shared_secret_key == conn.shared_secret_key
+        && row.service_hash == conn.service_hash
+        && labels_match
+        && row.connect_count == conn.connect_count as i64
+        && row.connected_since == conn.connected_since
+        && row.last_connected_at == conn.last_connected_at
+        && row.last_disconnected_at == conn.last_disconnected_at
+        && row.tunnel_mode == conn.tunnel_mode
+        && split_routes_match
 }
 
 pub async fn active_workspace_id(pool: &SqlitePool) -> Option<String> {
@@ -287,7 +373,7 @@ pub async fn connections_for_workspace(
     ws_id: &str,
 ) -> Result<Vec<Connection>, String> {
     let rows = sqlx::query_as::<_, ConnectionRow>(
-        "SELECT id, name, display_name, server, username, keychain_key, shared_secret_key, \
+        "SELECT id, workspace_id, name, display_name, server, username, keychain_key, shared_secret_key, \
          service_hash, labels, connect_count, connected_since, last_connected_at, last_disconnected_at, \
          tunnel_mode, split_routes \
          FROM connections WHERE workspace_id = ?",
@@ -400,6 +486,7 @@ struct WorkspaceRow {
 #[derive(sqlx::FromRow)]
 struct ConnectionRow {
     id: String,
+    workspace_id: String,
     name: String,
     display_name: String,
     server: String,
@@ -421,4 +508,166 @@ pub struct WorkspaceInfoRow {
     pub id: String,
     pub name: String,
     pub group_by: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::connection::Connection;
+    use crate::models::label::Label;
+    use crate::models::workspace::Workspace;
+
+    async fn test_pool() -> SqlitePool {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("connect");
+        create_tables(&pool).await.expect("create tables");
+        pool
+    }
+
+    fn sample_connection(id: &str) -> Connection {
+        Connection {
+            id: id.into(),
+            service_name: format!("svc-{}", id),
+            display_name: format!("Display {}", id),
+            server: "vpn.example.com".into(),
+            username: "user".into(),
+            keychain_key: format!("password_{}", id),
+            shared_secret_key: format!("shared_{}", id),
+            service_hash: Some(format!("hash-{}", id)),
+            labels: [("company".to_string(), "ACME".to_string())].into_iter().collect(),
+            connect_count: 3,
+            connected_since: Some(100),
+            last_connected_at: Some(200),
+            last_disconnected_at: Some(300),
+            tunnel_mode: "split".into(),
+            split_routes: vec!["10.0.0.0/8".into()],
+        }
+    }
+
+    fn sample_store() -> Store {
+        let mut ws1 = Workspace::new("Main");
+        ws1.id = "ws-1".into();
+        ws1.connections = vec![sample_connection("c-1"), sample_connection("c-2")];
+        let mut ws2 = Workspace::new("Second");
+        ws2.id = "ws-2".into();
+        ws2.connections = vec![sample_connection("c-3")];
+        Store {
+            workspaces: vec![ws1, ws2],
+            active_workspace_id: "ws-1".into(),
+            labels: vec![
+                Label {
+                    id: "company".into(),
+                    name: "Компания".into(),
+                    built_in: true,
+                },
+                Label {
+                    id: "custom".into(),
+                    name: "Своя".into(),
+                    built_in: false,
+                },
+            ],
+        }
+    }
+
+    async fn rowid(pool: &SqlitePool, table: &str, id: &str) -> i64 {
+        let sql = match table {
+            "labels" => "SELECT rowid FROM labels WHERE id = ?",
+            "workspaces" => "SELECT rowid FROM workspaces WHERE id = ?",
+            "connections" => "SELECT rowid FROM connections WHERE id = ?",
+            _ => panic!("unknown table"),
+        };
+        sqlx::query_scalar(sql)
+            .bind(id)
+            .fetch_one(pool)
+            .await
+            .expect("rowid")
+    }
+
+    #[tokio::test]
+    async fn save_load_round_trip() {
+        let pool = test_pool().await;
+        let store = sample_store();
+        save_store(&pool, &store).await.expect("save");
+
+        let loaded = load_store(&pool).await.expect("load");
+        assert_eq!(loaded.active_workspace_id, "ws-1");
+        assert_eq!(loaded.workspaces.len(), 2);
+        assert_eq!(loaded.labels.len(), 2);
+
+        let ws1 = loaded.workspaces.iter().find(|w| w.id == "ws-1").unwrap();
+        assert_eq!(ws1.connections.len(), 2);
+        let c1 = ws1.connections.iter().find(|c| c.id == "c-1").unwrap();
+        assert_eq!(c1.service_name, "svc-c-1");
+        assert_eq!(c1.display_name, "Display c-1");
+        assert_eq!(c1.tunnel_mode, "split");
+        assert_eq!(c1.split_routes, vec!["10.0.0.0/8".to_string()]);
+        assert_eq!(c1.labels.get("company").map(String::as_str), Some("ACME"));
+        assert_eq!(c1.connect_count, 3);
+        assert_eq!(c1.service_hash.as_deref(), Some("hash-c-1"));
+
+        let ws2 = loaded.workspaces.iter().find(|w| w.id == "ws-2").unwrap();
+        assert_eq!(ws2.connections.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn save_rewrites_only_changed_rows() {
+        let pool = test_pool().await;
+        let mut store = sample_store();
+        save_store(&pool, &store).await.expect("save");
+
+        let label_rowid = rowid(&pool, "labels", "custom").await;
+        let ws_rowid = rowid(&pool, "workspaces", "ws-2").await;
+        let conn_rowid = rowid(&pool, "connections", "c-1").await;
+
+        // Меняем одно подключение, остальные строки не трогаем
+        store.workspaces[0].connections[1].connect_count = 10;
+        save_store(&pool, &store).await.expect("save");
+
+        assert_eq!(rowid(&pool, "labels", "custom").await, label_rowid);
+        assert_eq!(rowid(&pool, "workspaces", "ws-2").await, ws_rowid);
+        assert_eq!(rowid(&pool, "connections", "c-1").await, conn_rowid);
+
+        let loaded = load_store(&pool).await.expect("load");
+        let c2 = loaded.find_connection("c-2").unwrap();
+        assert_eq!(c2.connect_count, 10);
+    }
+
+    #[tokio::test]
+    async fn save_deletes_missing_and_moves_connections() {
+        let pool = test_pool().await;
+        let mut store = sample_store();
+        save_store(&pool, &store).await.expect("save");
+
+        // c-3 переезжает в ws-1, ws-2 исчезает, c-2 удаляется
+        let moved = store.workspaces[1].connections.remove(0);
+        store.workspaces[0].connections.push(moved);
+        store.workspaces[0].connections.retain(|c| c.id != "c-2");
+        store.workspaces.remove(1);
+        save_store(&pool, &store).await.expect("save");
+
+        let loaded = load_store(&pool).await.expect("load");
+        assert_eq!(loaded.workspaces.len(), 1);
+        let ws1 = &loaded.workspaces[0];
+        assert_eq!(ws1.connections.len(), 2);
+        assert!(ws1.connections.iter().any(|c| c.id == "c-1"));
+        assert!(ws1.connections.iter().any(|c| c.id == "c-3"));
+        assert!(loaded.find_connection("c-2").is_none());
+    }
+
+    #[tokio::test]
+    async fn save_deletes_missing_labels() {
+        let pool = test_pool().await;
+        let mut store = sample_store();
+        save_store(&pool, &store).await.expect("save");
+
+        store.labels.retain(|l| l.id != "custom");
+        save_store(&pool, &store).await.expect("save");
+
+        let loaded = load_store(&pool).await.expect("load");
+        assert_eq!(loaded.labels.len(), 1);
+        assert_eq!(loaded.labels[0].id, "company");
+    }
 }
