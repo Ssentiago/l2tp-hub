@@ -3,7 +3,7 @@ use crate::models::connection::Connection;
 use crate::models::label::Label;
 use crate::models::workspace::Workspace;
 use crate::store::Store;
-use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
+use sqlx::sqlite::{SqliteConnection, SqlitePool, SqlitePoolOptions};
 use std::path::PathBuf;
 
 pub async fn init_pool(db_path: &PathBuf) -> Result<SqlitePool, String> {
@@ -26,7 +26,7 @@ pub async fn init_pool(db_path: &PathBuf) -> Result<SqlitePool, String> {
     Ok(pool)
 }
 
-async fn create_tables(pool: &SqlitePool) -> Result<(), String> {
+pub(crate) async fn create_tables(pool: &SqlitePool) -> Result<(), String> {
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS labels (
             id TEXT PRIMARY KEY,
@@ -97,8 +97,16 @@ async fn create_tables(pool: &SqlitePool) -> Result<(), String> {
 }
 
 pub async fn load_store(pool: &SqlitePool) -> Result<Store, String> {
+    let mut conn = pool
+        .acquire()
+        .await
+        .map_err(|e| format!("acquire connection: {}", e))?;
+    load_store_conn(&mut conn).await
+}
+
+pub(crate) async fn load_store_conn(db_conn: &mut SqliteConnection) -> Result<Store, String> {
     let labels = sqlx::query_as::<_, LabelRow>("SELECT id, name, built_in FROM labels")
-        .fetch_all(pool)
+        .fetch_all(&mut *db_conn)
         .await
         .map_err(|e| format!("load labels: {}", e))?
         .into_iter()
@@ -110,7 +118,7 @@ pub async fn load_store(pool: &SqlitePool) -> Result<Store, String> {
         .collect::<Vec<_>>();
 
     let workspaces = sqlx::query_as::<_, WorkspaceRow>("SELECT id, name, group_by FROM workspaces")
-        .fetch_all(pool)
+        .fetch_all(&mut *db_conn)
         .await
         .map_err(|e| format!("load workspaces: {}", e))?;
 
@@ -120,7 +128,7 @@ pub async fn load_store(pool: &SqlitePool) -> Result<Store, String> {
             "SELECT id, workspace_id, name, display_name, server, username, keychain_key, shared_secret_key, service_hash, labels, connect_count, connected_since, last_connected_at, last_disconnected_at, tunnel_mode, split_routes FROM connections WHERE workspace_id = ?",
         )
         .bind(&ws_row.id)
-        .fetch_all(pool)
+        .fetch_all(&mut *db_conn)
         .await
         .map_err(|e| format!("load connections: {}", e))?;
 
@@ -161,7 +169,7 @@ pub async fn load_store(pool: &SqlitePool) -> Result<Store, String> {
     let active_workspace_id = sqlx::query_scalar::<_, String>(
         "SELECT value FROM settings WHERE key = 'active_workspace_id'",
     )
-    .fetch_optional(pool)
+    .fetch_optional(&mut *db_conn)
     .await
     .map_err(|e| format!("load settings: {}", e))?
     .unwrap_or_else(|| {
@@ -171,18 +179,25 @@ pub async fn load_store(pool: &SqlitePool) -> Result<Store, String> {
             .unwrap_or_default()
     });
 
-    // Гарантируем что хотя бы один workspace существует
+    // Guarantee at least one workspace exists
     if result_workspaces.is_empty() {
         let ws = Workspace::new("Основной");
         let id = ws.id.clone();
         result_workspaces.push(ws);
-        // Сохраняем дефолтный workspace в БД
-        let _ = sqlx::query("INSERT INTO workspaces (id, name, group_by) VALUES (?, ?, ?)")
-            .bind(&id)
-            .bind("Основной")
-            .bind("[]")
-            .execute(pool)
-            .await;
+        // Persist the default workspace only while the table is still empty so
+        // concurrent bootstrap loads cannot create duplicates
+        if let Err(e) = sqlx::query(
+            "INSERT INTO workspaces (id, name, group_by) \
+             SELECT ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM workspaces)",
+        )
+        .bind(&id)
+        .bind("Основной")
+        .bind("[]")
+        .execute(&mut *db_conn)
+        .await
+        {
+            log::warn!("[db] bootstrap workspace insert failed: {}", e);
+        }
         return Ok(Store {
             workspaces: result_workspaces,
             active_workspace_id: id,
@@ -199,10 +214,17 @@ pub async fn load_store(pool: &SqlitePool) -> Result<Store, String> {
 
 pub async fn save_store(pool: &SqlitePool, store: &Store) -> Result<(), String> {
     let mut tx = pool.begin().await.map_err(|e| format!("begin tx: {}", e))?;
+    save_store_tx(&mut *tx, store).await?;
+    tx.commit().await.map_err(|e| format!("commit tx: {}", e))
+}
 
-    // Labels: upsert только изменившихся, удаление только исчезнувших
+/// Sync the snapshot into the database using an existing connection.
+///
+/// The caller owns the surrounding transaction and its commit.
+pub(crate) async fn save_store_tx(db_conn: &mut SqliteConnection, store: &Store) -> Result<(), String> {
+    // Labels: upsert changed rows, delete vanished rows
     let existing_labels = sqlx::query_as::<_, LabelRow>("SELECT id, name, built_in FROM labels")
-        .fetch_all(&mut *tx)
+        .fetch_all(&mut *db_conn)
         .await
         .map_err(|e| format!("load labels: {}", e))?;
     for label in &store.labels {
@@ -216,7 +238,7 @@ pub async fn save_store(pool: &SqlitePool, store: &Store) -> Result<(), String> 
             .bind(&label.id)
             .bind(&label.name)
             .bind(label.built_in as i32)
-            .execute(&mut *tx)
+            .execute(&mut *db_conn)
             .await
             .map_err(|e| format!("upsert label: {}", e))?;
     }
@@ -224,16 +246,17 @@ pub async fn save_store(pool: &SqlitePool, store: &Store) -> Result<(), String> 
         if !store.labels.iter().any(|l| l.id == row.id) {
             sqlx::query("DELETE FROM labels WHERE id = ?")
                 .bind(&row.id)
-                .execute(&mut *tx)
+                .execute(&mut *db_conn)
                 .await
                 .map_err(|e| format!("delete label: {}", e))?;
         }
     }
 
-    // Workspaces: upsert изменившихся, удаление отложено до обновления connections
+    // Workspaces: upsert changed rows; deletes are deferred until after the
+    // connections pass
     let existing_workspaces =
         sqlx::query_as::<_, WorkspaceRow>("SELECT id, name, group_by FROM workspaces")
-            .fetch_all(&mut *tx)
+            .fetch_all(&mut *db_conn)
             .await
             .map_err(|e| format!("load workspaces: {}", e))?;
     for ws in &store.workspaces {
@@ -253,16 +276,16 @@ pub async fn save_store(pool: &SqlitePool, store: &Store) -> Result<(), String> 
             .bind(&ws.id)
             .bind(&ws.name)
             .bind(&group_by)
-            .execute(&mut *tx)
+            .execute(&mut *db_conn)
             .await
             .map_err(|e| format!("upsert workspace: {}", e))?;
     }
 
-    // Connections: upsert изменившихся и переехавших, удаление исчезнувших
+    // Connections: upsert changed and moved rows, delete vanished rows
     let existing_connections = sqlx::query_as::<_, ConnectionRow>(
         "SELECT id, workspace_id, name, display_name, server, username, keychain_key, shared_secret_key, service_hash, labels, connect_count, connected_since, last_connected_at, last_disconnected_at, tunnel_mode, split_routes FROM connections",
     )
-    .fetch_all(&mut *tx)
+    .fetch_all(&mut *db_conn)
     .await
     .map_err(|e| format!("load connections: {}", e))?;
 
@@ -297,7 +320,7 @@ pub async fn save_store(pool: &SqlitePool, store: &Store) -> Result<(), String> 
             .bind(conn.last_disconnected_at)
             .bind(&conn.tunnel_mode)
             .bind(&split_routes_json)
-            .execute(&mut *tx)
+            .execute(&mut *db_conn)
             .await
             .map_err(|e| format!("upsert connection: {}", e))?;
         }
@@ -306,19 +329,19 @@ pub async fn save_store(pool: &SqlitePool, store: &Store) -> Result<(), String> 
         if !live_ids.contains(row.id.as_str()) {
             sqlx::query("DELETE FROM connections WHERE id = ?")
                 .bind(&row.id)
-                .execute(&mut *tx)
+                .execute(&mut *db_conn)
                 .await
                 .map_err(|e| format!("delete connection: {}", e))?;
         }
     }
 
-    // Удаление воркспейсов после connections, чтобы переехавшие подключения
-    // не сносились каскадом до обновления workspace_id
+    // Delete workspaces after the connections pass so moved connections get
+    // their new workspace_id before the cascade can drop them
     for row in &existing_workspaces {
         if !store.workspaces.iter().any(|w| w.id == row.id) {
             sqlx::query("DELETE FROM workspaces WHERE id = ?")
                 .bind(&row.id)
-                .execute(&mut *tx)
+                .execute(&mut *db_conn)
                 .await
                 .map_err(|e| format!("delete workspace: {}", e))?;
         }
@@ -327,11 +350,10 @@ pub async fn save_store(pool: &SqlitePool, store: &Store) -> Result<(), String> 
     // Settings
     sqlx::query("INSERT OR REPLACE INTO settings (key, value) VALUES ('active_workspace_id', ?)")
         .bind(&store.active_workspace_id)
-        .execute(&mut *tx)
+        .execute(&mut *db_conn)
         .await
         .map_err(|e| format!("save settings: {}", e))?;
 
-    tx.commit().await.map_err(|e| format!("commit tx: {}", e))?;
     Ok(())
 }
 

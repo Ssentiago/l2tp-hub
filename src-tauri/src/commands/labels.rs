@@ -12,39 +12,52 @@ pub async fn save_label(
     id: String,
     name: String,
 ) -> Result<label::Label, String> {
-    let mut s = store::load(&crate::DB_POOL.get().expect("pool")).await;
-    let label = if let Some(l) = s.labels.iter_mut().find(|l| l.id == id) {
-        l.name = name;
-        l.clone()
-    } else {
-        let l = label::Label {
-            id: id.clone(),
-            name,
-            built_in: false,
-        };
-        s.labels.push(l.clone());
-        l
-    };
-    store::save(&crate::DB_POOL.get().expect("pool"), &s).await?;
-    Ok(label)
+    let label_id = id.clone();
+    let state = crate::STORE
+        .get()
+        .expect("store actor")
+        .mutate(move |s| {
+            if let Some(l) = s.labels.iter_mut().find(|l| l.id == label_id) {
+                l.name = name;
+            } else {
+                s.labels.push(label::Label {
+                    id: label_id,
+                    name,
+                    built_in: false,
+                });
+            }
+            Ok(())
+        })
+        .await?;
+    state
+        .labels
+        .into_iter()
+        .find(|l| l.id == id)
+        .ok_or_else(|| "Метка не найдена".to_string())
 }
 
 #[tauri::command]
 pub async fn delete_label(_app_handle: tauri::AppHandle, id: String) -> Result<(), String> {
-    let mut s = store::load(&crate::DB_POOL.get().expect("pool")).await;
-    let label = s
-        .labels
-        .iter()
-        .find(|l| l.id == id)
-        .ok_or("Метка не найдена")?;
-    if label.built_in {
-        return Err("Нельзя удалить встроенную метку".into());
-    }
-    s.labels.retain(|l| l.id != id);
-    for ws in &mut s.workspaces {
-        for conn in &mut ws.connections {
-            conn.labels.remove(&id);
-        }
-    }
-    store::save(&crate::DB_POOL.get().expect("pool"), &s).await
+    crate::STORE
+        .get()
+        .expect("store actor")
+        .mutate(move |s| {
+            let label = s
+                .labels
+                .iter()
+                .find(|l| l.id == id)
+                .ok_or("Метка не найдена")?;
+            if label.built_in {
+                return Err("Нельзя удалить встроенную метку".into());
+            }
+            s.labels.retain(|l| l.id != id);
+            for ws in &mut s.workspaces {
+                for conn in &mut ws.connections {
+                    conn.labels.remove(&id);
+                }
+            }
+            Ok(())
+        })
+        .await
+        .map(|_| ())
 }

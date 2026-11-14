@@ -239,13 +239,18 @@ pub async fn switch_tunnel_mode(
     )?;
 
     // Обновляем tunnel_mode в store
-    let mut store = store::load(&crate::DB_POOL.get().expect("pool")).await;
-    for ws in &mut store.workspaces {
-        if let Some(c) = ws.connections.iter_mut().find(|c| c.id == id) {
-            c.tunnel_mode = new_mode.clone();
-        }
-    }
-    store::save(&crate::DB_POOL.get().expect("pool"), &store).await?;
+    crate::STORE
+        .get()
+        .expect("store actor")
+        .mutate(move |s| {
+            for ws in &mut s.workspaces {
+                if let Some(c) = ws.connections.iter_mut().find(|c| c.id == id) {
+                    c.tunnel_mode = new_mode.clone();
+                }
+            }
+            Ok(())
+        })
+        .await?;
 
     Ok(())
 }

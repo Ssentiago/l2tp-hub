@@ -17,10 +17,12 @@ mod state;
 mod sudo;
 
 // Re-exports from core
-pub use l2tp_hub_core::{db, guardian, keychain, l2tp, models, store};
+pub use l2tp_hub_core::{db, guardian, keychain, l2tp, models, store, store_actor};
 
 pub static LOGGER: std::sync::OnceLock<Arc<Logger>> = std::sync::OnceLock::new();
 pub static DB_POOL: std::sync::OnceLock<sqlx::SqlitePool> = std::sync::OnceLock::new();
+pub static STORE: std::sync::OnceLock<l2tp_hub_core::store_actor::StoreHandle> =
+    std::sync::OnceLock::new();
 
 #[macro_export]
 macro_rules! log {
@@ -69,6 +71,13 @@ fn main() {
             }
             DB_POOL.set(pool.clone()).ok();
 
+            // Store actor: the single writer of the store state, every
+            // mutation is serialized through its mailbox
+            let store_handle = tauri::async_runtime::block_on(async {
+                l2tp_hub_core::store_actor::StoreActor::spawn(pool.clone())
+            });
+            STORE.set(store_handle.clone()).ok();
+
             // SudoSession — управление privileged helper
             let sudo = sudo::SudoSession::new();
             app.manage(sudo.clone());
@@ -78,7 +87,7 @@ fn main() {
             let manager = l2tp::manager::L2tpManager::new(
                 executor,
                 l2tp_hub_core::env::global_env().clone(),
-                pool,
+                store_handle,
             );
             app.manage(manager);
 

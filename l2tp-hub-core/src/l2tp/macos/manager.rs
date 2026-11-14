@@ -4,6 +4,7 @@ use crate::keychain;
 use crate::l2tp;
 use crate::l2tp::VpnStatus;
 use crate::store;
+use crate::store_actor::StoreHandle;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
@@ -20,16 +21,16 @@ static DAEMON_STARTUP: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(()
 pub struct L2tpManager {
     executor: Arc<dyn PrivilegedExecutor>,
     env: AppEnv,
-    pool: sqlx::SqlitePool,
+    store: StoreHandle,
     active: Arc<Mutex<HashSet<String>>>,
 }
 
 impl L2tpManager {
-    pub fn new(executor: Arc<dyn PrivilegedExecutor>, env: AppEnv, pool: sqlx::SqlitePool) -> Self {
+    pub fn new(executor: Arc<dyn PrivilegedExecutor>, env: AppEnv, store: StoreHandle) -> Self {
         Self {
             executor,
             env,
-            pool,
+            store,
             active: Arc::new(Mutex::new(HashSet::new())),
         }
     }
@@ -85,7 +86,7 @@ impl L2tpManager {
     /// Full — только если нет других активных подключений.
     pub async fn connect(&self, id: &str) -> Result<(), String> {
         // Загружаем connection для проверки tunnel_mode
-        let store = store::load(&self.pool).await;
+        let store = self.store.load().await;
         let conn = store.workspaces.iter()
             .flat_map(|ws| ws.connections.iter())
             .find(|c| c.id == id)
@@ -143,16 +144,19 @@ impl L2tpManager {
             &original_gateway,
         )?;
 
-        let mut store = store::load(&self.pool).await;
+        let store = self.store.load().await;
 
         let hash = crate::utils::service_hash(conn, &password, &shared_secret);
         if conn.service_hash.as_deref() != Some(hash.as_str()) {
-            for ws in &mut store.workspaces {
-                if let Some(c) = ws.connections.iter_mut().find(|c| c.id == id) {
-                    c.service_hash = Some(hash.clone());
-                }
-            }
-            store::save(&self.pool, &store).await?;
+            let conn_id = id.to_string();
+            self.store
+                .mutate(move |s| {
+                    if let Some(c) = s.find_connection_mut(&conn_id) {
+                        c.service_hash = Some(hash);
+                    }
+                    Ok(())
+                })
+                .await?;
         }
 
         // Собираем ConnData для ВСЕХ активных подключений (включая новое)
@@ -183,8 +187,13 @@ impl L2tpManager {
             }
         }
 
-        update_connect_stats(&mut store, id);
-        store::save(&self.pool, &store).await?;
+        let conn_id = id.to_string();
+        self.store
+            .mutate(move |s| {
+                update_connect_stats(s, &conn_id);
+                Ok(())
+            })
+            .await?;
 
         log::debug!("[manager] connect done: {}", conn.service_name);
         Ok(())
@@ -260,7 +269,7 @@ impl L2tpManager {
     pub async fn disconnect(&self, id: &str) -> Result<(), String> {
         log::debug!("[manager] disconnect: id={}", id);
 
-        let mut store = store::load(&self.pool).await;
+        let store = self.store.load().await;
         let conn = store.workspaces.iter()
             .flat_map(|ws| ws.connections.iter())
             .find(|c| c.id == id)
@@ -297,8 +306,13 @@ impl L2tpManager {
 
         self.active_lock().remove(id);
 
-        update_disconnect_stats(&mut store, id);
-        store::save(&self.pool, &store).await?;
+        let conn_id = id.to_string();
+        self.store
+            .mutate(move |s| {
+                update_disconnect_stats(s, &conn_id);
+                Ok(())
+            })
+            .await?;
 
         log::debug!("[manager] disconnect done: {}", conn.service_name);
         Ok(())
@@ -312,7 +326,7 @@ impl L2tpManager {
             }
         }
 
-        let store = store::load(&self.pool).await;
+        let store = self.store.load().await;
         if let Some(conn) = store.workspaces.iter()
             .flat_map(|ws| ws.connections.iter())
             .find(|c| c.id == id)
@@ -332,7 +346,7 @@ impl L2tpManager {
     }
 
     pub async fn all_statuses(&self) -> HashMap<String, VpnStatus> {
-        let store = store::load(&self.pool).await;
+        let store = self.store.load().await;
         let active = self.active_lock();
         let mut map = HashMap::new();
 

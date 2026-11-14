@@ -37,27 +37,30 @@ pub async fn import(password: String) -> Result<bool, String> {
             .await
             .map_err(|e| e.to_string())??;
 
-            let mut store = store::load(&crate::DB_POOL.get().expect("pool")).await;
+            crate::STORE
+                .get()
+                .expect("store actor")
+                .mutate(move |s| {
+                    let ws = s.active_workspace_mut();
+                    for imported_conn in connections {
+                        if let Some(idx) = ws.connections.iter().position(|c| c.id == imported_conn.id) {
+                            ws.connections[idx] = imported_conn;
+                        } else {
+                            ws.connections.push(imported_conn);
+                        }
+                    }
 
-            let ws = store.active_workspace_mut();
-            for imported_conn in connections {
-                if let Some(idx) = ws.connections.iter().position(|c| c.id == imported_conn.id) {
-                    ws.connections[idx] = imported_conn;
-                } else {
-                    ws.connections.push(imported_conn);
-                }
-            }
-
-            for imported_label in labels {
-                if imported_label.built_in { continue; }
-                if let Some(idx) = store.labels.iter().position(|l| l.id == imported_label.id) {
-                    store.labels[idx] = imported_label;
-                } else {
-                    store.labels.push(imported_label);
-                }
-            }
-
-            store::save(&crate::DB_POOL.get().expect("pool"), &store).await?;
+                    for imported_label in labels {
+                        if imported_label.built_in { continue; }
+                        if let Some(idx) = s.labels.iter().position(|l| l.id == imported_label.id) {
+                            s.labels[idx] = imported_label;
+                        } else {
+                            s.labels.push(imported_label);
+                        }
+                    }
+                    Ok(())
+                })
+                .await?;
             log!("[import_config_dialog] done");
             Ok(true)
         }
@@ -81,25 +84,29 @@ pub async fn import_file(file_path: String, password: String) -> Result<bool, St
     .await
     .map_err(|e| e.to_string())??;
 
-    let mut store = store::load(&crate::DB_POOL.get().expect("pool")).await;
-    let ws = store.active_workspace_mut();
-    for imported_conn in connections {
-        if let Some(idx) = ws.connections.iter().position(|c| c.id == imported_conn.id) {
-            ws.connections[idx] = imported_conn;
-        } else {
-            ws.connections.push(imported_conn);
-        }
-    }
-    for imported_label in labels {
-        if imported_label.built_in { continue; }
-        if let Some(idx) = store.labels.iter().position(|l| l.id == imported_label.id) {
-            store.labels[idx] = imported_label;
-        } else {
-            store.labels.push(imported_label);
-        }
-    }
-
-    store::save(&crate::DB_POOL.get().expect("pool"), &store).await?;
+    crate::STORE
+        .get()
+        .expect("store actor")
+        .mutate(move |s| {
+            let ws = s.active_workspace_mut();
+            for imported_conn in connections {
+                if let Some(idx) = ws.connections.iter().position(|c| c.id == imported_conn.id) {
+                    ws.connections[idx] = imported_conn;
+                } else {
+                    ws.connections.push(imported_conn);
+                }
+            }
+            for imported_label in labels {
+                if imported_label.built_in { continue; }
+                if let Some(idx) = s.labels.iter().position(|l| l.id == imported_label.id) {
+                    s.labels[idx] = imported_label;
+                } else {
+                    s.labels.push(imported_label);
+                }
+            }
+            Ok(())
+        })
+        .await?;
     log!("[import_file] done");
     Ok(true)
 }
@@ -178,14 +185,20 @@ pub async fn reset(
         }
     }
 
-    let store = store::load(&crate::DB_POOL.get().expect("pool")).await;
-    for ws in &store.workspaces {
-        for conn in &ws.connections {
-            let _ = keychain::delete_password(&conn.keychain_key);
-            let _ = keychain::delete_password(&conn.shared_secret_key);
-        }
-    }
-    store::save(&crate::DB_POOL.get().expect("pool"), &store::Store::default()).await?;
+    crate::STORE
+        .get()
+        .expect("store actor")
+        .mutate(move |s| {
+            for ws in &s.workspaces {
+                for conn in &ws.connections {
+                    let _ = keychain::delete_password(&conn.keychain_key);
+                    let _ = keychain::delete_password(&conn.shared_secret_key);
+                }
+            }
+            *s = store::Store::default();
+            Ok(())
+        })
+        .await?;
 
     Ok(())
 }

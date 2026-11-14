@@ -6,6 +6,7 @@ pub mod keychain;
 pub mod l2tp;
 pub mod models;
 pub mod store;
+pub mod store_actor;
 pub mod utils;
 
 pub use env::AppEnv;

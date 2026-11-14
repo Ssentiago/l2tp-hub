@@ -2,7 +2,7 @@ use crate::env::AppEnv;
 use crate::executor::PrivilegedExecutor;
 use crate::keychain;
 use crate::l2tp::VpnStatus;
-use crate::store;
+use crate::store_actor::StoreHandle;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
@@ -14,16 +14,16 @@ pub struct L2tpManager {
     executor: Arc<dyn PrivilegedExecutor>,
     #[allow(dead_code)]
     env: AppEnv,
-    pool: sqlx::SqlitePool,
+    store: StoreHandle,
     active: Arc<Mutex<HashSet<String>>>,
 }
 
 impl L2tpManager {
-    pub fn new(executor: Arc<dyn PrivilegedExecutor>, env: AppEnv, pool: sqlx::SqlitePool) -> Self {
+    pub fn new(executor: Arc<dyn PrivilegedExecutor>, env: AppEnv, store: StoreHandle) -> Self {
         Self {
             executor,
             env,
-            pool,
+            store,
             active: Arc::new(Mutex::new(HashSet::new())),
         }
     }
@@ -50,7 +50,7 @@ impl L2tpManager {
 
     /// Подключить VPN по id.
     pub async fn connect(&self, id: &str) -> Result<(), String> {
-        let store = store::load(&self.pool).await;
+        let store = self.store.load().await;
         let conn = store
             .workspaces
             .iter()
@@ -82,7 +82,7 @@ impl L2tpManager {
 
     /// Отключить VPN по id.
     pub async fn disconnect(&self, id: &str) -> Result<(), String> {
-        let store = store::load(&self.pool).await;
+        let store = self.store.load().await;
         let conn = store
             .workspaces
             .iter()
@@ -101,7 +101,7 @@ impl L2tpManager {
 
     /// Статус подключения — из ОС (Get-VpnConnection).
     pub async fn status(&self, id: &str) -> VpnStatus {
-        let store = store::load(&self.pool).await;
+        let store = self.store.load().await;
         store
             .workspaces
             .iter()
@@ -113,7 +113,7 @@ impl L2tpManager {
 
     /// Статусы всех подключений — из ОС.
     pub async fn all_statuses(&self) -> HashMap<String, VpnStatus> {
-        let store = store::load(&self.pool).await;
+        let store = self.store.load().await;
         let mut map = HashMap::new();
         for ws in &store.workspaces {
             for conn in &ws.connections {

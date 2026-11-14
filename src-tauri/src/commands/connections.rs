@@ -27,8 +27,6 @@ pub async fn save_connection(
     input: ConnectionPayload,
 ) -> Result<Connection, String> {
     log!("[save_connection] called, id={:?}", input.id);
-    let mut store = store::load(&crate::DB_POOL.get().expect("pool")).await;
-
     let id = input
         .id
         .clone()
@@ -43,50 +41,61 @@ pub async fn save_connection(
         keychain::set_password(&shared_secret_key, &input.shared_secret)?;
     }
 
-    let ws = store.active_workspace_mut();
-    // При обновлении сохраняем статистику и service_name
-    let conn = if let Some(idx) = ws.connections.iter().position(|c| c.id == id) {
-        let existing = &ws.connections[idx];
-        Connection {
-            id: id.clone(),
-            service_name: existing.service_name.clone(),
-            display_name: input.display_name,
-            server: input.server,
-            username: input.username,
-            keychain_key,
-            shared_secret_key,
-            service_hash: existing.service_hash.clone(),
-            labels: input.labels,
-            connect_count: existing.connect_count,
-            connected_since: existing.connected_since,
-            last_connected_at: existing.last_connected_at,
-            last_disconnected_at: existing.last_disconnected_at,
-            tunnel_mode: input.tunnel_mode,
-            split_routes: input.split_routes,
-        }
-    } else {
-        Connection {
-            id: id.clone(),
-            service_name: id.clone(),
-            display_name: input.display_name,
-            server: input.server,
-            username: input.username,
-            keychain_key,
-            shared_secret_key,
-            labels: input.labels,
-            tunnel_mode: input.tunnel_mode,
-            split_routes: input.split_routes,
-            ..Default::default()
-        }
-    };
+    let conn_id = id.clone();
+    let state = crate::STORE
+        .get()
+        .expect("store actor")
+        .mutate(move |s| {
+            let ws = s.active_workspace_mut();
+            // При обновлении сохраняем статистику и service_name
+            let conn = if let Some(idx) = ws.connections.iter().position(|c| c.id == conn_id) {
+                let existing = &ws.connections[idx];
+                Connection {
+                    id: conn_id.clone(),
+                    service_name: existing.service_name.clone(),
+                    display_name: input.display_name,
+                    server: input.server,
+                    username: input.username,
+                    keychain_key,
+                    shared_secret_key,
+                    service_hash: existing.service_hash.clone(),
+                    labels: input.labels,
+                    connect_count: existing.connect_count,
+                    connected_since: existing.connected_since,
+                    last_connected_at: existing.last_connected_at,
+                    last_disconnected_at: existing.last_disconnected_at,
+                    tunnel_mode: input.tunnel_mode,
+                    split_routes: input.split_routes,
+                }
+            } else {
+                Connection {
+                    id: conn_id.clone(),
+                    service_name: conn_id.clone(),
+                    display_name: input.display_name,
+                    server: input.server,
+                    username: input.username,
+                    keychain_key,
+                    shared_secret_key,
+                    labels: input.labels,
+                    tunnel_mode: input.tunnel_mode,
+                    split_routes: input.split_routes,
+                    ..Default::default()
+                }
+            };
 
-    if let Some(idx) = ws.connections.iter().position(|c| c.id == id) {
-        ws.connections[idx] = conn.clone();
-    } else {
-        ws.connections.push(conn.clone());
-    }
+            if let Some(idx) = ws.connections.iter().position(|c| c.id == conn_id) {
+                ws.connections[idx] = conn;
+            } else {
+                ws.connections.push(conn);
+            }
+            Ok(())
+        })
+        .await?;
 
-    store::save(&crate::DB_POOL.get().expect("pool"), &store).await?;
+    let conn = state
+        .find_connection(&id)
+        .cloned()
+        .ok_or("Подключение не найдено")?;
     log!("[save_connection] success");
     Ok(conn)
 }
@@ -100,30 +109,48 @@ pub async fn delete_connection(
 ) -> Result<(), String> {
     log!("[delete_connection] (macos) called for id={}", id);
     let sudo = sudo.inner().clone();
-    let mut store = store::load(&crate::DB_POOL.get().expect("pool")).await;
-    let ws = store.active_workspace_mut();
-    if let Some(conn) = ws.connections.iter().find(|c| c.id == id) {
+
+    // Keychain entries and the VPN service are removed outside the store
+    // transaction; their keys depend only on the connection id
+    let snapshot = store::load(&crate::DB_POOL.get().expect("pool")).await;
+    if let Some(conn) = snapshot.find_connection(&id) {
         let _ = keychain::delete_password(&conn.keychain_key);
         let _ = keychain::delete_password(&conn.shared_secret_key);
         let _ = l2tp::delete_vpn_service(&sudo, &conn.service_name);
     }
-    ws.connections.retain(|c| c.id != id);
-    store::save(&crate::DB_POOL.get().expect("pool"), &store).await?;
-    Ok(())
+
+    crate::STORE
+        .get()
+        .expect("store actor")
+        .mutate(move |s| {
+            s.active_workspace_mut().connections.retain(|c| c.id != id);
+            Ok(())
+        })
+        .await
+        .map(|_| ())
 }
 
 #[tauri::command]
 #[cfg(target_os = "windows")]
 pub async fn delete_connection(_app_handle: tauri::AppHandle, id: String) -> Result<(), String> {
     log!("[delete_connection] (windows) called for id={}", id);
-    let mut store = store::load(&crate::DB_POOL.get().expect("pool")).await;
-    let ws = store.active_workspace_mut();
-    if let Some(conn) = ws.connections.iter().find(|c| c.id == id) {
+
+    // Keychain entries and the VPN service are removed outside the store
+    // transaction; their keys depend only on the connection id
+    let snapshot = store::load(&crate::DB_POOL.get().expect("pool")).await;
+    if let Some(conn) = snapshot.find_connection(&id) {
         let _ = keychain::delete_password(&conn.keychain_key);
         let _ = keychain::delete_password(&conn.shared_secret_key);
         let _ = l2tp::delete_vpn_service(&conn.service_name);
     }
-    ws.connections.retain(|c| c.id != id);
-    store::save(&crate::DB_POOL.get().expect("pool"), &store).await?;
-    Ok(())
+
+    crate::STORE
+        .get()
+        .expect("store actor")
+        .mutate(move |s| {
+            s.active_workspace_mut().connections.retain(|c| c.id != id);
+            Ok(())
+        })
+        .await
+        .map(|_| ())
 }
