@@ -54,9 +54,14 @@ impl AppEnv {
         }
     }
 
+    /// Корневая директория конфигов ipsec (per-connection поддиректории)
+    pub fn config_root(&self) -> PathBuf {
+        self.app_data_dir.join("ipsec")
+    }
+
     /// Директория конфигов ipsec (per-connection)
     pub fn config_dir(&self, name: &str) -> PathBuf {
-        let base = self.app_data_dir.join("ipsec").join(name);
+        let base = self.config_root().join(name);
         let _ = std::fs::create_dir_all(&base);
         base
     }

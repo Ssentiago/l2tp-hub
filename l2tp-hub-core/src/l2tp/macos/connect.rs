@@ -588,8 +588,19 @@ pub fn get_vpn_status(name: &str) -> VpnStatus {
     }
 }
 
+/// Список VPN-сервисов: имена per-connection директорий конфигов в config_root.
 pub fn list_vpn_services() -> Vec<String> {
-    vec![]
+    let root = crate::env::global_env().config_root();
+    let mut names = match fs::read_dir(&root) {
+        Ok(entries) => entries
+            .flatten()
+            .filter(|e| e.path().is_dir())
+            .filter_map(|e| e.file_name().into_string().ok())
+            .collect::<Vec<_>>(),
+        Err(_) => Vec::new(),
+    };
+    names.sort();
+    names
 }
 
 pub fn configs_exist(name: &str) -> bool {

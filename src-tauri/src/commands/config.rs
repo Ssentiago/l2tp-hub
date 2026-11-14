@@ -156,6 +156,12 @@ pub async fn reset(
     #[cfg(target_os = "windows")]
     let _ = &sudo;
 
+    // Полная очистка VPN-состояния: остановка демонов, восстановление маршрутов,
+    // удаление временных файлов. Делается до удаления сервисов.
+    tokio::task::spawn_blocking(l2tp::cleanup_all_vpn_state)
+        .await
+        .map_err(|e| e.to_string())?;
+
     let vpn_services = l2tp::list_vpn_services();
     for service in vpn_services {
         #[cfg(target_os = "macos")]
