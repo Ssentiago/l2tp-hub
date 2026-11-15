@@ -59,7 +59,6 @@ interface Store {
   connections: ConnectionWithStatus[];
   connectingId: string | null;
   disconnectingId: string | null;
-  deletingId: string | null;
   loadConnections: () => Promise<void>;
   saveConnection: (payload: ConnectionPayload) => Promise<void>;
   deleteConnection: (id: string) => Promise<void>;
@@ -188,7 +187,6 @@ export const useStore = create<Store>((set, get) => ({
   connections: [],
   connectingId: null,
   disconnectingId: null,
-  deletingId: null,
   loadConnections: async () => {
     const conns = await api.connections.getAll();
     const statuses = await api.vpn.getAllStatuses().catch(() => ({} as Record<string, VpnStatus>));
@@ -206,7 +204,6 @@ export const useStore = create<Store>((set, get) => ({
     await api.connections.delete(id);
     set((s) => ({
       connections: s.connections.filter((c) => c.id !== id),
-      deletingId: null,
     }));
   },
   connectVpn: async (id) => {

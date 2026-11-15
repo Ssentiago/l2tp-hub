@@ -190,10 +190,8 @@ route-guardian (`/tmp/l2tp-hub-guardian.sock`) остаётся 0777 без пр
 `/private/var/root/l2tp-hub/route.state` для восстановления после падения. Изменение
 маршрутной логики требует понимания `l2tp-hub-core/src/l2tp/macos/routes.rs`.
 
-Dead code. Часть фронтовых файлов не используется в активном коде: `src/pages/About`,
-`src/pages/ConnectionForm`, файлы `*.bak`. Модуль `src-tauri/src/startup` почти
-мёртвый. Скрипт `resources/route-guardian.sh` вытеснен демоном `route-guardian`.
-Рабочими точками входа они не являются.
+Dead code. Мёртвый код вычищается по мере обнаружения. Сейчас не используется:
+событие `app:log` из `logger.rs` эмитится, но потребителя во фронте нет.
 
 ## Куда смотреть
 

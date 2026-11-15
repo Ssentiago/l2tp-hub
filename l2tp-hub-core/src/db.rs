@@ -1,7 +1,6 @@
 
 use crate::models::connection::Connection;
 use crate::models::label::Label;
-use crate::models::tunnel_mode::TunnelMode;
 use crate::models::workspace::Workspace;
 use crate::store::Store;
 use sqlx::sqlite::{SqliteConnection, SqlitePool, SqlitePoolOptions};
@@ -538,6 +537,7 @@ mod tests {
     use super::*;
     use crate::models::connection::Connection;
     use crate::models::label::Label;
+    use crate::models::tunnel_mode::TunnelMode;
     use crate::models::workspace::Workspace;
 
     async fn test_pool() -> SqlitePool {

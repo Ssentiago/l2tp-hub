@@ -13,7 +13,6 @@ import { PaletteView } from "./ui/PaletteView";
 import { ManageView } from "./ui/ManageView";
 import { Settings } from "./pages/Settings/Settings";
 import { SudoModal } from "./pages/Connections/components/SudoModal";
-import { LogDrawer } from "./components/LogDrawer";
 import { useStore } from "./store";
 import { api } from "./core/api";
 import { Toaster } from "react-hot-toast";
@@ -55,7 +54,6 @@ function AppContent() {
   } = useStore();
 
   const [showSettings, setShowSettings] = useState(false);
-  const [showLog, setShowLog] = useState(false);
 
   useEffect(() => {
     initVpnEventListener();
@@ -206,7 +204,6 @@ function AppContent() {
           </Box>
         </Box>
       )}
-      <LogDrawer open={showLog} onClose={() => setShowLog(false)} />
       <Toaster />
     </Box>
   );

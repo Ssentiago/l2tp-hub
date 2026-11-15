@@ -99,9 +99,6 @@ macOS 13+ и Xcode Command Line Tools.
 | `resources/helper/*` | Бинарь helper и его plist |
 | `resources/guardian/*` | Бинарь guardian и его plist |
 
-Ресурс `route-guardian.sh` лежит в корне resources, но не входит в карту бандла и не
-используется, это устаревший механизм.
-
 Dev-helper (`npm run build:helper:dev`) собирается в `helper/target/debug` и в ресурсы
 не кладётся: в релизный бандл он физически не попадает.
 

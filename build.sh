@@ -504,7 +504,6 @@ done
 echo ""
 printf "$fmt" "ipsec" "—" "$RESOURCES_DIR/ipsec/ipsec"
 printf "$fmt" "strongswan.conf" "—" "$RESOURCES_DIR/etc/strongswan.conf"
-printf "$fmt" "route-guardian.sh" "—" "$RESOURCES_DIR/route-guardian.sh"
 
 echo ""
 echo "  Architecture:"

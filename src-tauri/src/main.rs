@@ -11,7 +11,6 @@ pub mod commands;
 #[cfg(target_os = "macos")]
 pub mod helper;
 pub mod logger;
-pub mod startup;
 mod sleep_wake;
 mod state;
 mod sudo;

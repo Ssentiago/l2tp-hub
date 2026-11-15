@@ -227,9 +227,3 @@ charon и xl2tpd, удаление control и pid файлов, удаление
 `/Library/PrivilegedHelperTools/l2tp-hub-guardian` (права 555, владелец root:wheel),
 plist в `/Library/LaunchDaemons`, затем `launchctl bootout` и `bootstrap`. Всё
 выполняется через helper.
-
-### Устаревший скрипт
-
-`src-tauri/resources/route-guardian.sh` это bash-аналог guardian в виде отсоединённого
-скрипта-сторожа. Он вытеснен демоном `route-guardian` и в текущем коде не используется,
-не входит в бандл и рабочей точкой входа не является.
