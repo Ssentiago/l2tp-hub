@@ -78,6 +78,17 @@ impl SudoSession {
 
         const EXPECTED_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+        // Debug-сборка: версии helper и приложения синхронизированы, поэтому
+        // пересборка dev-helper без смены версии незаметна для проверки версии.
+        // Сверяем бинарь с каталогом сборки и переустанавливаем при отличии.
+        #[cfg(debug_assertions)]
+        if helper_installed() && helper_binary_changed() {
+            crate::log!("[helper] dev-helper binary differs from build output, reinstalling");
+            self.set_status("Обновление сервиса (dev-сборка)...");
+            reinstall_helper()?;
+            return self.wait_for_helper_after_install(EXPECTED_VERSION);
+        }
+
         // Шаг 1: хелпер запущен и отвечает?
         if helper::is_helper_running() {
             return self.check_version_and_auth(EXPECTED_VERSION);
@@ -237,6 +248,37 @@ impl SudoSession {
 #[cfg(target_os = "macos")]
 fn helper_installed() -> bool {
     std::path::Path::new(hp::BIN).exists() && std::path::Path::new(&hp::plist()).exists()
+}
+
+/// Debug-сборка: сравнивает установленный dev-helper с бинарем из каталога
+/// сборки. Версии синхронизированы через jrit, поэтому единственный признак
+/// пересборки helper и устаревшего демона: отличие содержимого бинаря.
+#[cfg(target_os = "macos")]
+#[cfg(debug_assertions)]
+fn helper_binary_changed() -> bool {
+    let (src, _) = match helper_source_files() {
+        Ok(v) => v,
+        Err(_) => return false,
+    };
+    let installed = std::path::Path::new(hp::BIN);
+    if !src.exists() || !installed.exists() {
+        return false;
+    }
+    let src_meta = match std::fs::metadata(&src) {
+        Ok(m) => m,
+        Err(_) => return false,
+    };
+    let inst_meta = match std::fs::metadata(installed) {
+        Ok(m) => m,
+        Err(_) => return false,
+    };
+    if src_meta.len() != inst_meta.len() {
+        return true;
+    }
+    match (std::fs::read(&src), std::fs::read(installed)) {
+        (Ok(a), Ok(b)) => a != b,
+        _ => false,
+    }
 }
 
 /// Запустить уже установленный хелпер через launchctl
