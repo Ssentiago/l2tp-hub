@@ -12,6 +12,5 @@ sqlx = { version = "0.9", features = ["runtime-tokio", "sqlite"] }
 keyring = "3"
 log = "0.4"
 uuid = { version = "1", features = ["v4"] }
-dirs = "6"
 sha2 = "0.10.9"
 specta = { version = "=2.0.0-rc.28", features = ["derive"] }

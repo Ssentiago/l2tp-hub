@@ -28,23 +28,6 @@ pub struct AppEnv {
 }
 
 impl AppEnv {
-    /// Создать с автоматическим определением путей ОС.
-    pub fn autodetect() -> Self {
-        let app_data_dir = dirs::data_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join("com.sentiago.l2tp-hub");
-        let db_path = app_data_dir.join("l2tp-hub.db");
-        let resource_dir = std::env::current_exe()
-            .ok()
-            .and_then(|p| p.parent().map(|d| d.join("resources")))
-            .unwrap_or_else(|| PathBuf::from("resources"));
-        Self {
-            app_data_dir,
-            db_path,
-            resource_dir,
-        }
-    }
-
     /// Создать с явными путями (для GUI из Tauri).
     pub fn with_paths(app_data_dir: PathBuf, db_path: PathBuf, resource_dir: PathBuf) -> Self {
         Self {

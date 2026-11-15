@@ -54,7 +54,7 @@ charon и xl2tpd (root, на время подключения). LaunchDaemon'ы
 
 Фронтенд и бэкенд. Стандартный IPC Tauri. Фронт вызывает команды через `invoke`,
 бэкенд эмитит события через `app.emit`. Основные события: `vpn-status-changed`,
-`app-shown`, `app:log`.
+`app-shown`.
 
 Приложение и helper. Unix socket `/var/run/l2tp-hub-helper.sock`. Запрос: одна строка
 JSON-массива argv, например `["cp", "a", "b"]`. Ответ: одна строка JSON вида

@@ -110,7 +110,7 @@ fn main() {
             }
         })
         .setup(|app| {
-            let logger = Arc::new(logger::Logger::new(app.handle().clone()));
+            let logger = Arc::new(logger::Logger::new());
             LOGGER.set(logger).ok();
 
             // Инициализируем AppEnv — пути приложения
