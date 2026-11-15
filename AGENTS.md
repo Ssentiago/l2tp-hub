@@ -71,7 +71,7 @@ cleanup при пропаже heartbeat или смерти Tauri.
 | `npm run gen:types`      | Генерация TypeScript-типов из Rust (specta) в `src/typing/bindings.ts` |
 | `npm run build:helper`   | Собирает helper (universal arm64+x86_64), кладёт бинарь и plist в `src-tauri/resources/helper/` |
 | `npm run build:helper:dev` | Собирает dev-helper (debug) в `helper/target/debug`, в ресурсы не кладёт |
-| `npm run build:guardian` | Собирает guardian, кладёт в `src-tauri/resources/guardian/`            |
+| `npm run build:guardian` | Собирает guardian (universal arm64+x86_64), кладёт в `src-tauri/resources/guardian/` |
 | `npm run build:deps`     | Собирает нативные зависимости (strongSwan, xl2tpd, OpenSSL)            |
 | `npm run build:all`      | helper + guardian + зависимости + tsc + vite + tauri                   |
 

@@ -70,13 +70,31 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri
+          workspaces: |
+            src-tauri
+            helper
+            route-guardian
 
       - run: bun install
 
       - name: Build helper (universal)
         if: runner.os == 'macOS'
         run: bun run build:helper
+
+      - name: Build guardian (universal)
+        if: runner.os == 'macOS'
+        run: bun run build:guardian
+
+      - name: Cache native dependencies
+        if: runner.os == 'macOS'
+        uses: actions/cache@v4
+        with:
+          path: build-strongswan
+          key: native-deps-${{ runner.os }}-${{ hashFiles('build.sh', 'build-strongswan/*.patch') }}
+
+      - name: Build native dependencies (universal)
+        if: runner.os == 'macOS'
+        run: bun run build:deps
 
       - uses: tauri-apps/tauri-action@v0
         env:

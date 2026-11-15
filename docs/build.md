@@ -27,12 +27,13 @@ strongSwan, xl2tpd), патчи, итоговый бандл и автомати
 `build:deps` запускает `build.sh` (полная сборка нативных зависимостей).
 `build:deps:skip-ssl` переиспользует уже собранный OpenSSL. `build:deps:clean`
 очищает артефакты. `build:helper` собирает helper как universal-бинарь (arm64 и
-x86_64, склейка через `lipo`), `build:guardian` собирает guardian; оба копируют бинари
-с plist в `src-tauri/resources`. `build:all` цепляет всё вместе с фронтом и Tauri.
+x86_64, склейка через `lipo`), `build:guardian` собирает guardian так же universal.
+Оба копируют бинари с plist в `src-tauri/resources`. `build:all` цепляет всё вместе
+с фронтом и Tauri.
 Перед фронтом генерятся TypeScript-типы (`npm run gen:types`), этот шаг также вшит в
 `tauri:dev` и `tauri:build`.
-Для `build:helper` нужен rustup с установленными таргетами `aarch64-apple-darwin` и
-`x86_64-apple-darwin`.
+Для `build:helper` и `build:guardian` нужен rustup с установленными таргетами
+`aarch64-apple-darwin` и `x86_64-apple-darwin`.
 
 ## Порядок build.sh
 
@@ -127,8 +128,23 @@ jrit только поднимает версии и пишет changelog: в р
 
 Версия приложения (1.0.0) именно отсюда, именно её `sudo.rs` сравнивает с версией
 helper при рукопожатии. Версии поднимаются вместе, поэтому helper переустанавливается
-при обновлении приложения, а не при каждом запуске. Helper собирается в CI шагом
-`bun run build:helper` перед упаковкой (macOS, universal-бинарь).
+при обновлении приложения, а не при каждом запуске.
+
+## Сборка в CI
+
+Воркфлоу `build.yaml` и `release.yml` перед упаковкой пересобирают все нативные
+бинари на macOS-раннере и не полагаются на закоммиченные файлы в `src-tauri/resources`:
+
+Шаг `bun run build:helper` собирает helper universal, `bun run build:guardian`
+собирает guardian universal, `bun run build:deps` запускает `build.sh` для strongSwan,
+xl2tpd и OpenSSL. Между guardian и зависимостями каталог `build-strongswan`
+восстанавливается из кеша `actions/cache` с ключом по хешу `build.sh` и патчей:
+повторные сборки переиспользуют скачанные исходники и собранные по архитектурам
+артефакты, `build.sh` при этом всё равно прогоняет склейку `lipo` и деплой в ресурсы.
+Windows-джоб нативные зависимости не собирает: там свой VPN-стек.
+
+Закоммиченные бинари в `src-tauri/resources` остаются для локальной разработки и
+могут отставать от исходников; релизный бандл всегда содержит свежесобранные.
 
 ## Сборка приложения
 
