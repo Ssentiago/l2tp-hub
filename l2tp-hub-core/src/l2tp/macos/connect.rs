@@ -6,13 +6,13 @@ use tokio::sync::Notify;
 use crate::executor::PrivilegedExecutor;
 use crate::models::tunnel_mode::TunnelMode;
 
-use super::error::{ConnData, classify_connect_failure, read_log_tail};
+use super::error::{ConnData, ConnectError, ConnectSignal, LogSource, classify_connect_failure, log_signals, pppd_outcome_signals, read_log_tail};
 use super::paths::{config_dir, active_dir, sanitize_name, swanctl_bin, CHARON_LABEL, XL2TPD_LABEL};
 use super::routes::{capture_physical_route, load_route_state, save_route_state, restore_routes, clear_route_state};
 use super::guardian::{activate_guardian, start_heartbeat_thread, stop_heartbeat_thread, deactivate_guardian};
 use super::daemon::{generate_charon_plist, generate_xl2tpd_plist, install_daemon, start_daemon, stop_daemon, uninstall_daemon};
 use super::config::{generate_configs, deploy_configs_to_active, generate_merged_configs};
-use super::helpers::{is_process_running_global, find_ppp_interface, count_ppp_interfaces, log_system_state, destroy_stale_ppp_interfaces};
+use super::helpers::{is_process_running_global, find_ppp_interface, count_ppp_interfaces, log_system_state, destroy_stale_ppp_interfaces, ike_sa_state};
 
 /// PPP interface readiness signal.
 /// First connection signals after ppp0 is created.
@@ -57,7 +57,7 @@ pub async fn connect_vpn(
     all_conns: &[ConnData],
     is_first: bool,
     original_gateway: &str,
-) -> Result<(), String> {
+) -> Result<(), ConnectError> {
     // Сортируем для детерминированного unit assignment:
     // существующие подключения по ID (стабильный порядок), новое — в конце.
     let sorted: Vec<ConnData> = if is_first {
@@ -168,7 +168,7 @@ pub async fn connect_vpn(
         ]);
         match &load_out {
             Ok(out) => log::debug!("[l2tp] swanctl --load-all OK: {}", out.trim()),
-            Err(e) => return Err(format!("swanctl --load-all failed: {}", e)),
+            Err(e) => return Err(format!("swanctl --load-all failed: {}", e).into()),
         }
 
         // Start xl2tpd
@@ -199,7 +199,7 @@ pub async fn connect_vpn(
         ]);
         match &load_out {
             Ok(out) => log::debug!("[l2tp] swanctl --load-all OK: {}", out.trim()),
-            Err(e) => return Err(format!("swanctl --load-all failed: {}", e)),
+            Err(e) => return Err(format!("swanctl --load-all failed: {}", e).into()),
         }
 
         // Restart xl2tpd
@@ -246,11 +246,31 @@ pub async fn connect_vpn(
         }
 
         if !pppd_ready {
-            let charon_log = read_log_tail(&format!("/tmp/l2tp/{}-charon", sanitize_name(&this.service_name)));
-            let pppd_log = read_log_tail(&format!("/tmp/l2tp/{}-pppd.log", sanitize_name(&this.service_name)));
-            let error = classify_connect_failure(&charon_log, &pppd_log);
-            log::debug!("[l2tp] connection failed: {:?} — {}", error, error.user_message());
-            return Err(format!("{}: {}", error.user_message(), format!("{:?}", error)));
+            let sanitized = sanitize_name(&this.service_name);
+            let charon_log = read_log_tail(&format!("/tmp/l2tp/{}-charon", sanitized));
+            let pppd_log = read_log_tail(&format!("/tmp/l2tp/{}-pppd.log", sanitized));
+            let xl2tpd_log = read_log_tail(&format!("/tmp/l2tp/{}-xl2tpd.log", sanitized));
+
+            // Признаки собираются структурными сигналами и строками логов:
+            // классификатор решает по ним, а не по произвольному тексту.
+            let mut signals: Vec<ConnectSignal> = Vec::new();
+            if !is_process_running_global("charon") {
+                signals.push(ConnectSignal::DaemonDead("charon"));
+            }
+            if !is_process_running_global("xl2tpd") {
+                signals.push(ConnectSignal::DaemonDead("xl2tpd"));
+            }
+            signals.extend(pppd_outcome_signals(&xl2tpd_log));
+            signals.push(ConnectSignal::PppdMissing);
+            if let Some(state) = ike_sa_state(sudo, &this.service_name) {
+                signals.push(ConnectSignal::IkeSaState(state));
+            }
+            signals.extend(log_signals(LogSource::Charon, &charon_log));
+            signals.extend(log_signals(LogSource::Pppd, &pppd_log));
+
+            let error = classify_connect_failure(&signals);
+            log::debug!("[l2tp] connection failed: {}", error);
+            return Err(error);
         }
         // Ждём пока pppd создаст ppp интерфейс, затем сигналим другим connection'ам
         let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(30);

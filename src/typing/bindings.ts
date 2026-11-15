@@ -45,6 +45,25 @@ export const commands = {
 };
 
 /* Types */
+/**
+ *  Результат классификации. Код и этап уходят в UI, признаки остаются для
+ *  логов и истории сессий.
+ */
+export type ConnectError = {
+	code: ConnectErrorCode,
+	stage: ConnectStage,
+	evidence: string[],
+};
+
+/**
+ *  Стабильный код ошибки подключения. Текст и подсказки для UI выбираются по
+ *  нему во фронтенде и не зависят от формулировок в логах демонов.
+ */
+export type ConnectErrorCode = "ike_auth_failed" | "ike_no_proposal" | "ike_ts_unacceptable" | "ike_cert_untrusted" | "ike_peer_unreachable" | "ppp_negotiation_failed" | "ppp_peer_auth_failed" | "ppp_our_auth_failed" | "ppp_peer_dead" | "ppp_killed" | "stack_failed" | "unknown";
+
+/**  Этап подключения, на котором сорвалось соединение. */
+export type ConnectStage = "ike" | "child" | "ppp" | "unknown";
+
 export type Connection = Connection_Serialize | Connection_Deserialize;
 
 export type ConnectionPayload = ConnectionPayload_Serialize | ConnectionPayload_Deserialize;

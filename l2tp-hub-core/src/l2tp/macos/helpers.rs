@@ -1,10 +1,11 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::process::Command;
 
 use crate::executor::PrivilegedExecutor;
 
-use super::paths::{config_dir, active_dir, swanctl_bin, CHARON_LABEL, XL2TPD_LABEL};
+use super::error::IkeSaState;
+use super::paths::{config_dir, active_dir, sanitize_name, swanctl_bin, CHARON_LABEL, XL2TPD_LABEL};
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -102,60 +103,86 @@ pub fn is_ppp_unit_running(unit: u32) -> bool {
 /// Имя секции — sanitize_name(service_name). Команда совпадает по форме с вызовами
 /// check_ipsec_sa_alive и connect_vpn, поэтому allowlist хелпера её уже пропускает.
 pub fn established_ike_sas(sudo: &dyn PrivilegedExecutor) -> Result<HashSet<String>, String> {
+    let output = list_sas_raw(sudo)?;
+    Ok(parse_ike_sa_states(&output)
+        .into_iter()
+        .filter(|(_, state)| *state == IkeSaState::Established)
+        .map(|(name, _)| name)
+        .collect())
+}
+
+/// Состояние IKE SA одного подключения по данным `swanctl --list-sas --raw`.
+/// None — состояние узнать не удалось (swanctl недоступен).
+pub fn ike_sa_state(sudo: &dyn PrivilegedExecutor, service_name: &str) -> Option<IkeSaState> {
+    let output = list_sas_raw(sudo).ok()?;
+    let states = parse_ike_sa_states(&output);
+    Some(states.get(&sanitize_name(service_name)).copied().unwrap_or(IkeSaState::Absent))
+}
+
+fn list_sas_raw(sudo: &dyn PrivilegedExecutor) -> Result<String, String> {
     let strongswan_conf = active_dir().join("strongswan.conf");
     let swanctl = swanctl_bin();
-    let output = sudo.run(&[
+    sudo.run(&[
         "env",
         &format!("STRONGSWAN_CONF={}", strongswan_conf.to_string_lossy()),
         &swanctl.to_string_lossy(),
         "--list-sas", "--raw",
-    ])?;
-
-    Ok(parse_established_ike_sas(&output))
+    ])
 }
 
 /// Разбор `swanctl --list-sas --raw`: vici_dump печатает каждое событие одной строкой
 /// вида `list-sa event {<name> {uniqueid=.. state=ESTABLISHED .. child-sas {..}}}`.
 /// Ключ state= до подсекции child-sas — состояние самого IKE SA,
 /// внутри child-sas state= принадлежит CHILD SA и не учитывается.
-fn parse_established_ike_sas(output: &str) -> HashSet<String> {
-    let mut names = HashSet::new();
+fn parse_ike_sa_states(output: &str) -> HashMap<String, IkeSaState> {
+    let mut states = HashMap::new();
     for line in output.lines() {
         let line = line.trim();
         let Some(rest) = line.strip_prefix("list-sa event {") else { continue; };
         let Some((name, body)) = rest.split_once(" {") else { continue; };
         let ike_part = body.split("child-sas {").next().unwrap_or(body);
-        if ike_part.split_whitespace().any(|token| token == "state=ESTABLISHED") {
-            names.insert(name.trim().to_string());
-        }
+        let state = ike_part
+            .split_whitespace()
+            .find_map(|token| token.strip_prefix("state="))
+            .map(parse_ike_state)
+            .unwrap_or(IkeSaState::Negotiating);
+        states.insert(name.trim().to_string(), state);
     }
-    names
+    states
+}
+
+fn parse_ike_state(value: &str) -> IkeSaState {
+    if value == "ESTABLISHED" {
+        IkeSaState::Established
+    } else {
+        IkeSaState::Negotiating
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::parse_established_ike_sas;
+    use super::{parse_ike_sa_states, IkeSaState};
 
     #[test]
-    fn parses_established_sa_name() {
+    fn parses_established_sa_state() {
         let out = "list-sa event {home {uniqueid=2 version=1 state=ESTABLISHED local-host=192.168.0.2 child-sas {home-4 {name=home uniqueid=4 state=INSTALLED mode=TRANSPORT}}}}\n";
-        let names = parse_established_ike_sas(out);
-        assert!(names.contains("home"));
+        let states = parse_ike_sa_states(out);
+        assert_eq!(states.get("home"), Some(&IkeSaState::Established));
     }
 
     #[test]
-    fn ignores_non_established_sa() {
+    fn non_established_sa_is_negotiating() {
         let out = "list-sa event {home {uniqueid=2 version=1 state=CONNECTING child-sas {home-4 {name=home uniqueid=4 state=INSTALLED}}}}\n";
-        let names = parse_established_ike_sas(out);
-        assert!(!names.contains("home"));
+        let states = parse_ike_sa_states(out);
+        assert_eq!(states.get("home"), Some(&IkeSaState::Negotiating));
     }
 
     #[test]
     fn child_state_is_not_ike_state() {
-        // IKE SA умирает, CHILD SA ещё INSTALLED: подключение не считается установленным
+        // IKE SA умирает, CHILD SA ещё INSTALLED: состояние берётся из IKE SA
         let out = "list-sa event {home {uniqueid=2 version=1 state=DESTROYING child-sas {home-4 {name=home uniqueid=4 state=INSTALLED}}}}\n";
-        let names = parse_established_ike_sas(out);
-        assert!(!names.contains("home"));
+        let states = parse_ike_sa_states(out);
+        assert_eq!(states.get("home"), Some(&IkeSaState::Negotiating));
     }
 
     #[test]
@@ -165,9 +192,9 @@ mod tests {
             "list-sa event {alpha-2 {uniqueid=2 version=1 state=CONNECTING}}\n",
             "list-sas reply {\n}\n",
         );
-        let names = parse_established_ike_sas(out);
-        assert!(names.contains("alpha"));
-        assert!(!names.contains("alpha-2"));
+        let states = parse_ike_sa_states(out);
+        assert_eq!(states.get("alpha"), Some(&IkeSaState::Established));
+        assert_eq!(states.get("alpha-2"), Some(&IkeSaState::Negotiating));
     }
 }
 

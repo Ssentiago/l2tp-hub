@@ -16,7 +16,7 @@ pub async fn connect_vpn(
     app_handle: tauri::AppHandle,
     id: String,
     manager: State<'_, L2tpManager>,
-) -> Result<(), String> {
+) -> Result<(), crate::l2tp::ConnectError> {
     log!("[connect_vpn] (macos) id={}", id);
     let manager = manager.inner().clone();
     let id_clone = id.clone();
@@ -63,6 +63,7 @@ pub async fn connect_vpn(
         Err(e) => {
             log!("[connect_vpn] failed: {}, emitting disconnected event", e);
             // Сохраняем логи неудачного подключения
+            let err_text = e.to_string();
             let store = store::load(&crate::DB_POOL.get().expect("pool")).await;
             if let Some(conn) = store.workspaces.iter()
                 .flat_map(|ws| ws.connections.iter())
@@ -73,7 +74,7 @@ pub async fn connect_vpn(
                     &conn.service_name,
                     &conn.server,
                     conn.connected_since,
-                    Some(e),
+                    Some(&err_text),
                 );
             }
             let _ = app.emit("vpn-status-changed", serde_json::json!({

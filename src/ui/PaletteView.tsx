@@ -3,11 +3,13 @@ import { Box, Typography } from "@mui/material";
 import { ChevronRight, ExpandMore } from "@mui/icons-material";
 import { useStore } from "../store";
 import { api } from "../core/api";
-import { matchesQuery } from "../core/display";
+import { getTitle, matchesQuery } from "../core/display";
 import type { ConnectionWithStatus } from "../store";
 import { SearchInput } from "./SearchInput";
 import { ActiveConnectionBar } from "./ActiveConnectionBar";
 import { ConnectionRow } from "./ConnectionRow";
+import { ConnectErrorBanner } from "./ConnectErrorBanner";
+import { ConnectionLogDrawer } from "../pages/Connections/components/ConnectionLogDrawer";
 import { KeyHints } from "./KeyHints";
 
 function groupByCompanyFn(conns: ConnectionWithStatus[]): Map<string, ConnectionWithStatus[]> {
@@ -138,6 +140,8 @@ export function PaletteView() {
   );
 
   const activeConn = connections.find((c) => c.status === "connected" || c.status === "connecting" || c.status === "reconnecting") ?? null;
+  const failedConn = connections.find((c) => c.error) ?? null;
+  const [showFailedLogs, setShowFailedLogs] = useState(false);
 
   const toggleCollapsed = (key: string) => {
     setCollapsed((prev) => {
@@ -313,6 +317,19 @@ export function PaletteView() {
         <ActiveConnectionBar conn={activeConn} onDisconnect={() => handleDisconnect(activeConn.id)} />
       )}
 
+      {/* failed connection banner */}
+      {failedConn?.error && (
+        <ConnectErrorBanner
+          error={failedConn.error}
+          onRetry={() => handleConnect(failedConn.id)}
+          onEdit={() => {
+            setViewMode("manage");
+            setSelectedKey(`manage:${failedConn.id}`);
+          }}
+          onLogs={() => setShowFailedLogs(true)}
+        />
+      )}
+
       {/* list */}
       <Box ref={listRef} sx={{ flex: 1, overflow: "auto", py: 0.5 }}>
         {renderRows(all, "Все")}
@@ -322,6 +339,13 @@ export function PaletteView() {
           </Box>
         )}
       </Box>
+
+      <ConnectionLogDrawer
+        open={showFailedLogs}
+        onClose={() => setShowFailedLogs(false)}
+        connectionId={failedConn?.id ?? ""}
+        connectionName={failedConn ? getTitle(failedConn) : ""}
+      />
 
       <KeyHints />
     </Box>

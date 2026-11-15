@@ -9,6 +9,8 @@ use crate::store_actor::StoreHandle;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
+use super::error::ConnectError;
+
 /// Сериализация запуска VPN демонов.
 /// Предотвращает параллельный запуск charon/xl2tpd при одновременных подключениях.
 static DAEMON_STARTUP: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
@@ -85,7 +87,7 @@ impl L2tpManager {
     /// Подключить VPN по id.
     /// Разрешает параллельные split если подсети не пересекаются.
     /// Full — только если нет других активных подключений.
-    pub async fn connect(&self, id: &str) -> Result<(), String> {
+    pub async fn connect(&self, id: &str) -> Result<(), ConnectError> {
         // Загружаем connection для проверки tunnel_mode
         let store = self.store.load().await;
         let conn = store.workspaces.iter()
@@ -101,17 +103,17 @@ impl L2tpManager {
                 // OK — reconnect существующего
             } else {
                 if conn.tunnel_mode == TunnelMode::Full && !active.is_empty() {
-                    return Err("Невозможно подключить полный туннель: есть активные подключения. Сначала отключите.".to_string());
+                    return Err("Невозможно подключить полный туннель: есть активные подключения. Сначала отключите.".into());
                 }
 
                 if conn.tunnel_mode == TunnelMode::Split && self.has_active_full_inner(&store, &active) {
-                    return Err("Невозможно подключить раздельный туннель: активен полный туннель.".to_string());
+                    return Err("Невозможно подключить раздельный туннель: активен полный туннель.".into());
                 }
 
                 if conn.tunnel_mode == TunnelMode::Split && !conn.split_routes.is_empty() {
                     let existing = self.active_split_routes_inner(&store, &active, id);
                     if let Some(overlap) = find_overlap(&conn.split_routes, &existing) {
-                        return Err(format!("Подсеть {} уже используется активным подключением", overlap));
+                        return Err(format!("Подсеть {} уже используется активным подключением", overlap).into());
                     }
                 }
             }
@@ -127,7 +129,7 @@ impl L2tpManager {
         result
     }
 
-    async fn do_connect(&self, id: &str, conn: &crate::models::connection::Connection) -> Result<(), String> {
+    async fn do_connect(&self, id: &str, conn: &crate::models::connection::Connection) -> Result<(), ConnectError> {
         log::debug!("[manager] connect: id={}, mode={}", id, conn.tunnel_mode);
 
         let password = keychain::get_password(&conn.keychain_key)?;
@@ -184,7 +186,7 @@ impl L2tpManager {
                 log::debug!("[manager] connect timed out after 60s");
                 crate::l2tp::macos::stop_heartbeat_thread();
                 crate::l2tp::macos::deactivate_guardian();
-                return Err("Превышен таймаут подключения (60 сек)".to_string());
+                return Err("Превышен таймаут подключения (60 сек)".into());
             }
         }
 

@@ -98,7 +98,7 @@ oneshot). Команды передают замыкание `FnOnce(&mut Store)
 | `cleanup.rs` | Полная очистка VPN-состояния |
 | `helpers.rs` | Проверки процессов, PPP-интерфейсы, логирование |
 | `paths.rs` | Константы путей, имена демонов, sanitize |
-| `error.rs` | `ConnData`, `ConnectError`, классификация ошибок |
+| `error.rs` | `ConnData`, признаки и классификация ошибок подключения |
 
 Ключевые публичные функции: `create_vpn_service`, `delete_vpn_service`, `connect_vpn`,
 `disconnect_vpn`, `disconnect_single`, `switch_tunnel_mode`, `get_vpn_status`,
@@ -127,10 +127,29 @@ LaunchDaemon, без guardian, без split tunneling. Привилегиров�
 
 ## Классификация ошибок
 
-`ConnectError` в `error.rs` различает: `ServerUnreachable`, `AuthenticationFailed`,
-`NoProposalChosen`, `PppAuthFailed`, `Unknown`. Функция
-`classify_connect_failure` парсит логи charon и pppd и выбирает категорию, из которой
-формируется понятное пользователю сообщение (`user_message`).
+`error.rs` содержит структурную классификацию сбоя подключения. Признаки
+(`ConnectSignal`) собираются в `connect.rs` в момент неудачи: код завершения pppd из
+лога xl2tpd (xl2tpd спавнит pppd и один видит его статус: строки вида
+`pppd exited for call N with code C` и `pppd terminated ... by signal S`), живность
+демонов charon и xl2tpd, состояние IKE SA из `swanctl --list-sas --raw`, строки логов
+charon и pppd.
+
+`classify_connect_failure` — чистая функция над признаками. Правила лежат в
+упорядоченной таблице `RULES`, первое совпадение выигрывает. Приоритет источников:
+структурные сигналы (коды выхода pppd по man pppd EXIT STATUS, сигналы, живность
+демонов), затем токены RFC 7296 в логе charon (`AUTHENTICATION_FAILED`,
+`NO_PROPOSAL_CHOSEN`, `TS_UNACCEPTABLE`, `INVALID_ID_INFORMATION`), затем устойчивые
+фразы strongSwan и pppd (сильный strongSwan пишет человекочитаемый текст вместо
+токенов, поэтому матчатся оба варианта), затем вывод по состоянию IKE SA. Если ни одно
+правило не сработало, возвращается `Unknown` с сырыми признаками (обрезанный список)
+вместо угадывания.
+
+Результат `ConnectError` несёт `code` (`ConnectErrorCode`, например `ike_auth_failed`,
+`ppp_peer_unreachable`, `stack_failed`), `stage` (`ike`, `child`, `ppp`, `unknown`) и
+`evidence`. Код стабилен и не зависит от формулировок в логах: текст для UI выбирается
+по нему во фронтенде (`src/core/connectErrors.ts`), `user_message` в ядре остаётся для
+логов и истории сессий. `connect_vpn` и `L2tpManager::connect` возвращают
+`Result<(), ConnectError>`, Tauri-команда отдаёт структуру наружу как есть.
 
 ## Договорённости ядра
 

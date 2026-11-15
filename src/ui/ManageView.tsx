@@ -30,6 +30,7 @@ import { getTitle } from "../core/display";
 import { StatusDot } from "./StatusDot";
 import { ModeSegment } from "./ModeSegment";
 import { SubnetEditor } from "../components/SubnetEditor";
+import { ConnectErrorBanner } from "./ConnectErrorBanner";
 import { ConnectionLogDrawer } from "../pages/Connections/components/ConnectionLogDrawer";
 
 // ——— Tree ———
@@ -317,6 +318,16 @@ export function ManageView() {
                 </Tooltip>
               </Box>
             </Box>
+
+            {/* Сбой подключения: причина, подсказки и действия */}
+            {selected.error && (
+              <ConnectErrorBanner
+                error={selected.error}
+                onRetry={() => connectVpn(selected.id)}
+                onEdit={() => setDetailTab(0)}
+                onLogs={() => setShowLog(true)}
+              />
+            )}
 
             {/* Tabs */}
             <Tabs

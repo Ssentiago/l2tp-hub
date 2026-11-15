@@ -3,17 +3,19 @@ import { listen } from "@tauri-apps/api/event";
 import { getVersion } from "@tauri-apps/api/app";
 import { api } from "./core/api";
 import type {
+  ConnectError,
   Connection_Serialize as Connection,
   ConnectionPayload_Deserialize as ConnectionPayload,
   Label,
   VpnStatus,
   WorkspaceInfo,
 } from "./typing/bindings";
+import { toConnectError } from "./core/connectErrors";
 
 /** UI-композит: подключение вместе с текущим VPN-статусом. */
 export interface ConnectionWithStatus extends Connection {
   status: VpnStatus;
-  error?: string;
+  error?: ConnectError;
 }
 
 interface Store {
@@ -231,15 +233,20 @@ export const useStore = create<Store>((set, get) => ({
     set({ connectingId: id });
     set((s) => ({
       connections: s.connections.map((c) =>
-        c.id === id ? { ...c, status: "connecting" as const } : c,
+        c.id === id ? { ...c, status: "connecting" as const, error: undefined } : c,
       ),
     }));
     try {
       await api.vpn.connect(id);
     } catch (e) {
+      const failure = toConnectError(e) ?? {
+        code: "unknown",
+        stage: "unknown",
+        evidence: [String(e)],
+      } as ConnectError;
       set((s) => ({
         connections: s.connections.map((c) =>
-          c.id === id ? { ...c, status: "disconnected" as const } : c,
+          c.id === id ? { ...c, status: "disconnected" as const, error: failure } : c,
         ),
       }));
       set({ connectingId: null });
@@ -265,7 +272,7 @@ export const useStore = create<Store>((set, get) => ({
 
   initVpnEventListener: () => {
     if (vpnEventUnlisten) return; // уже инициализирован
-    listen<{ id: string; status: VpnStatus; connected_since?: number; error?: string }>("vpn-status-changed", (event) => {
+    listen<{ id: string; status: VpnStatus; connected_since?: number; error?: ConnectError }>("vpn-status-changed", (event) => {
       const { id, status, connected_since, error } = event.payload;
       console.log("[store] vpn-status-changed event:", id, status, connected_since, error);
 
