@@ -300,6 +300,10 @@ name "{username}"
 password "{password}"
 "#, ppp_log = ppp_log, name = conn.service_name, username = conn.username, password = conn.password, unit = idx),
         ).map_err(|e| format!("options-{}.xl2tpd: {}", s, e))?;
+
+        // Маркер назначенного юнита: по нему статус подключения находит свой pppN.
+        fs::write(config_dir(&conn.service_name).join("ppp-unit"), idx.to_string())
+            .map_err(|e| format!("ppp-unit: {}", e))?;
     }
 
     // --- strongswan.conf ---

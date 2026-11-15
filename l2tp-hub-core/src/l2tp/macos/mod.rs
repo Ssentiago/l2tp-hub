@@ -17,7 +17,7 @@ pub use guardian::{install_guardian_daemon, deactivate_guardian, stop_heartbeat_
 pub use connect::{
     create_vpn_service, delete_vpn_service,
     connect_vpn, disconnect_vpn, disconnect_single,
-    switch_tunnel_mode, get_vpn_status, list_vpn_services, configs_exist,
+    switch_tunnel_mode, list_vpn_services, configs_exist,
 };
-pub use helpers::{is_process_running_global, check_ipsec_sa_alive};
+pub use helpers::{is_process_running_global, check_ipsec_sa_alive, ppp_unit_marker, is_ppp_unit_running, established_ike_sas};
 pub use cleanup::cleanup_all_vpn_state;

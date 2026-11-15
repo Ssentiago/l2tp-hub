@@ -4,7 +4,6 @@ use std::sync::OnceLock;
 use tokio::sync::Notify;
 
 use crate::executor::PrivilegedExecutor;
-use crate::l2tp::VpnStatus;
 use crate::models::tunnel_mode::TunnelMode;
 
 use super::error::{ConnData, classify_connect_failure, read_log_tail};
@@ -568,25 +567,6 @@ pub fn switch_tunnel_mode(
 
     log::debug!("[l2tp] switch_tunnel_mode done");
     Ok(())
-}
-
-pub fn get_vpn_status(name: &str) -> VpnStatus {
-    let dir = config_dir(name);
-
-    if !dir.join("swanctl.conf").exists() {
-        return VpnStatus::Disconnected;
-    }
-
-    let xl2tpd_running = is_process_running_global("xl2tpd");
-    let pppd_running = is_process_running_global("pppd");
-
-    if xl2tpd_running && pppd_running {
-        VpnStatus::Connected
-    } else if xl2tpd_running || pppd_running {
-        VpnStatus::Connecting
-    } else {
-        VpnStatus::Disconnected
-    }
 }
 
 /// Список VPN-сервисов: имена per-connection директорий конфигов в config_root.

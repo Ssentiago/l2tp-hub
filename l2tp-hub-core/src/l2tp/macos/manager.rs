@@ -328,42 +328,27 @@ impl L2tpManager {
         }
 
         let store = self.store.load().await;
-        if let Some(conn) = store.workspaces.iter()
+        let Some(conn) = store.workspaces.iter()
             .flat_map(|ws| ws.connections.iter())
             .find(|c| c.id == id)
-        {
-            let dir = l2tp::config_dir(&conn.service_name);
-            if !dir.join("swanctl.conf").exists() {
-                return VpnStatus::Disconnected;
-            }
-            let xl2tpd = l2tp::is_process_running_global("xl2tpd");
-            let pppd = l2tp::is_process_running_global("pppd");
-            if xl2tpd && pppd { return VpnStatus::Connected; }
-            if xl2tpd || pppd { return VpnStatus::Connecting; }
+        else {
             return VpnStatus::Disconnected;
-        }
+        };
 
-        VpnStatus::Disconnected
+        let sas = self.established_sas();
+        connection_status(&conn.service_name, &sas)
     }
 
     pub async fn all_statuses(&self) -> HashMap<String, VpnStatus> {
         let store = self.store.load().await;
+        let sas = self.established_sas();
         let active = self.active_lock();
         let mut map = HashMap::new();
 
         for ws in &store.workspaces {
             for conn in &ws.connections {
                 let status = if active.contains(conn.id.as_str()) {
-                    let dir = l2tp::config_dir(&conn.service_name);
-                    if !dir.join("swanctl.conf").exists() {
-                        VpnStatus::Disconnected
-                    } else {
-                        let xl2tpd = l2tp::is_process_running_global("xl2tpd");
-                        let pppd = l2tp::is_process_running_global("pppd");
-                        if xl2tpd && pppd { VpnStatus::Connected }
-                        else if xl2tpd || pppd { VpnStatus::Connecting }
-                        else { VpnStatus::Disconnected }
-                    }
+                    connection_status(&conn.service_name, &sas)
                 } else {
                     VpnStatus::Disconnected
                 };
@@ -372,6 +357,33 @@ impl L2tpManager {
         }
         map
     }
+
+    /// Имена установленных IKE SA. При ошибке запроса — пустой набор, ошибка идёт в лог.
+    fn established_sas(&self) -> HashSet<String> {
+        match l2tp::established_ike_sas(self.executor.as_ref()) {
+            Ok(sas) => sas,
+            Err(e) => {
+                log::debug!("[manager] swanctl --list-sas failed: {}", e);
+                HashSet::new()
+            }
+        }
+    }
+}
+
+/// Статус одного подключения по данным его собственного туннеля.
+/// Интерфейс pppN — сам туннель, он главный признак.
+/// IPSec SA нужен, чтобы отличить «pppd ещё поднимает интерфейс» от «туннеля нет».
+fn connection_status(service_name: &str, established_sas: &HashSet<String>) -> VpnStatus {
+    let iface_up = l2tp::ppp_unit_marker(service_name)
+        .map(l2tp::is_ppp_unit_running)
+        .unwrap_or(false);
+    if iface_up {
+        return VpnStatus::Connected;
+    }
+    if established_sas.contains(&l2tp::sanitize_name(service_name)) {
+        return VpnStatus::Connecting;
+    }
+    VpnStatus::Disconnected
 }
 
 /// Проверяет пересечение двух списков CIDR-подсетей.
