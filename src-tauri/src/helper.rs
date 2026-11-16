@@ -91,18 +91,18 @@ mod imp {
     }
 
     pub fn query_helper_version() -> Result<String, String> {
-        Err("helper: не поддерживается на Windows".to_string())
+        Err("helper: not supported on Windows".to_string())
     }
 
     pub fn send_guardian_start(
         _script_path: &str,
         _args: &[&str],
     ) -> Result<HelperResponse, String> {
-        Err("helper: не поддерживается на Windows".to_string())
+        Err("helper: not supported on Windows".to_string())
     }
 
     pub fn send_command(_args: &[&str]) -> Result<HelperResponse, String> {
-        Err("helper: не поддерживается на Windows".to_string())
+        Err("helper: not supported on Windows".to_string())
     }
 }
 

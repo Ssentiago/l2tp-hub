@@ -106,7 +106,7 @@ fn decrypt_payload(data: &[u8], password: &str) -> Result<Vec<u8>, String> {
     if data.starts_with(MAGIC_V1) {
         return decrypt_v1(data, password);
     }
-    Err("Неверный формат файла".to_string())
+    Err("Invalid file format".to_string())
 }
 
 fn read_u32_be(data: &[u8], offset: &mut usize) -> u32 {
@@ -118,16 +118,16 @@ fn read_u32_be(data: &[u8], offset: &mut usize) -> u32 {
 fn decrypt_v2(data: &[u8], password: &str) -> Result<Vec<u8>, String> {
     let header_len = MAGIC_V2.len() + 2 + 12 + SALT_LEN + NONCE_LEN;
     if data.len() < header_len + GCM_TAG_LEN {
-        return Err("Файл повреждён или не является конфигурацией l2tphub".to_string());
+        return Err("The file is corrupted or is not an l2tphub configuration".to_string());
     }
 
     let version = data[MAGIC_V2.len()];
     if version != FORMAT_VERSION {
-        return Err(format!("Неподдерживаемая версия формата файла: {}", version));
+        return Err(format!("Unsupported file format version: {}", version));
     }
     let kdf_id = data[MAGIC_V2.len() + 1];
     if kdf_id != KDF_ARGON2ID {
-        return Err(format!("Неподдерживаемый алгоритм вывода ключа: {}", kdf_id));
+        return Err(format!("Unsupported key derivation algorithm: {}", kdf_id));
     }
 
     let mut offset = MAGIC_V2.len() + 2;
@@ -147,12 +147,12 @@ fn decrypt_v2(data: &[u8], password: &str) -> Result<Vec<u8>, String> {
 
     cipher
         .decrypt(nonce, ciphertext)
-        .map_err(|_| "Неверный пароль или файл повреждён".to_string())
+        .map_err(|_| "Wrong password or corrupted file".to_string())
 }
 
 fn decrypt_v1(data: &[u8], password: &str) -> Result<Vec<u8>, String> {
     if data.len() < MAGIC_V1.len() + NONCE_LEN + GCM_TAG_LEN {
-        return Err("Файл повреждён или не является конфигурацией l2tphub".to_string());
+        return Err("The file is corrupted or is not an l2tphub configuration".to_string());
     }
 
     let nonce_bytes = &data[MAGIC_V1.len()..MAGIC_V1.len() + NONCE_LEN];
@@ -165,7 +165,7 @@ fn decrypt_v1(data: &[u8], password: &str) -> Result<Vec<u8>, String> {
 
     cipher
         .decrypt(nonce, ciphertext)
-        .map_err(|_| "Неверный пароль или файл повреждён".to_string())
+        .map_err(|_| "Wrong password or corrupted file".to_string())
 }
 
 pub fn make_backup(store: &Store, password: &str) -> Result<Vec<u8>, String> {

@@ -97,7 +97,7 @@ pub async fn save_connection(
     let conn = state
         .find_connection(&id)
         .cloned()
-        .ok_or("Подключение не найдено")?;
+        .ok_or("Connection not found")?;
     log!("[save_connection] success");
     Ok(conn)
 }

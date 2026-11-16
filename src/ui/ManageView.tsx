@@ -24,6 +24,8 @@ import {
 } from "@mui/icons-material";
 import { useStore } from "../store";
 import { api } from "../core/api";
+import i18n from "../core/i18n";
+import { useTranslation } from "react-i18next";
 import type { ConnectionWithStatus } from "../store";
 import type { Connection_Serialize as Connection } from "../typing/bindings";
 import { getTitle } from "../core/display";
@@ -61,7 +63,7 @@ function buildTree(conns: ConnectionWithStatus[], workspaceName: string): TreeIt
     if (branchKeys.length <= 1) {
       const br = branchKeys[0] ?? "";
       const connsList = branches.get(br) ?? [];
-      const label = co && br ? `${co} · ${br}` : co || br || "Без группы";
+      const label = co && br ? `${co} · ${br}` : co || br || i18n.t("palette.noGroup");
       children.push({
         id: `co-${co}-${br}`,
         label,
@@ -93,7 +95,7 @@ function buildTree(conns: ConnectionWithStatus[], workspaceName: string): TreeIt
       }
       children.push({
         id: `co-${co}`,
-        label: co || "Без группы",
+        label: co || i18n.t("palette.noGroup"),
         depth: 1,
         children: branchChildren,
       });
@@ -139,6 +141,7 @@ export function ManageView() {
     deleteWorkspace,
     createWorkspace,
   } = useStore();
+  const { t } = useTranslation();
 
   const [expanded, setExpanded] = useState<Set<string>>(new Set(["ws-root"]));
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
@@ -191,13 +194,13 @@ export function ManageView() {
         }}
       >
         <Box sx={{ display: "flex", alignItems: "center", px: 1, py: 1, gap: 0.5 }}>
-          <Tooltip title="Назад к палитре (Esc)">
+          <Tooltip title={t("manage.backToPalette")}>
             <IconButton size="small" onClick={() => { setViewMode("palette"); setQuery(""); }}>
               <ArrowBack fontSize="small" />
             </IconButton>
           </Tooltip>
-          <Typography sx={{ fontSize: 13, fontWeight: 500, flex: 1, color: "text.secondary" }}>Управление</Typography>
-          <Tooltip title="Новое подключение (⌘N)">
+          <Typography sx={{ fontSize: 13, fontWeight: 500, flex: 1, color: "text.secondary" }}>{t("manage.title")}</Typography>
+          <Tooltip title={t("manage.newConnection")}>
             <IconButton size="small" onClick={handleNewConnection}>
               <Add fontSize="small" />
             </IconButton>
@@ -303,15 +306,15 @@ export function ManageView() {
                     else connectVpn(selected.id);
                   }}
                 >
-                  {selected.status === "connected" ? "Отключить" : "Подключить"}
+                  {selected.status === "connected" ? t("manage.disconnect") : t("manage.connect")}
                 </Button>
                 <Box sx={{ flex: 1 }} />
-                <Tooltip title="Логи сессий">
+                <Tooltip title={t("manage.sessionLogs")}>
                   <IconButton size="small" onClick={() => setShowLog(true)}>
                     <Article fontSize="small" />
                   </IconButton>
                 </Tooltip>
-                <Tooltip title="Копировать ID">
+                <Tooltip title={t("manage.copyId")}>
                   <IconButton size="small" onClick={() => navigator.clipboard.writeText(selected.id)}>
                     <ContentCopy fontSize="small" />
                   </IconButton>
@@ -335,9 +338,9 @@ export function ManageView() {
               onChange={(_, v) => setDetailTab(v)}
               sx={{ px: 3, borderBottom: "1px solid", borderColor: "divider" }}
             >
-              <Tab label="Параметры" />
-              <Tab label="Маршруты" />
-              <Tab label="Логи" />
+              <Tab label={t("manage.tabParams")} />
+              <Tab label={t("manage.tabRoutes")} />
+              <Tab label={t("manage.tabLogs")} />
             </Tabs>
 
             <Box sx={{ flex: 1, overflow: "auto", p: 3 }}>
@@ -353,10 +356,10 @@ export function ManageView() {
               {detailTab === 2 && (
                 <Box>
                   <Typography sx={{ color: "text.secondary", mb: 2 }}>
-                    История сессий и логи подключения.
+                    {t("manage.logsDescription")}
                   </Typography>
                   <Button variant="outlined" startIcon={<Article />} onClick={() => setShowLog(true)}>
-                    Открыть логи
+                    {t("manage.openLogs")}
                   </Button>
                 </Box>
               )}
@@ -364,9 +367,9 @@ export function ManageView() {
           </>
         ) : (
           <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", flexDirection: "column", gap: 1 }}>
-            <Typography sx={{ color: "text.disabled" }}>Выберите подключение</Typography>
+            <Typography sx={{ color: "text.disabled" }}>{t("manage.selectConnection")}</Typography>
             <Button variant="outlined" startIcon={<Add />} onClick={handleNewConnection}>
-              Создать новое
+              {t("manage.createNew")}
             </Button>
           </Box>
         )}
@@ -391,12 +394,12 @@ export function ManageView() {
           >
             {[
               {
-                label: "Копировать ID",
+                label: t("manage.copyId"),
                 icon: <ContentCopy fontSize="small" />,
                 action: () => navigator.clipboard.writeText(connCtxMenu.connId),
               },
               {
-                label: "Удалить",
+                label: t("manage.ctxDelete"),
                 icon: <Delete fontSize="small" />,
                 action: () => setDeleteTarget(connCtxMenu.connId),
                 danger: true,
@@ -447,7 +450,7 @@ export function ManageView() {
           >
             {[
               {
-                label: "Переименовать",
+                label: t("common.rename"),
                 icon: <Edit fontSize="small" />,
                 action: () => {
                   setWsRenameVal(wsName);
@@ -455,7 +458,7 @@ export function ManageView() {
                 },
               },
               {
-                label: "Удалить воркспейс",
+                label: t("manage.wsDelete"),
                 icon: <Delete fontSize="small" />,
                 action: () => setWsDeleteOpen(true),
                 danger: true,
@@ -489,7 +492,7 @@ export function ManageView() {
 
       {/* ——— Workspace rename dialog ——— */}
       <Dialog open={wsRenameOpen} onClose={() => setWsRenameOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Переименовать воркспейс</DialogTitle>
+        <DialogTitle>{t("manage.wsRenameTitle")}</DialogTitle>
         <DialogContent>
           <TextField
             autoFocus
@@ -501,7 +504,7 @@ export function ManageView() {
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setWsRenameOpen(false)}>Отмена</Button>
+          <Button onClick={() => setWsRenameOpen(false)}>{t("common.cancel")}</Button>
           <Button
             variant="contained"
             onClick={async () => {
@@ -511,21 +514,21 @@ export function ManageView() {
               setWsRenameOpen(false);
             }}
           >
-            Сохранить
+            {t("common.save")}
           </Button>
         </DialogActions>
       </Dialog>
 
       {/* ——— Workspace delete dialog ——— */}
       <Dialog open={wsDeleteOpen} onClose={() => setWsDeleteOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Удалить воркспейс?</DialogTitle>
+        <DialogTitle>{t("manage.wsDeleteTitle")}</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Все подключения внутри «{wsName}» будут удалены без возможности восстановления.
+            {t("manage.wsDeleteBody", { name: wsName })}
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setWsDeleteOpen(false)}>Отмена</Button>
+          <Button onClick={() => setWsDeleteOpen(false)}>{t("common.cancel")}</Button>
           <Button
             color="error"
             variant="contained"
@@ -534,23 +537,23 @@ export function ManageView() {
               setWsDeleteOpen(false);
             }}
           >
-            Удалить
+            {t("common.delete")}
           </Button>
         </DialogActions>
       </Dialog>
 
       {/* ——— Delete connection dialog ——— */}
       <Dialog open={deleteTarget !== null} onClose={() => setDeleteTarget(null)} maxWidth="xs">
-        <DialogTitle>Удалить подключение?</DialogTitle>
+        <DialogTitle>{t("manage.connDeleteTitle")}</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Подключение и все его данные будут удалены без возможности восстановления.
+            {t("manage.connDeleteBody")}
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteTarget(null)}>Отмена</Button>
+          <Button onClick={() => setDeleteTarget(null)}>{t("common.cancel")}</Button>
           <Button color="error" variant="contained" onClick={handleDelete}>
-            Удалить
+            {t("common.delete")}
           </Button>
         </DialogActions>
       </Dialog>
@@ -569,6 +572,7 @@ export function ManageView() {
 
 function ParamsForm({ conn, onSaved }: { conn: Connection; onSaved: () => void }) {
   const { labels } = useStore();
+  const { t } = useTranslation();
   const [displayName, setDisplayName] = useState(conn.display_name);
   const [server, setServer] = useState(conn.server);
   const [username, setUsername] = useState(conn.username);
@@ -637,16 +641,16 @@ function ParamsForm({ conn, onSaved }: { conn: Connection; onSaved: () => void }
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2, maxWidth: 480 }}>
-      <TextField label="Название" size="small" value={displayName} onChange={(e) => { setDisplayName(e.target.value); setDirty(true); }} />
-      <TextField label="Сервер" size="small" value={server} onChange={(e) => { setServer(e.target.value); setDirty(true); }} />
-      <TextField label="Логин" size="small" value={username} onChange={(e) => { setUsername(e.target.value); setDirty(true); }} />
-      <TextField label="Пароль (пусто = не менять)" size="small" type="password" value={password} onChange={(e) => { setPassword(e.target.value); setDirty(true); }} />
-      <TextField label="Общий ключ (пусто = не менять)" size="small" type="password" value={sharedSecret} onChange={(e) => { setSharedSecret(e.target.value); setDirty(true); }} />
+      <TextField label={t("form.name")} size="small" value={displayName} onChange={(e) => { setDisplayName(e.target.value); setDirty(true); }} />
+      <TextField label={t("form.server")} size="small" value={server} onChange={(e) => { setServer(e.target.value); setDirty(true); }} />
+      <TextField label={t("form.username")} size="small" value={username} onChange={(e) => { setUsername(e.target.value); setDirty(true); }} />
+      <TextField label={t("form.passwordKeep")} size="small" type="password" value={password} onChange={(e) => { setPassword(e.target.value); setDirty(true); }} />
+      <TextField label={t("form.sharedSecretKeep")} size="small" type="password" value={sharedSecret} onChange={(e) => { setSharedSecret(e.target.value); setDirty(true); }} />
 
       {/* Labels */}
       {labels.length > 0 && (
         <>
-          <Typography sx={{ fontSize: 12, color: "text.secondary", mt: 1 }}>Метки</Typography>
+          <Typography sx={{ fontSize: 12, color: "text.secondary", mt: 1 }}>{t("form.labels")}</Typography>
           {labels.map((l) => (
             <TextField
               key={l.id}
@@ -665,10 +669,10 @@ function ParamsForm({ conn, onSaved }: { conn: Connection; onSaved: () => void }
       {dirty && (
         <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
           <Button variant="contained" size="small" onClick={save} disabled={saving}>
-            {saving ? "Сохранение…" : "Сохранить (⌘S)"}
+            {saving ? t("common.saving") : t("common.saveShortcut")}
           </Button>
-          <Button size="small" onClick={cancel}>Отмена (Esc)</Button>
-          <Typography sx={{ fontSize: 12, color: "warning.main", ml: 1 }}>• Несохранённые изменения</Typography>
+          <Button size="small" onClick={cancel}>{t("common.cancelEsc")}</Button>
+          <Typography sx={{ fontSize: 12, color: "warning.main", ml: 1 }}>{t("form.unsaved")}</Typography>
         </Box>
       )}
     </Box>
@@ -678,6 +682,7 @@ function ParamsForm({ conn, onSaved }: { conn: Connection; onSaved: () => void }
 // ——— RoutesEditor with SubnetEditor ———
 
 function RoutesEditor({ conn, onSaved }: { conn: Connection; onSaved: () => void }) {
+  const { t } = useTranslation();
   const [routes, setRoutes] = useState<string[]>(conn.split_routes ?? []);
   const [dirty, setDirty] = useState(false);
 
@@ -706,8 +711,8 @@ function RoutesEditor({ conn, onSaved }: { conn: Connection; onSaved: () => void
     <Box>
       <Typography sx={{ fontSize: 13, color: "text.secondary", mb: 2 }}>
         {conn.tunnel_mode === "full"
-          ? "Полный туннель — весь трафик через VPN. Маршруты не требуются."
-          : "Подсети для раздельного туннелирования."}
+          ? t("routes.fullMode")
+          : t("routes.splitMode")}
       </Typography>
       <SubnetEditor
         routes={routes}
@@ -719,7 +724,7 @@ function RoutesEditor({ conn, onSaved }: { conn: Connection; onSaved: () => void
       {dirty && (
         <Box sx={{ display: "flex", gap: 1, mt: 2 }}>
           <Button variant="contained" size="small" onClick={save}>
-            Сохранить (⌘S)
+            {t("common.saveShortcut")}
           </Button>
           <Button
             size="small"
@@ -728,7 +733,7 @@ function RoutesEditor({ conn, onSaved }: { conn: Connection; onSaved: () => void
               setDirty(false);
             }}
           >
-            Отмена
+            {t("common.cancel")}
           </Button>
         </Box>
       )}
@@ -739,6 +744,7 @@ function RoutesEditor({ conn, onSaved }: { conn: Connection; onSaved: () => void
 // ——— NewConnectionForm ———
 
 function NewConnectionForm({ onDone, onCancel }: { onDone: () => void; onCancel: () => void }) {
+  const { t } = useTranslation();
   const [displayName, setDisplayName] = useState("");
   const [server, setServer] = useState("");
   const [username, setUsername] = useState("");
@@ -788,17 +794,17 @@ function NewConnectionForm({ onDone, onCancel }: { onDone: () => void; onCancel:
 
   return (
     <Box sx={{ p: 3, display: "flex", flexDirection: "column", gap: 2, maxWidth: 480 }}>
-      <Typography sx={{ fontSize: 18, fontWeight: 600 }}>Новое подключение</Typography>
-      <TextField label="Название" size="small" value={displayName} onChange={(e) => setDisplayName(e.target.value)} autoFocus />
-      <TextField label="Сервер" size="small" value={server} onChange={(e) => setServer(e.target.value)} />
-      <TextField label="Логин" size="small" value={username} onChange={(e) => setUsername(e.target.value)} />
-      <TextField label="Пароль" size="small" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-      <TextField label="Общий ключ" size="small" type="password" value={sharedSecret} onChange={(e) => setSharedSecret(e.target.value)} />
+      <Typography sx={{ fontSize: 18, fontWeight: 600 }}>{t("form.newTitle")}</Typography>
+      <TextField label={t("form.name")} size="small" value={displayName} onChange={(e) => setDisplayName(e.target.value)} autoFocus />
+      <TextField label={t("form.server")} size="small" value={server} onChange={(e) => setServer(e.target.value)} />
+      <TextField label={t("form.username")} size="small" value={username} onChange={(e) => setUsername(e.target.value)} />
+      <TextField label={t("form.password")} size="small" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+      <TextField label={t("form.sharedSecret")} size="small" type="password" value={sharedSecret} onChange={(e) => setSharedSecret(e.target.value)} />
       <Box sx={{ display: "flex", gap: 1 }}>
         <Button variant="contained" onClick={save} disabled={!canSave || saving}>
-          {saving ? "Сохранение…" : "Создать (⌘S)"}
+          {saving ? t("common.saving") : t("common.createShortcut")}
         </Button>
-        <Button onClick={onCancel}>Отмена (Esc)</Button>
+        <Button onClick={onCancel}>{t("common.cancelEsc")}</Button>
       </Box>
     </Box>
   );

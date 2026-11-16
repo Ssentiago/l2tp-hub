@@ -4,8 +4,10 @@ import {
   InputLabel, CircularProgress, IconButton, Tooltip, Chip,
 } from "@mui/material";
 import { Close, ContentCopy, Refresh } from "@mui/icons-material";
+import { useTranslation } from "react-i18next";
 import { api } from "../../../core/api";
 import toast from "react-hot-toast";
+import i18n from "../../../core/i18n";
 import type {
   SessionMeta_Serialize as SessionMeta,
   SessionLogs_Serialize as SessionLogs,
@@ -19,7 +21,7 @@ interface Props {
 }
 
 function formatTimestamp(ts: number): string {
-  return new Date(ts * 1000).toLocaleString("ru-RU", {
+  return new Date(ts * 1000).toLocaleString(i18n.resolvedLanguage, {
     day: "numeric", month: "short",
     hour: "2-digit", minute: "2-digit",
   });
@@ -30,6 +32,7 @@ function filterLogLines(raw: string): string {
 }
 
 export function ConnectionLogDrawer({ open, onClose, connectionId, connectionName }: Props) {
+  const { t } = useTranslation();
   const [history, setHistory] = useState<SessionMeta[]>([]);
   const [selectedTs, setSelectedTs] = useState<number | null>(null);
   const [logs, setLogs] = useState<SessionLogs | null>(null);
@@ -73,14 +76,14 @@ export function ConnectionLogDrawer({ open, onClose, connectionId, connectionNam
   const filteredLog = useMemo(() => filterLogLines(rawLog), [rawLog]);
 
   const tabContent = tab === 0 ? filteredLog : rawLog;
-  const tabLabel = tab === 0 ? "Логи" : "Сырой вывод";
+  const tabLabel = tab === 0 ? t("logDrawer.tabLogs") : t("logDrawer.tabRaw");
   const lineCount = tabContent ? tabContent.split("\n").filter((l: string) => l.trim()).length : 0;
 
   const copyLog = () => {
     if (!tabContent) return;
     const header = `[${tabLabel}] ${connectionName}`;
     navigator.clipboard.writeText(`${header}\n${"—".repeat(header.length)}\n${tabContent}`).then(() => {
-      toast.success(`Скопировано: ${lineCount} строк`);
+      toast.success(t("logDrawer.copied", { count: lineCount }));
     });
   };
 
@@ -95,9 +98,9 @@ export function ConnectionLogDrawer({ open, onClose, connectionId, connectionNam
         {/* Header */}
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, px: 2, py: 1, borderBottom: 1, borderColor: "divider" }}>
           <Typography variant="subtitle2" sx={{ flex: 1 }}>
-            Логи: {connectionName}
+            {t("logDrawer.title", { name: connectionName })}
           </Typography>
-          <Tooltip title="Обновить">
+          <Tooltip title={t("logDrawer.refresh")}>
             <IconButton
               size="small"
               onClick={() => {
@@ -112,7 +115,7 @@ export function ConnectionLogDrawer({ open, onClose, connectionId, connectionNam
               <Refresh fontSize="small" />
             </IconButton>
           </Tooltip>
-          <Tooltip title="Скопировать">
+          <Tooltip title={t("logDrawer.copy")}>
             <span>
               <IconButton size="small" onClick={copyLog} disabled={!tabContent}>
                 <ContentCopy fontSize="small" />
@@ -127,9 +130,9 @@ export function ConnectionLogDrawer({ open, onClose, connectionId, connectionNam
         {/* Session selector */}
         <Box sx={{ px: 2, py: 1, borderBottom: 1, borderColor: "divider" }}>
           <FormControl size="small" fullWidth>
-            <InputLabel>Сессия</InputLabel>
+            <InputLabel>{t("logDrawer.session")}</InputLabel>
             <Select
-              label="Сессия"
+              label={t("logDrawer.session")}
               value={selectedTs ?? ""}
               onChange={(e) => setSelectedTs(Number(e.target.value))}
               disabled={history.length === 0}
@@ -141,7 +144,7 @@ export function ConnectionLogDrawer({ open, onClose, connectionId, connectionNam
                       {formatTimestamp(s.timestamp)}
                     </Typography>
                     <Chip
-                      label={s.status === "error" ? "Ошибка" : "Отключено"}
+                      label={s.status === "error" ? t("logDrawer.statusError") : t("logDrawer.statusDisconnected")}
                       size="small"
                       color={s.status === "error" ? "error" : "default"}
                       sx={{ height: 18, fontSize: 10 }}
@@ -167,8 +170,8 @@ export function ConnectionLogDrawer({ open, onClose, connectionId, connectionNam
           onChange={(_, v) => setTab(v)}
           sx={{ minHeight: 36, borderBottom: 1, borderColor: "divider", px: 1 }}
         >
-          <Tab label={`Логи${lineCount && tab === 0 ? ` (${lineCount})` : ""}`} sx={{ minHeight: 36, py: 0, fontSize: 12, textTransform: "none" }} />
-          <Tab label={`Сырой вывод${lineCount && tab === 1 ? ` (${lineCount})` : ""}`} sx={{ minHeight: 36, py: 0, fontSize: 12, textTransform: "none" }} />
+          <Tab label={`${t("logDrawer.tabLogs")}${lineCount && tab === 0 ? ` (${lineCount})` : ""}`} sx={{ minHeight: 36, py: 0, fontSize: 12, textTransform: "none" }} />
+          <Tab label={`${t("logDrawer.tabRaw")}${lineCount && tab === 1 ? ` (${lineCount})` : ""}`} sx={{ minHeight: 36, py: 0, fontSize: 12, textTransform: "none" }} />
         </Tabs>
 
         {/* Log content */}
@@ -191,7 +194,7 @@ export function ConnectionLogDrawer({ open, onClose, connectionId, connectionNam
           >
             {tabContent || (
               <Typography variant="caption" color="text.disabled">
-                {history.length === 0 ? "Нет сохранённых сессий" : "Лог пуст"}
+                {history.length === 0 ? t("logDrawer.noSessions") : t("logDrawer.emptyLog")}
               </Typography>
             )}
           </Box>

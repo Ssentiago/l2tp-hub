@@ -224,12 +224,12 @@ pub async fn switch_tunnel_mode(
     let conn = store.workspaces.iter()
         .flat_map(|ws| ws.connections.iter())
         .find(|c| c.id == id)
-        .ok_or("Подключение не найдено")?
+        .ok_or("Connection not found")?
         .clone();
 
     // Проверяем что подключение активно
     if manager.status(&id).await != VpnStatus::Connected {
-        return Err("Подключение не активно".to_string());
+        return Err("Connection is not active".to_string());
     }
 
     let sudo = manager.executor();
@@ -268,7 +268,7 @@ pub async fn switch_tunnel_mode(
 #[specta::specta]
 #[cfg(target_os = "windows")]
 pub async fn switch_tunnel_mode(_id: String, _new_mode: TunnelMode) -> Result<(), String> {
-    Err("Split tunneling не поддерживается на Windows".to_string())
+    Err("Split tunneling is not supported on Windows".to_string())
 }
 
 // ---------------------------------------------------------------------------
@@ -290,5 +290,5 @@ pub async fn get_session_logs(
     timestamp: i64,
 ) -> Result<crate::l2tp::logs::SessionLogs, String> {
     crate::l2tp::logs::get_session_logs(&id, timestamp)
-        .ok_or_else(|| "Сессия не найдена".to_string())
+        .ok_or_else(|| "Session not found".to_string())
 }

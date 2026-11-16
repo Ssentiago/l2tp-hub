@@ -181,7 +181,7 @@ pub(crate) async fn load_store_conn(db_conn: &mut SqliteConnection) -> Result<St
 
     // Guarantee at least one workspace exists
     if result_workspaces.is_empty() {
-        let ws = Workspace::new("Основной");
+        let ws = Workspace::new("Default");
         let id = ws.id.clone();
         result_workspaces.push(ws);
         // Persist the default workspace only while the table is still empty so
@@ -191,7 +191,7 @@ pub(crate) async fn load_store_conn(db_conn: &mut SqliteConnection) -> Result<St
              SELECT ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM workspaces)",
         )
         .bind(&id)
-        .bind("Основной")
+        .bind("Default")
         .bind("[]")
         .execute(&mut *db_conn)
         .await
@@ -472,7 +472,7 @@ pub async fn migrate_from_json(
     if let Ok(legacy) = serde_json::from_str::<LegacyStore>(&data) {
         let ws = Workspace {
             id: uuid::Uuid::new_v4().to_string(),
-            name: "Основной".into(),
+            name: "Default".into(),
             connections: legacy.connections,
             group_by: vec!["company".into(), "branch".into()],
         };
@@ -583,12 +583,12 @@ mod tests {
             labels: vec![
                 Label {
                     id: "company".into(),
-                    name: "Компания".into(),
+                    name: "Company".into(),
                     built_in: true,
                 },
                 Label {
                     id: "custom".into(),
-                    name: "Своя".into(),
+                    name: "Custom".into(),
                     built_in: false,
                 },
             ],

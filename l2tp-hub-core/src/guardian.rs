@@ -128,7 +128,7 @@ mod imp {
     }
 
     pub fn heartbeat() -> Result<GuardianResponse, String> {
-        Err("guardian: не поддерживается на Windows".to_string())
+        Err("guardian: not supported on Windows".to_string())
     }
 
     pub fn set_state(
@@ -138,19 +138,19 @@ mod imp {
         _tunnel_mode: &str,
         _split_routes: &[String],
     ) -> Result<GuardianResponse, String> {
-        Err("guardian: не поддерживается на Windows".to_string())
+        Err("guardian: not supported on Windows".to_string())
     }
 
     pub fn clear_state() -> Result<GuardianResponse, String> {
-        Err("guardian: не поддерживается на Windows".to_string())
+        Err("guardian: not supported on Windows".to_string())
     }
 
     pub fn cleanup() -> Result<GuardianResponse, String> {
-        Err("guardian: не поддерживается на Windows".to_string())
+        Err("guardian: not supported on Windows".to_string())
     }
 
     pub fn status() -> Result<GuardianResponse, String> {
-        Err("guardian: не поддерживается на Windows".to_string())
+        Err("guardian: not supported on Windows".to_string())
     }
 }
 

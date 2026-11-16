@@ -56,7 +56,7 @@ impl L2tpManager {
             .iter()
             .flat_map(|ws| ws.connections.iter())
             .find(|c| c.id == id)
-            .ok_or("Подключение не найдено")?
+            .ok_or("Connection not found")?
             .clone();
 
         let password = keychain::get_password(&conn.keychain_key)?;
@@ -88,7 +88,7 @@ impl L2tpManager {
             .iter()
             .flat_map(|ws| ws.connections.iter())
             .find(|c| c.id == id)
-            .ok_or("Подключение не найдено")?
+            .ok_or("Connection not found")?
             .clone();
 
         self.active_lock().remove(id);

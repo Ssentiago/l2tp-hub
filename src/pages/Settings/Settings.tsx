@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { useStore } from "../../store";
 import {
   Box,
@@ -34,8 +35,15 @@ import type { UpdateInfo } from "../../typing/bindings";
 import { getVersion } from "@tauri-apps/api/app";
 import { open } from "@tauri-apps/plugin-dialog";
 import toast from "react-hot-toast";
+import { setLang, currentLang, SUPPORTED_LANGS, type Lang } from "../../core/i18n";
+
+const LANG_NAMES: Record<Lang, string> = {
+  ru: "Русский",
+  en: "English",
+};
 
 export function Settings() {
+  const { t } = useTranslation();
   const {
     labels,
     saveLabel,
@@ -65,7 +73,7 @@ export function Settings() {
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [updateSuccess, setUpdateSuccess] = useState<string | null>(null);
 
-  const RESET_WORD = "СБРОС";
+  const RESET_WORD = t("settings.resetWord");
 
   useEffect(() => {
     loadLabels();
@@ -78,7 +86,7 @@ export function Settings() {
       const id = newName.trim().toLowerCase().replace(/\s+/g, "_");
       await saveLabel(id, newName.trim());
       setNewName("");
-      toast.success("Метка добавлена");
+      toast.success(t("settings.labelAdded"));
     } catch (e) {
       console.error("[handleAdd label] ERROR:", e);
     } finally {
@@ -92,7 +100,7 @@ export function Settings() {
     try {
       await saveLabel(id, editingName.trim());
       setEditingId(null);
-      toast.success("Метка переименована");
+      toast.success(t("settings.labelRenamed"));
     } catch (e) {
       console.error("[handleRename label] ERROR:", e);
     } finally {
@@ -104,7 +112,7 @@ export function Settings() {
     setLabelsSubmitting(true);
     try {
       await deleteLabel(id);
-      toast.success("Метка удалена");
+      toast.success(t("settings.labelDeleted"));
     } catch (e) {
       console.error("[handleDelete label] ERROR:", e);
     } finally {
@@ -142,14 +150,14 @@ export function Settings() {
       if (dialogMode === "export") {
         const saved = await api.config.export(password);
         if (saved) {
-          setSuccess("Конфигурация экспортирована");
+          setSuccess(t("settings.exported"));
           setDialogOpen(false);
         }
       } else {
         if (importFilePath) {
           const imported = await api.config.importFile(importFilePath, password);
           if (imported) {
-            setSuccess("Конфигурация импортирована");
+            setSuccess(t("settings.imported"));
             await loadLabels();
             setImportFilePath(null);
             setDialogOpen(false);
@@ -166,7 +174,7 @@ export function Settings() {
     try {
       await api.config.reset();
       await loadLabels();
-      setSuccess("Все данные сброшены");
+      setSuccess(t("settings.resetDone"));
       setResetOpen(false);
       setResetConfirmText("");
     } catch (e: any) {
@@ -186,7 +194,7 @@ export function Settings() {
         setUpdateInfo(update);
         setUpdateDialogOpen(true);
       } else {
-        setUpdateSuccess("Установлена последняя версия");
+        setUpdateSuccess(t("settings.latestInstalled"));
       }
     } catch (e: any) {
       setUpdateError(e?.message ?? String(e));
@@ -209,20 +217,36 @@ export function Settings() {
   return (
     <Box sx={{ maxWidth: 480, mx: "auto" }}>
       <Typography variant="h6" sx={{ mb: 3 }}>
-        Настройки
+        {t("settings.title")}
       </Typography>
 
       <Paper variant="outlined" sx={{ p: 3, mb: 3 }}>
         <Typography variant="overline" color="text.secondary">
-          Конфигурация
+          {t("settings.language")}
+        </Typography>
+        <Box sx={{ display: "flex", gap: 1, mt: 1 }}>
+          {SUPPORTED_LANGS.map((lng) => (
+            <Button
+              key={lng}
+              variant={currentLang() === lng ? "contained" : "outlined"}
+              onClick={() => setLang(lng)}
+            >
+              {LANG_NAMES[lng]}
+            </Button>
+          ))}
+        </Box>
+      </Paper>
+
+      <Paper variant="outlined" sx={{ p: 3, mb: 3 }}>
+        <Typography variant="overline" color="text.secondary">
+          {t("settings.configTitle")}
         </Typography>
         <Typography
           variant="caption"
           color="text.secondary"
           sx={{ display: "block", mb: 2 }}
         >
-          Экспорт и импорт всех подключений и меток, включая пароли. Файл
-          шифруется паролем.
+          {t("settings.configDesc")}
         </Typography>
         {success && (
           <Alert
@@ -240,7 +264,7 @@ export function Settings() {
             onClick={() => openDialog("export")}
             fullWidth
           >
-            Экспорт
+            {t("settings.export")}
           </Button>
           <Button
             variant="outlined"
@@ -248,14 +272,14 @@ export function Settings() {
             onClick={handleFileImport}
             fullWidth
           >
-            Импорт
+            {t("settings.import")}
           </Button>
         </Box>
       </Paper>
 
       <Paper variant="outlined" sx={{ p: 3, mb: 3 }}>
         <Typography variant="overline" color="text.secondary">
-          Метки
+          {t("settings.labelsTitle")}
         </Typography>
         {labelsSubmitting && (
           <CircularProgress size={14} sx={{ ml: 1, verticalAlign: "middle" }} />
@@ -265,8 +289,7 @@ export function Settings() {
           color="text.secondary"
           sx={{ display: "block", mb: 2 }}
         >
-          Поля для категоризации подключений. Встроенные метки нельзя удалить.
-          Метки общие для всех пространств. Подключения и группировка — свои в каждом пространстве.
+          {t("settings.labelsDesc")}
         </Typography>
 
         <List disablePadding>
@@ -278,7 +301,7 @@ export function Settings() {
                 sx={{ py: 1, gap: 1 }}
                 secondaryAction={
                   <Tooltip
-                    title={label.built_in ? "Встроенная метка" : "Удалить"}
+                    title={label.built_in ? t("settings.builtInLabel") : t("common.delete")}
                   >
                     <span>
                       <IconButton
@@ -314,7 +337,7 @@ export function Settings() {
                 ) : (
                   <ListItemText
                     primary={label.name}
-                    secondary={label.built_in ? "встроенная" : null}
+                    secondary={label.built_in ? t("settings.builtIn") : null}
                     onClick={() => {
                       if (!label.built_in) {
                         setEditingId(label.id);
@@ -339,15 +362,15 @@ export function Settings() {
         maxWidth="xs"
         fullWidth
       >
-        <DialogTitle>Доступно обновление</DialogTitle>
+        <DialogTitle>{t("settings.updateAvailable")}</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Новая версия: <strong>{updateInfo?.latest_version}</strong>
+            {t("settings.newVersion", { version: updateInfo?.latest_version })}
           </DialogContentText>
           {updateDownloading && (
             <Box sx={{ display: "flex", alignItems: "center", gap: 2, mt: 2 }}>
               <CircularProgress size={20} />
-              <Typography variant="body2">Скачиваем...</Typography>
+              <Typography variant="body2">{t("settings.downloading")}</Typography>
             </Box>
           )}
         </DialogContent>
@@ -356,14 +379,14 @@ export function Settings() {
             onClick={() => setUpdateDialogOpen(false)}
             disabled={updateDownloading}
           >
-            Позже
+            {t("common.later")}
           </Button>
           <Button
             variant="contained"
             onClick={handleApplyUpdate}
             disabled={updateDownloading}
           >
-            Установить
+            {t("common.install")}
           </Button>
         </DialogActions>
       </Dialog>
@@ -373,7 +396,7 @@ export function Settings() {
         <Box sx={{ display: "flex", gap: 1 }}>
           <TextField
             size="small"
-            placeholder="Название новой метки"
+            placeholder={t("settings.newLabelPlaceholder")}
             value={newName}
             disabled={labelsSubmitting}
             onChange={(e) => setNewName(e.target.value)}
@@ -386,21 +409,21 @@ export function Settings() {
             onClick={handleAdd}
             disabled={!newName.trim() || labelsSubmitting}
           >
-            Добавить
+            {t("common.add")}
           </Button>
         </Box>
       </Paper>
 
       <Paper variant="outlined" sx={{ p: 3, mb: 3 }}>
         <Typography variant="overline" color="text.secondary">
-          Обновления
+          {t("settings.updatesTitle")}
         </Typography>
         <Typography
           variant="caption"
           color="text.secondary"
           sx={{ display: "block", mb: 2 }}
         >
-          Проверить наличие новой версии приложения.
+          {t("settings.updatesDesc")}
         </Typography>
         {updateError && (
           <Alert severity="error" sx={{ mb: 2 }} onClose={() => setUpdateError(null)}>
@@ -419,7 +442,7 @@ export function Settings() {
           disabled={updateChecking}
           fullWidth
         >
-          {updateChecking ? "Проверяем..." : "Проверить обновления"}
+          {updateChecking ? t("settings.checking") : t("settings.checkUpdates")}
         </Button>
       </Paper>
 
@@ -428,15 +451,14 @@ export function Settings() {
         sx={{ p: 3, borderColor: (theme) => theme.palette.error.dark }}
       >
         <Typography variant="overline" sx={{ color: "error.main" }}>
-          Опасная зона
+          {t("settings.dangerTitle")}
         </Typography>
         <Typography
           variant="caption"
           color="text.secondary"
           sx={{ display: "block", mb: 2 }}
         >
-          Удаляет все подключения и пользовательские метки. Встроенные метки
-          сохраняются. Действие необратимо.
+          {t("settings.dangerDesc")}
         </Typography>
         <Button
           variant="outlined"
@@ -447,7 +469,7 @@ export function Settings() {
             setResetConfirmText("");
           }}
         >
-          Сбросить все данные
+          {t("settings.resetAll")}
         </Button>
       </Paper>
 
@@ -460,18 +482,18 @@ export function Settings() {
       >
         <DialogTitle>
           {dialogMode === "export"
-            ? "Экспорт конфигурации"
-            : "Импорт конфигурации"}
+            ? t("settings.exportTitle")
+            : t("settings.importTitle")}
         </DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             {dialogMode === "export"
-              ? "Файл будет зашифрован этим паролем. Без него восстановление невозможно."
-              : "Введите пароль, которым был зашифрован файл при экспорте."}
+              ? t("settings.exportBody")
+              : t("settings.importBody")}
           </Typography>
           {dialogMode === "import" && importFilePath && (
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-              Файл: {importFilePath.split(/[/\\]/).pop()}
+              {t("settings.importFile", { name: importFilePath.split(/[/\\]/).pop() })}
             </Typography>
           )}
           {error && (
@@ -483,7 +505,7 @@ export function Settings() {
             autoFocus
             fullWidth
             size="small"
-            label="Пароль"
+            label={t("settings.password")}
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -491,13 +513,13 @@ export function Settings() {
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>Отмена</Button>
+          <Button onClick={() => setDialogOpen(false)}>{t("common.cancel")}</Button>
           <Button
             variant="contained"
             onClick={handleConfirm}
             disabled={!password.trim()}
           >
-            {dialogMode === "export" ? "Экспортировать" : "Импортировать"}
+            {dialogMode === "export" ? t("settings.doExport") : t("settings.doImport")}
           </Button>
         </DialogActions>
       </Dialog>
@@ -510,16 +532,14 @@ export function Settings() {
         fullWidth
       >
         <DialogTitle sx={{ color: "error.main" }}>
-          Сброс всех данных
+          {t("settings.resetTitle")}
         </DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: 2 }}>
-            Будут удалены все подключения и пользовательские метки. Сохранённые
-            пароли будут удалены из системного хранилища ключей. Это действие
-            необратимо.
+            {t("settings.resetBody")}
           </DialogContentText>
           <DialogContentText sx={{ mb: 2 }}>
-            Для подтверждения введите <strong>{RESET_WORD}</strong>:
+            {t("settings.resetConfirm", { word: RESET_WORD })}
           </DialogContentText>
           <TextField
             autoFocus
@@ -540,7 +560,7 @@ export function Settings() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setResetOpen(false)} disabled={resetting}>
-            Отмена
+            {t("common.cancel")}
           </Button>
           <Button
             variant="contained"
@@ -548,7 +568,7 @@ export function Settings() {
             onClick={handleReset}
             disabled={resetConfirmText !== RESET_WORD || resetting}
           >
-            Сбросить
+            {t("settings.doReset")}
           </Button>
         </DialogActions>
       </Dialog>

@@ -35,7 +35,7 @@ pub async fn save_label(
         .labels
         .into_iter()
         .find(|l| l.id == id)
-        .ok_or_else(|| "Метка не найдена".to_string())
+        .ok_or_else(|| "Label not found".to_string())
 }
 
 #[tauri::command]
@@ -49,9 +49,9 @@ pub async fn delete_label(_app_handle: tauri::AppHandle, id: String) -> Result<(
                 .labels
                 .iter()
                 .find(|l| l.id == id)
-                .ok_or("Метка не найдена")?;
+                .ok_or("Label not found")?;
             if label.built_in {
-                return Err("Нельзя удалить встроенную метку".into());
+                return Err("Cannot delete a built-in label".into());
             }
             s.labels.retain(|l| l.id != id);
             for ws in &mut s.workspaces {

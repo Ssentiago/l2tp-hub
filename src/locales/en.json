@@ -1,0 +1,281 @@
+{
+  "common": {
+    "cancel": "Cancel",
+    "cancelEsc": "Cancel (Esc)",
+    "save": "Save",
+    "saveShortcut": "Save (⌘S)",
+    "saving": "Saving…",
+    "delete": "Delete",
+    "rename": "Rename",
+    "create": "Create",
+    "createShortcut": "Create (⌘S)",
+    "add": "Add",
+    "later": "Later",
+    "install": "Install",
+    "close": "Close"
+  },
+  "status": {
+    "connecting": "Connecting…",
+    "reconnecting": "Reconnecting…"
+  },
+  "mode": {
+    "split": "Split",
+    "full": "Full",
+    "splitDesc": "Split tunnel — only subnets go through VPN",
+    "fullDesc": "Full tunnel — all traffic goes through VPN",
+    "current": "{{desc}} (current)",
+    "disableToSwitch": "Disconnect to change the mode",
+    "noSplitRoutes": "No subnets for split tunneling",
+    "fullUnavailable": "Full tunnel is unavailable while connections are active"
+  },
+  "keyHints": {
+    "showHide": "Show/Hide",
+    "connect": "Connect",
+    "splitFull": "Split/Full",
+    "manage": "Manage",
+    "new": "New",
+    "disconnect": "Disconnect",
+    "settings": "Settings",
+    "backHide": "Back/Hide"
+  },
+  "search": {
+    "placeholder": "Search…",
+    "flatList": "Flat list",
+    "groupByCompany": "Group by company"
+  },
+  "activeBar": {
+    "disconnectTooltip": "Disconnect (⌘D)"
+  },
+  "palette": {
+    "noGroup": "Ungrouped",
+    "sectionAll": "All",
+    "sortName": "A–Z",
+    "sortRecent": "Recent",
+    "emptySearch": "Nothing found"
+  },
+  "actions": {
+    "retry": "Retry",
+    "edit": "Connection settings",
+    "logs": "Session logs"
+  },
+  "errors": {
+    "ike_auth_failed": {
+      "message": "The server rejected IKE authentication",
+      "hints": [
+        "Check the pre-shared key (PSK) in the connection settings",
+        "The key must match the one configured on the server"
+      ]
+    },
+    "ike_no_proposal": {
+      "message": "The server did not accept the encryption proposal",
+      "hints": [
+        "The IKE parameters on the server do not match ours",
+        "Contact the server administrator to confirm the settings"
+      ]
+    },
+    "ike_ts_unacceptable": {
+      "message": "The server rejected the tunnel subnets",
+      "hints": [
+        "Check the split tunneling subnets",
+        "The server may only allow specific networks"
+      ]
+    },
+    "ike_cert_untrusted": {
+      "message": "The server certificate or key failed verification",
+      "hints": [
+        "The server uses a key that the application does not trust"
+      ]
+    },
+    "ike_peer_unreachable": {
+      "message": "The server is not responding to IKE requests",
+      "hints": [
+        "Check the server address and internet connectivity",
+        "A firewall or provider may be blocking UDP 500 and 4500"
+      ]
+    },
+    "ppp_negotiation_failed": {
+      "message": "PPP negotiation did not complete",
+      "hints": [
+        "IPSec is established but the PPP tunnel did not come up",
+        "Check the session logs and the server settings"
+      ]
+    },
+    "ppp_peer_auth_failed": {
+      "message": "The server failed authentication at the PPP stage",
+      "hints": [
+        "The account is misconfigured on the server"
+      ]
+    },
+    "ppp_our_auth_failed": {
+      "message": "The server rejected the username or password",
+      "hints": [
+        "Check the login and password in the connection settings",
+        "Make sure the account is active on the server"
+      ]
+    },
+    "ppp_peer_dead": {
+      "message": "The server dropped the PPP connection",
+      "hints": [
+        "The server stopped answering channel echo requests"
+      ]
+    },
+    "ppp_killed": {
+      "message": "The PPP daemon was terminated",
+      "hints": [
+        "The pppd process was killed after start, check the session logs"
+      ]
+    },
+    "stack_failed": {
+      "message": "The local VPN daemons failed to start",
+      "hints": [
+        "charon or xl2tpd did not start",
+        "Restart the application; if it repeats, reinstall the helper"
+      ]
+    },
+    "unknown": {
+      "message": "Could not connect",
+      "hints": [
+        "The cause of the failure is unknown, open the session logs"
+      ]
+    }
+  },
+  "manage": {
+    "backToPalette": "Back to palette (Esc)",
+    "title": "Manage",
+    "newConnection": "New connection (⌘N)",
+    "connect": "Connect",
+    "disconnect": "Disconnect",
+    "sessionLogs": "Session logs",
+    "copyId": "Copy ID",
+    "tabParams": "Settings",
+    "tabRoutes": "Routes",
+    "tabLogs": "Logs",
+    "logsDescription": "Session history and connection logs.",
+    "openLogs": "Open logs",
+    "selectConnection": "Select a connection",
+    "createNew": "Create new",
+    "ctxDelete": "Delete",
+    "wsDelete": "Delete workspace",
+    "wsRenameTitle": "Rename workspace",
+    "wsDeleteTitle": "Delete workspace?",
+    "wsDeleteBody": "All connections inside “{{name}}” will be deleted and cannot be recovered.",
+    "connDeleteTitle": "Delete connection?",
+    "connDeleteBody": "The connection and all its data will be deleted and cannot be recovered."
+  },
+  "form": {
+    "name": "Name",
+    "server": "Server",
+    "username": "Login",
+    "password": "Password",
+    "passwordKeep": "Password (empty = keep current)",
+    "sharedSecret": "Shared key",
+    "sharedSecretKeep": "Shared key (empty = keep current)",
+    "labels": "Labels",
+    "unsaved": "• Unsaved changes",
+    "newTitle": "New connection"
+  },
+  "routes": {
+    "fullMode": "Full tunnel — all traffic goes through VPN. No routes required.",
+    "splitMode": "Subnets for split tunneling."
+  },
+  "subnet": {
+    "defaultLabel": "Subnets via VPN",
+    "defaultPlaceholder": "10.0.0.0/8 or 192.168.1",
+    "invalidFallback": "Invalid input",
+    "alreadyAdded": "This subnet is already added",
+    "notRecognized": "Not recognized: {{list}}",
+    "pasteTooltip": "Paste from clipboard (CIDR separated by comma or newline)",
+    "emptyHint": "No subnets added. Enter a CIDR and press Enter.",
+    "inputHelper": "CIDR, mask, range or shorthand (e.g. 192.168.1)",
+    "emptyInput": "Empty input",
+    "invalidIp": "Invalid IP: {{ip}}",
+    "rangeStartEnd": "Range start is greater than the end",
+    "rangeNotAligned": "The range is not aligned to a subnet. Use CIDR or shorten the range.",
+    "invalidMask": "Invalid mask: {{mask}}",
+    "invalidPrefix": "Invalid prefix: {{prefix}}",
+    "invalidInput": "Invalid input: {{input}}",
+    "oneHost": "Single host",
+    "addresses_one": "{{count}} address",
+    "addresses_other": "{{count}} addresses",
+    "addressesK": "{{n}}K addresses",
+    "addressesM": "{{n}}M addresses"
+  },
+  "time": {
+    "justNow": "just now",
+    "minutesAgo": "{{n}} min ago",
+    "hoursAgo": "{{n}} h ago",
+    "daysAgo": "{{n}} d ago",
+    "weeksAgo": "{{n}} w ago",
+    "monthsAgo": "{{n}} mo ago",
+    "yearsAgo": "{{n}} y ago"
+  },
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "configTitle": "Configuration",
+    "configDesc": "Export and import all connections and labels, including passwords. The file is encrypted with a password.",
+    "export": "Export",
+    "import": "Import",
+    "labelsTitle": "Labels",
+    "labelsDesc": "Fields for categorizing connections. Built-in labels cannot be deleted. Labels are shared across all workspaces. Connections and grouping are per workspace.",
+    "builtInLabel": "Built-in label",
+    "builtIn": "built-in",
+    "newLabelPlaceholder": "New label name",
+    "labelAdded": "Label added",
+    "labelRenamed": "Label renamed",
+    "labelDeleted": "Label deleted",
+    "exported": "Configuration exported",
+    "imported": "Configuration imported",
+    "resetDone": "All data reset",
+    "latestInstalled": "The latest version is installed",
+    "updatesTitle": "Updates",
+    "updatesDesc": "Check for a new version of the application.",
+    "checking": "Checking...",
+    "checkUpdates": "Check for updates",
+    "updateAvailable": "Update available",
+    "newVersion": "New version: {{version}}",
+    "downloading": "Downloading...",
+    "dangerTitle": "Danger zone",
+    "dangerDesc": "Deletes all connections and custom labels. Built-in labels are kept. This action cannot be undone.",
+    "resetAll": "Reset all data",
+    "exportTitle": "Export configuration",
+    "importTitle": "Import configuration",
+    "exportBody": "The file will be encrypted with this password. Without it the data cannot be recovered.",
+    "importBody": "Enter the password the file was encrypted with at export.",
+    "importFile": "File: {{name}}",
+    "password": "Password",
+    "doExport": "Export",
+    "doImport": "Import",
+    "resetTitle": "Reset all data",
+    "resetBody": "All connections and custom labels will be deleted. Saved passwords will be removed from the system keychain. This action cannot be undone.",
+    "resetConfirm": "Type {{word}} to confirm:",
+    "resetWord": "RESET",
+    "doReset": "Reset"
+  },
+  "sudoModal": {
+    "title": "Setup required",
+    "intro": "The application needs two things to work:",
+    "sudoLabel": "Administrator rights (sudo)",
+    "keychainLabel": "Keychain access",
+    "waiting": "Waiting...",
+    "authSudo": "Authorize (service)",
+    "allowKeychain": "Allow keychain access"
+  },
+  "logDrawer": {
+    "title": "Logs: {{name}}",
+    "refresh": "Refresh",
+    "copy": "Copy",
+    "session": "Session",
+    "statusError": "Error",
+    "statusDisconnected": "Disconnected",
+    "tabLogs": "Logs",
+    "tabRaw": "Raw output",
+    "copied_one": "Copied: {{count}} line",
+    "copied_other": "Copied: {{count}} lines",
+    "noSessions": "No saved sessions",
+    "emptyLog": "Log is empty"
+  },
+  "app": {
+    "confirmDelete": "Delete connection?"
+  }
+}

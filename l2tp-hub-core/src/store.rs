@@ -13,7 +13,7 @@ pub struct Store {
 
 impl Default for Store {
     fn default() -> Self {
-        let ws = Workspace::new("Основной");
+        let ws = Workspace::new("Default");
         let id = ws.id.clone();
         Self {
             workspaces: vec![ws],
@@ -21,12 +21,12 @@ impl Default for Store {
             labels: vec![
                 Label {
                     id: "company".into(),
-                    name: "Компания".into(),
+                    name: "Company".into(),
                     built_in: true,
                 },
                 Label {
                     id: "branch".into(),
-                    name: "Филиал".into(),
+                    name: "Branch".into(),
                     built_in: true,
                 },
             ],

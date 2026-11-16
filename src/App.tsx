@@ -15,6 +15,7 @@ import { Settings } from "./pages/Settings/Settings";
 import { SudoModal } from "./pages/Connections/components/SudoModal";
 import { useStore } from "./store";
 import { api } from "./core/api";
+import i18n from "./core/i18n";
 import { Toaster } from "react-hot-toast";
 
 const theme = createTheme({
@@ -136,7 +137,7 @@ function AppContent() {
         e.preventDefault();
         if (selectedKey) {
           const connId = selectedKey.split(":").slice(1).join(":");
-          if (confirm("Удалить подключение?")) {
+          if (confirm(i18n.t("app.confirmDelete"))) {
             deleteConnection(connId);
             setSelectedKey(null);
           }

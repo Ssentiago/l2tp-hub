@@ -93,7 +93,7 @@ impl L2tpManager {
         let conn = store.workspaces.iter()
             .flat_map(|ws| ws.connections.iter())
             .find(|c| c.id == id)
-            .ok_or("Подключение не найдено")?
+            .ok_or("Connection not found")?
             .clone();
 
         {
@@ -103,17 +103,17 @@ impl L2tpManager {
                 // OK — reconnect существующего
             } else {
                 if conn.tunnel_mode == TunnelMode::Full && !active.is_empty() {
-                    return Err("Невозможно подключить полный туннель: есть активные подключения. Сначала отключите.".into());
+                    return Err("Cannot start a full tunnel while connections are active. Disconnect them first.".into());
                 }
 
                 if conn.tunnel_mode == TunnelMode::Split && self.has_active_full_inner(&store, &active) {
-                    return Err("Невозможно подключить раздельный туннель: активен полный туннель.".into());
+                    return Err("Cannot start a split tunnel while a full tunnel is active.".into());
                 }
 
                 if conn.tunnel_mode == TunnelMode::Split && !conn.split_routes.is_empty() {
                     let existing = self.active_split_routes_inner(&store, &active, id);
                     if let Some(overlap) = find_overlap(&conn.split_routes, &existing) {
-                        return Err(format!("Подсеть {} уже используется активным подключением", overlap).into());
+                        return Err(format!("Subnet {} is already used by an active connection", overlap).into());
                     }
                 }
             }
@@ -186,7 +186,7 @@ impl L2tpManager {
                 log::debug!("[manager] connect timed out after 60s");
                 crate::l2tp::macos::stop_heartbeat_thread();
                 crate::l2tp::macos::deactivate_guardian();
-                return Err("Превышен таймаут подключения (60 сек)".into());
+                return Err("Connection timed out (60 seconds)".into());
             }
         }
 
@@ -276,7 +276,7 @@ impl L2tpManager {
         let conn = store.workspaces.iter()
             .flat_map(|ws| ws.connections.iter())
             .find(|c| c.id == id)
-            .ok_or("Подключение не найдено")?
+            .ok_or("Connection not found")?
             .clone();
 
         l2tp::logs::save_session_logs(

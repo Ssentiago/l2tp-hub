@@ -8,6 +8,8 @@
  *   - Host:       10.0.0.1 → 10.0.0.1/32
  */
 
+import i18n from "./i18n";
+
 export interface ParseResult {
   ok: boolean;
   cidr?: string;       // Нормализованный CIDR
@@ -76,7 +78,7 @@ function isNetworkAddress(ip: string, prefix: number): boolean {
  */
 export function parseSubnetInput(input: string): ParseResult {
   const raw = input.trim();
-  if (!raw) return { ok: false, error: "Пустой ввод", original: input };
+  if (!raw) return { ok: false, error: i18n.t("subnet.emptyInput"), original: input };
 
   // --- Range: 10.0.0.1-10.0.0.254 ---
   if (raw.includes("-") && !raw.includes("/")) {
@@ -84,11 +86,11 @@ export function parseSubnetInput(input: string): ParseResult {
     if (parts.length === 2) {
       const start = parts[0].trim();
       const end = parts[1].trim();
-      if (!isValidIPv4(start)) return { ok: false, error: `Невалидный IP: ${start}`, original: input };
-      if (!isValidIPv4(end)) return { ok: false, error: `Невалидный IP: ${end}`, original: input };
+      if (!isValidIPv4(start)) return { ok: false, error: i18n.t("subnet.invalidIp", { ip: start }), original: input };
+      if (!isValidIPv4(end)) return { ok: false, error: i18n.t("subnet.invalidIp", { ip: end }), original: input };
       const startN = ipToUint32(start);
       const endN = ipToUint32(end);
-      if (startN > endN) return { ok: false, error: "Начало диапазона больше конца", original: input };
+      if (startN > endN) return { ok: false, error: i18n.t("subnet.rangeStartEnd"), original: input };
 
       // Находим минимальный CIDR покрывающий диапазон
       // Для простоты: если range = целая подсеть — вернуть её CIDR
@@ -101,7 +103,7 @@ export function parseSubnetInput(input: string): ParseResult {
       // Иначе: возвращаем /32 для каждого адреса? Нет — ругаемся
       return {
         ok: false,
-        error: `Диапазон не выровнен на подсеть. Используйте CIDR или сократите диапазон.`,
+        error: i18n.t("subnet.rangeNotAligned"),
         original: input,
       };
     }
@@ -113,18 +115,18 @@ export function parseSubnetInput(input: string): ParseResult {
     const ip = ipPart.trim();
     const prefixStr = prefixPart.trim();
 
-    if (!isValidIPv4(ip)) return { ok: false, error: `Невалидный IP: ${ip}`, original: input };
+    if (!isValidIPv4(ip)) return { ok: false, error: i18n.t("subnet.invalidIp", { ip }), original: input };
 
     let prefix: number;
     if (prefixStr.includes(".")) {
       // Маска в нотации 255.0.0.0
       const cidr = maskToCidr(prefixStr);
-      if (cidr === null) return { ok: false, error: `Невалидная маска: ${prefixStr}`, original: input };
+      if (cidr === null) return { ok: false, error: i18n.t("subnet.invalidMask", { mask: prefixStr }), original: input };
       prefix = cidr;
     } else {
       prefix = Number(prefixStr);
       if (isNaN(prefix) || prefix < 0 || prefix > 32) {
-        return { ok: false, error: `Невалидный prefix: ${prefixStr}`, original: input };
+        return { ok: false, error: i18n.t("subnet.invalidPrefix", { prefix: prefixStr }), original: input };
       }
     }
 
@@ -157,7 +159,7 @@ export function parseSubnetInput(input: string): ParseResult {
     return { ok: true, cidr: `${raw}/32`, original: input };
   }
 
-  return { ok: false, error: `Невалидный ввод: ${raw}`, original: input };
+  return { ok: false, error: i18n.t("subnet.invalidInput", { input: raw }), original: input };
 }
 
 /**
@@ -176,9 +178,9 @@ export function formatCidr(cidr: string): string {
 export function describeCidr(cidr: string): string {
   const [, prefix] = cidr.split("/");
   const p = Number(prefix);
-  if (p === 32) return "Один хост";
+  if (p === 32) return i18n.t("subnet.oneHost");
   const hosts = cidrHosts(p);
-  if (hosts <= 256) return `${hosts} адресов`;
-  if (hosts <= 65536) return `${(hosts / 1024).toFixed(0)}K адресов`;
-  return `${(hosts / 1048576).toFixed(0)}M адресов`;
+  if (hosts <= 256) return i18n.t("subnet.addresses", { count: hosts });
+  if (hosts <= 65536) return i18n.t("subnet.addressesK", { n: (hosts / 1024).toFixed(0) });
+  return i18n.t("subnet.addressesM", { n: (hosts / 1048576).toFixed(0) });
 }

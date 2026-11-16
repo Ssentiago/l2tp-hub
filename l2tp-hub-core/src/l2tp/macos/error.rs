@@ -106,18 +106,18 @@ impl ConnectError {
     /// UI строит текст по code, поэтому формулировки логов на него не влияют.
     pub fn user_message(&self) -> &'static str {
         match self.code {
-            ConnectErrorCode::IkeAuthFailed => "Сервер отклонил аутентификацию IKE",
-            ConnectErrorCode::IkeNoProposal => "Сервер не принял набор алгоритмов шифрования",
-            ConnectErrorCode::IkeTsUnacceptable => "Сервер отклонил подсети туннеля",
-            ConnectErrorCode::IkeCertUntrusted => "Сертификат или ключ сервера не прошёл проверку",
-            ConnectErrorCode::IkePeerUnreachable => "Сервер не отвечает на запросы IKE",
-            ConnectErrorCode::PppNegotiationFailed => "PPP-согласование не завершилось",
-            ConnectErrorCode::PppPeerAuthFailed => "Сервер не прошёл проверку подлинности на этапе PPP",
-            ConnectErrorCode::PppOurAuthFailed => "Сервер отклонил имя пользователя или пароль",
-            ConnectErrorCode::PppPeerDead => "Сервер оборвал PPP-соединение",
-            ConnectErrorCode::PppKilled => "pppd завершён принудительно",
-            ConnectErrorCode::StackFailed => "Локальные VPN-демоны не запустились",
-            ConnectErrorCode::Unknown => "Причина сбоя подключения не распознана",
+            ConnectErrorCode::IkeAuthFailed => "The server rejected IKE authentication",
+            ConnectErrorCode::IkeNoProposal => "The server did not accept the encryption proposal",
+            ConnectErrorCode::IkeTsUnacceptable => "The server rejected the tunnel subnets",
+            ConnectErrorCode::IkeCertUntrusted => "The server certificate or key failed verification",
+            ConnectErrorCode::IkePeerUnreachable => "The server is not responding to IKE requests",
+            ConnectErrorCode::PppNegotiationFailed => "PPP negotiation did not complete",
+            ConnectErrorCode::PppPeerAuthFailed => "The server failed authentication at the PPP stage",
+            ConnectErrorCode::PppOurAuthFailed => "The server rejected the username or password",
+            ConnectErrorCode::PppPeerDead => "The server dropped the PPP connection",
+            ConnectErrorCode::PppKilled => "The pppd process was terminated",
+            ConnectErrorCode::StackFailed => "The local VPN daemons failed to start",
+            ConnectErrorCode::Unknown => "The cause of the connection failure is unknown",
         }
     }
 }

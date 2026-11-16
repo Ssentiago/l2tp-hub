@@ -1,4 +1,5 @@
 import { Box, Tooltip } from "@mui/material";
+import { useTranslation } from "react-i18next";
 import type { TunnelMode } from "../typing/bindings";
 
 interface Props {
@@ -9,12 +10,8 @@ interface Props {
   size?: "sm" | "md";
 }
 
-const MODE_DESC: Record<TunnelMode, string> = {
-  split: "Раздельный туннель — только подсети через VPN",
-  full: "Полный туннель — весь трафик через VPN",
-};
-
 export function ModeSegment({ value, onChange, disabled, disabledModes = [], size = "sm" }: Props) {
+  const { t } = useTranslation();
   const h = size === "sm" ? 26 : 32;
   const px = size === "sm" ? 1 : 1.5;
   const fontSize = size === "sm" ? 11 : 12;
@@ -23,15 +20,14 @@ export function ModeSegment({ value, onChange, disabled, disabledModes = [], siz
     const active = value === mode;
     const isDisabled = disabled || disabledModes.includes(mode);
 
-    let tooltip = MODE_DESC[mode];
+    const desc = mode === "split" ? t("mode.splitDesc") : t("mode.fullDesc");
+    let tooltip = desc;
     if (disabled && active) {
-      tooltip = "Отключите соединение для смены режима";
+      tooltip = t("mode.disableToSwitch");
     } else if (disabledModes.includes(mode)) {
-      tooltip = mode === "split"
-        ? "Нет подсетей для раздельного туннелирования"
-        : "Полный туннель недоступен при активных подключениях";
+      tooltip = mode === "split" ? t("mode.noSplitRoutes") : t("mode.fullUnavailable");
     } else if (active) {
-      tooltip = `${MODE_DESC[mode]} (текущий)`;
+      tooltip = t("mode.current", { desc });
     }
 
     const inner = (
@@ -73,8 +69,8 @@ export function ModeSegment({ value, onChange, disabled, disabledModes = [], siz
 
   return (
     <Box sx={{ display: "inline-flex" }}>
-      {btn("split", "Сплит")}
-      {btn("full", "Фулл")}
+      {btn("split", t("mode.split"))}
+      {btn("full", t("mode.full"))}
     </Box>
   );
 }

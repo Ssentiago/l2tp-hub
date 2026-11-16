@@ -1,6 +1,7 @@
 import { useRef, useEffect } from "react";
 import { Box, InputBase, IconButton, Tooltip } from "@mui/material";
 import { Search, ViewList, ViewModule } from "@mui/icons-material";
+import { useTranslation } from "react-i18next";
 
 interface Props {
   value: string;
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export function SearchInput({ value, onChange, groupByCompany, onToggleGroup, inputRef }: Props) {
+  const { t } = useTranslation();
   const localRef = useRef<HTMLInputElement>(null);
   const ref = inputRef ?? localRef;
 
@@ -33,7 +35,7 @@ export function SearchInput({ value, onChange, groupByCompany, onToggleGroup, in
       <Search sx={{ color: "text.secondary", fontSize: 20 }} />
       <InputBase
         inputRef={ref}
-        placeholder="Поиск…"
+        placeholder={t("search.placeholder")}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         sx={{
@@ -42,7 +44,7 @@ export function SearchInput({ value, onChange, groupByCompany, onToggleGroup, in
           "& input::placeholder": { color: "text.secondary", opacity: 1 },
         }}
       />
-      <Tooltip title={groupByCompany ? "Плоский список" : "Группировать по компании"}>
+      <Tooltip title={groupByCompany ? t("search.flatList") : t("search.groupByCompany")}>
         <IconButton size="small" onClick={onToggleGroup} sx={{ color: groupByCompany ? "primary.main" : "text.secondary" }}>
           {groupByCompany ? <ViewModule fontSize="small" /> : <ViewList fontSize="small" />}
         </IconButton>

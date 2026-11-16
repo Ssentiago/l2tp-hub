@@ -13,6 +13,7 @@ import {
   Typography,
 } from "@mui/material";
 import { Lock, VpnKey, CheckCircle, RadioButtonUnchecked } from "@mui/icons-material";
+import { useTranslation } from "react-i18next";
 
 export function SudoModal({
   sudoReady,
@@ -27,6 +28,7 @@ export function SudoModal({
   onAuthSudo: () => Promise<void>;
   onAuthKeychain: () => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [sudoLoading, setSudoLoading] = useState(false);
   const [sudoError, setSudoError] = useState<string | null>(null);
   const [keychainLoading, setKeychainLoading] = useState(false);
@@ -67,11 +69,11 @@ export function SudoModal({
     >
       <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1 }}>
         <Lock fontSize="small" />
-        Требуется настройка
+        {t("sudoModal.title")}
       </DialogTitle>
       <DialogContent>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Для работы приложения необходимо два условия:
+          {t("sudoModal.intro")}
         </Typography>
 
         <Stack spacing={1} sx={{ mb: 2 }}>
@@ -84,7 +86,7 @@ export function SudoModal({
                 checkedIcon={<CheckCircle color="success" />}
               />
             }
-            label="Права администратора (sudo)"
+            label={t("sudoModal.sudoLabel")}
           />
           <FormControlLabel
             control={
@@ -95,7 +97,7 @@ export function SudoModal({
                 checkedIcon={<CheckCircle color="success" />}
               />
             }
-            label="Доступ к связке ключей"
+            label={t("sudoModal.keychainLabel")}
           />
         </Stack>
 
@@ -112,9 +114,8 @@ export function SudoModal({
               }
             >
               {sudoLoading
-                ? (helperStatusText || "Ожидание...")
-                : "Авторизоваться (сервис)"
-              }
+                ? (helperStatusText || t("sudoModal.waiting"))
+                : t("sudoModal.authSudo")}
             </Button>
             {sudoError && (
               <Alert severity="error" sx={{ mb: 1 }}>{sudoError}</Alert>
@@ -134,7 +135,7 @@ export function SudoModal({
                 keychainLoading ? <CircularProgress size={16} /> : <VpnKey fontSize="small" />
               }
             >
-              {keychainLoading ? "Ожидание..." : "Разрешить доступ к связке ключей"}
+              {keychainLoading ? t("sudoModal.waiting") : t("sudoModal.allowKeychain")}
             </Button>
             {keychainError && (
               <Alert severity="error" sx={{ mb: 1 }}>{keychainError}</Alert>

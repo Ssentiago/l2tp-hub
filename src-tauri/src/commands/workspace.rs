@@ -78,7 +78,7 @@ pub async fn delete_workspace(_app_handle: tauri::AppHandle, id: String) -> Resu
         .expect("store actor")
         .mutate(move |s| {
             if s.workspaces.len() <= 1 {
-                return Err("Нельзя удалить последнее пространство".into());
+                return Err("Cannot delete the last workspace".into());
             }
             let idx = s
                 .workspaces

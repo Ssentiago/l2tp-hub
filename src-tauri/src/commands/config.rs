@@ -26,10 +26,10 @@ pub async fn import(password: String) -> Result<bool, String> {
 
     match path {
         Some(p) => {
-            let path_buf = p.as_path().ok_or("Не удалось получить путь")?.to_path_buf();
+            let path_buf = p.as_path().ok_or("Could not resolve the path")?.to_path_buf();
             let data = tokio::fs::read(&path_buf)
                 .await
-                .map_err(|e| format!("Ошибка чтения файла: {}", e))?;
+                .map_err(|e| format!("File read error: {}", e))?;
 
             // CPU-heavy crypto in spawn_blocking
             let (connections, labels) = tokio::task::spawn_blocking(move || {
@@ -78,7 +78,7 @@ pub async fn import_file(file_path: String, password: String) -> Result<bool, St
     let path_buf = std::path::PathBuf::from(&file_path);
     let data = tokio::fs::read(&path_buf)
         .await
-        .map_err(|e| format!("Ошибка чтения файла: {}", e))?;
+        .map_err(|e| format!("File read error: {}", e))?;
 
     let (connections, labels) = tokio::task::spawn_blocking(move || {
         backup::restore_backup(&data, &password)
@@ -144,10 +144,10 @@ pub async fn export(password: String) -> Result<bool, String> {
 
     match path {
         Some(p) => {
-            let path_buf = p.as_path().ok_or("Не удалось получить путь")?.to_path_buf();
+            let path_buf = p.as_path().ok_or("Could not resolve the path")?.to_path_buf();
             tokio::fs::write(&path_buf, &bytes)
                 .await
-                .map_err(|e| format!("Ошибка записи файла: {}", e))?;
+                .map_err(|e| format!("File write error: {}", e))?;
             log!("[export_config_dialog] Saved to {:?}", path_buf);
             Ok(true)
         }

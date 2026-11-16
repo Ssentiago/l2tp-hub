@@ -84,7 +84,7 @@ impl SudoSession {
         #[cfg(debug_assertions)]
         if helper_installed() && helper_binary_changed() {
             crate::log!("[helper] dev-helper binary differs from build output, reinstalling");
-            self.set_status("Обновление сервиса (dev-сборка)...");
+            self.set_status("Updating service (dev build)...");
             reinstall_helper()?;
             return self.wait_for_helper_after_install(EXPECTED_VERSION);
         }
@@ -96,7 +96,7 @@ impl SudoSession {
 
         // Шаг 2: хелпер установлен но не запущен? Попробуем запустить
         if helper_installed() {
-            self.set_status("Запуск сервиса...");
+            self.set_status("Starting service...");
             start_helper()?;
             if self.wait_for_helper(EXPECTED_VERSION)? {
                 return Ok(());
@@ -104,7 +104,7 @@ impl SudoSession {
         }
 
         // Шаг 3: первая установка через osascript
-        self.set_status("Требуется установка сервиса...");
+        self.set_status("Service installation required...");
         install_helper()?;
 
         // Ждём запуска с retry
@@ -115,7 +115,7 @@ impl SudoSession {
     #[cfg(target_os = "windows")]
     pub fn authenticate(&self) -> Result<(), String> {
         *self.authenticated.lock().unwrap() = true;
-        self.set_status("Запущено от имени администратора");
+        self.set_status("Running as administrator");
         Ok(())
     }
 
@@ -131,14 +131,14 @@ impl SudoSession {
             }
             Ok(v) => {
                 crate::log!("[helper] version mismatch: installed={}, expected={}", v, expected);
-                self.set_status("Обновление сервиса...");
+                self.set_status("Updating service...");
                 reinstall_helper()?;
                 self.wait_for_helper_after_install(expected)
             }
             Err(_) => {
                 // Старый хелпер без команды `version` — переустанавливаем
                 crate::log!("[helper] version query failed (old helper without version command), reinstalling");
-                self.set_status("Обновление сервиса (старая версия)...");
+                self.set_status("Updating service (old version)...");
                 reinstall_helper()?;
                 self.wait_for_helper_after_install(expected)
             }
@@ -151,11 +151,11 @@ impl SudoSession {
         use crate::helper;
 
         for attempt in 1..=HELPER_CONNECT_RETRIES {
-            self.set_status(&format!("Ожидание сервиса ({}/{})...", attempt, HELPER_CONNECT_RETRIES));
+            self.set_status(&format!("Waiting for service ({}/{})...", attempt, HELPER_CONNECT_RETRIES));
             std::thread::sleep(HELPER_CONNECT_DELAY);
 
             if helper::is_helper_running() {
-                self.set_status("Сервис подключён");
+                self.set_status("Service connected");
                 // Проверяем версию (новый хелпер должен ответить)
                 match helper::query_helper_version() {
                     Ok(v) if v == expected_version => {
@@ -178,8 +178,8 @@ impl SudoSession {
             }
         }
 
-        self.set_status("Сервис не отвечает");
-        Err("Сервис установлен, но не отвечает после 3 попыток. Перезапустите приложение.".to_string())
+        self.set_status("Service not responding");
+        Err("The service is installed but not responding after 3 attempts. Restart the application.".to_string())
     }
 
     /// Ждёт запуска уже установленного хелпера (после start_helper)
@@ -188,21 +188,21 @@ impl SudoSession {
         use crate::helper;
 
         for attempt in 1..=HELPER_CONNECT_RETRIES {
-            self.set_status(&format!("Ожидание сервиса ({}/{})...", attempt, HELPER_CONNECT_RETRIES));
+            self.set_status(&format!("Waiting for service ({}/{})...", attempt, HELPER_CONNECT_RETRIES));
             std::thread::sleep(HELPER_CONNECT_DELAY);
 
             if helper::is_helper_running() {
                 // Проверяем версию
                 match helper::query_helper_version() {
                     Ok(v) if v == expected_version => {
-                        self.set_status("Сервис подключён");
+                        self.set_status("Service connected");
                         *self.authenticated.lock().unwrap() = true;
                         return Ok(true);
                     }
                     _ => {
                         // Старая версия — переустанавливаем
                         crate::log!("[helper] outdated after start, reinstalling");
-                        self.set_status("Обновление сервиса...");
+                        self.set_status("Updating service...");
                         reinstall_helper()?;
                         return self.wait_for_helper_after_install(expected_version).map(|_| true);
                     }
@@ -212,7 +212,7 @@ impl SudoSession {
 
         // Не запустился — пробуем переустановить
         crate::log!("[helper] failed to start after {} attempts, reinstalling", HELPER_CONNECT_RETRIES);
-        self.set_status("Переустановка сервиса...");
+        self.set_status("Reinstalling service...");
         reinstall_helper()?;
         self.wait_for_helper_after_install(expected_version).map(|_| true)
     }
@@ -376,9 +376,9 @@ fn install_helper() -> Result<(), String> {
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
         if stderr.contains("(-128)") {
-            Err("Установка отменена пользователем".to_string())
+            Err("Installation canceled by the user".to_string())
         } else {
-            Err(format!("Установка хелпера не удалась: {}", stderr))
+            Err(format!("Helper installation failed: {}", stderr))
         }
     }
 }
@@ -463,7 +463,7 @@ fn client_requirement() -> Result<String, String> {
         .filter(|h| !h.is_empty())
         .ok_or_else(|| {
             format!(
-                "codesign: CDHash не найден для {:?}, приложение не подписано",
+                "codesign: CDHash not found for {:?}, the app is not signed",
                 exe
             )
         })?;

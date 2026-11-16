@@ -9,6 +9,7 @@ import {
   Typography,
 } from "@mui/material";
 import { Add, ContentPaste, Lan } from "@mui/icons-material";
+import { useTranslation } from "react-i18next";
 import { parseSubnetInput, formatCidr, describeCidr } from "../core/subnet";
 
 interface Props {
@@ -22,28 +23,31 @@ interface Props {
 export function SubnetEditor({
   routes,
   onChange,
-  label = "Подсети через VPN",
-  placeholder = "10.0.0.0/8 или 192.168.1",
+  label,
+  placeholder,
   disabled = false,
 }: Props) {
+  const { t } = useTranslation();
+  const labelValue = label ?? t("subnet.defaultLabel");
+  const placeholderValue = placeholder ?? t("subnet.defaultPlaceholder");
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const addRoute = useCallback(() => {
     const result = parseSubnetInput(input);
     if (!result.ok) {
-      setError(result.error ?? "Невалидный ввод");
+      setError(result.error ?? t("subnet.invalidFallback"));
       return;
     }
     const cidr = result.cidr!;
     if (routes.includes(cidr)) {
-      setError("Такая подсеть уже добавлена");
+      setError(t("subnet.alreadyAdded"));
       return;
     }
     onChange([...routes, cidr]);
     setInput("");
     setError(null);
-  }, [input, routes, onChange]);
+  }, [input, routes, onChange, t]);
 
   const removeRoute = useCallback(
     (index: number) => {
@@ -88,7 +92,7 @@ export function SubnetEditor({
         onChange([...routes, ...added]);
       }
       if (errors.length > 0) {
-        setError(`Не распознано: ${errors.join(", ")}`);
+        setError(t("subnet.notRecognized", { list: errors.join(", ") }));
       } else {
         setError(null);
       }
@@ -108,9 +112,9 @@ export function SubnetEditor({
     <Box>
       <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 0.5 }}>
         <Typography variant="body2" color="text.secondary">
-          {label}
+          {labelValue}
         </Typography>
-        <Tooltip title="Вставить из буфера (CIDR через запятую/перенос строки)">
+        <Tooltip title={t("subnet.pasteTooltip")}>
           <IconButton size="small" onClick={handlePaste} disabled={disabled}>
             <ContentPaste sx={{ fontSize: 14 }} />
           </IconButton>
@@ -140,7 +144,7 @@ export function SubnetEditor({
 
       {routes.length === 0 && (
         <Typography variant="caption" color="text.disabled" sx={{ mb: 1, display: "block" }}>
-          Подсети не добавлены. Введите CIDR и нажмите Enter.
+          {t("subnet.emptyHint")}
         </Typography>
       )}
 
@@ -154,10 +158,10 @@ export function SubnetEditor({
           setError(null);
         }}
         onKeyDown={handleKeyDown}
-        placeholder={placeholder}
+        placeholder={placeholderValue}
         disabled={disabled}
         error={!!error}
-        helperText={error || (input.trim() && !liveValidation ? `${formatCidr(parseSubnetInput(input).cidr ?? "")}` : "CIDR, маска, диапазон или shorthand (напр. 192.168.1)")}
+        helperText={error || (input.trim() && !liveValidation ? `${formatCidr(parseSubnetInput(input).cidr ?? "")}` : t("subnet.inputHelper"))}
         slotProps={{
           input: {
             endAdornment: (

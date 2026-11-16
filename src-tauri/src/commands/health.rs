@@ -33,13 +33,13 @@ fn icmp_ping(host: &str) -> bool {
 fn ike_probe(server: &str) -> Result<bool, String> {
     let addr = format!("{}:500", server);
 
-    let socket = UdpSocket::bind("0.0.0.0:0").map_err(|e| format!("Ошибка сокета: {}", e))?;
+    let socket = UdpSocket::bind("0.0.0.0:0").map_err(|e| format!("Socket error: {}", e))?;
     socket
         .set_read_timeout(Some(Duration::from_secs(4)))
-        .map_err(|e| format!("Ошибка сокета: {}", e))?;
+        .map_err(|e| format!("Socket error: {}", e))?;
     socket
         .connect(&addr)
-        .map_err(|e| format!("Ошибка подключения: {}", e))?;
+        .map_err(|e| format!("Connection error: {}", e))?;
 
     let mut packet = IKE_SA_INIT_PAYLOAD.to_vec();
     let mut rng = rand::thread_rng();
@@ -49,7 +49,7 @@ fn ike_probe(server: &str) -> Result<bool, String> {
 
     socket
         .send(&packet)
-        .map_err(|e| format!("Ошибка отправки: {}", e))?;
+        .map_err(|e| format!("Send error: {}", e))?;
 
     let mut buf = [0u8; 1500];
     match socket.recv(&mut buf) {
@@ -63,7 +63,7 @@ fn ike_probe(server: &str) -> Result<bool, String> {
             log!("[health] IKE timeout from {}", addr);
             Ok(false)
         }
-        Err(e) => Err(format!("Ошибка получения: {}", e)),
+        Err(e) => Err(format!("Receive error: {}", e)),
     }
 }
 
@@ -79,7 +79,7 @@ pub async fn check_connection(app_handle: tauri::AppHandle, id: String) -> Resul
         .iter()
         .flat_map(|ws| ws.connections.iter())
         .find(|c| c.id == id)
-        .ok_or("Подключение не найдено")?
+        .ok_or("Connection not found")?
         .clone();
 
     // Check if any VPN is active
@@ -89,7 +89,7 @@ pub async fn check_connection(app_handle: tauri::AppHandle, id: String) -> Resul
             let status = manager.status(&c.id).await;
             if status == VpnStatus::Connected || status == VpnStatus::Connecting {
                 return Err(
-                    "Проверка недоступна во время активного VPN-подключения".into(),
+                    "The check is unavailable during an active VPN connection".into(),
                 );
             }
         }

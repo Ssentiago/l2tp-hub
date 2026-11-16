@@ -1,4 +1,6 @@
 import { Box, Button, Typography } from "@mui/material";
+import { useTranslation } from "react-i18next";
+import type { ParseKeys } from "i18next";
 import type { ConnectError } from "../typing/bindings";
 import { connectErrorView, type ConnectErrorAction } from "../core/connectErrors";
 
@@ -9,14 +11,15 @@ interface Props {
   onLogs: () => void;
 }
 
-const ACTION_LABELS: Record<ConnectErrorAction, string> = {
-  retry: "Повторить",
-  edit: "Параметры подключения",
-  logs: "Логи сессии",
+const ACTION_KEYS: Record<ConnectErrorAction, ParseKeys> = {
+  retry: "actions.retry",
+  edit: "actions.edit",
+  logs: "actions.logs",
 };
 
 /** Панель с причиной сбоя подключения, подсказками и действиями по ней. */
 export function ConnectErrorBanner({ error, onRetry, onEdit, onLogs }: Props) {
+  const { t } = useTranslation();
   const view = connectErrorView(error);
   const handlers: Record<ConnectErrorAction, () => void> = {
     retry: onRetry,
@@ -58,7 +61,7 @@ export function ConnectErrorBanner({ error, onRetry, onEdit, onLogs }: Props) {
             color={action === "retry" ? "primary" : "inherit"}
             onClick={handlers[action]}
           >
-            {ACTION_LABELS[action]}
+            {t(ACTION_KEYS[action])}
           </Button>
         ))}
       </Box>

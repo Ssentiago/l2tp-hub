@@ -1,6 +1,7 @@
 import { useMemo, useRef, useCallback, useEffect, useState } from "react";
 import { Box, Typography } from "@mui/material";
 import { ChevronRight, ExpandMore } from "@mui/icons-material";
+import { useTranslation } from "react-i18next";
 import { useStore } from "../store";
 import { api } from "../core/api";
 import { getTitle, matchesQuery } from "../core/display";
@@ -40,6 +41,7 @@ export function PaletteView() {
     switchWorkspace,
     sudoReady,
   } = useStore();
+  const { t } = useTranslation();
 
   const searchRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -218,7 +220,7 @@ export function PaletteView() {
                       <ExpandMore sx={{ fontSize: 16, color: "text.secondary" }} />
                     )}
                     <Typography sx={{ fontSize: 13, fontWeight: 500, color: "text.secondary" }}>
-                      {company || "Без группы"}
+                      {company || t("palette.noGroup")}
                     </Typography>
                     <Typography sx={{ fontSize: 13, fontWeight: 400, color: "text.disabled" }}>
                       · {groupConns.length}
@@ -286,7 +288,7 @@ export function PaletteView() {
                   "&:hover": { bgcolor: "rgba(255,255,255,0.05)" },
                 }}
               >
-                {s === "name" ? "А–Я" : "Недавние"}
+                {s === "name" ? t("palette.sortName") : t("palette.sortRecent")}
               </Box>
             ))}
           </Box>
@@ -332,10 +334,10 @@ export function PaletteView() {
 
       {/* list */}
       <Box ref={listRef} sx={{ flex: 1, overflow: "auto", py: 0.5 }}>
-        {renderRows(all, "Все")}
+        {renderRows(all, t("palette.sectionAll"))}
         {filtered.length === 0 && (
           <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
-            <Typography sx={{ color: "text.disabled" }}>Ничего не найдено</Typography>
+            <Typography sx={{ color: "text.disabled" }}>{t("palette.emptySearch")}</Typography>
           </Box>
         )}
       </Box>

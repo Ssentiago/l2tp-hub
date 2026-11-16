@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { Box, Typography, IconButton, Tooltip, CircularProgress } from "@mui/material";
 import { StopCircle } from "@mui/icons-material";
+import { useTranslation } from "react-i18next";
+import type { ParseKeys } from "i18next";
 import type { ConnectionWithStatus } from "../store";
 import { getTitle } from "../core/display";
 
@@ -9,12 +11,13 @@ interface Props {
   onDisconnect: () => void;
 }
 
-const STATUS_TEXT: Record<string, string> = {
-  connecting: "Подключение…",
-  reconnecting: "Переподключение…",
+const STATUS_KEYS: Record<string, ParseKeys> = {
+  connecting: "status.connecting",
+  reconnecting: "status.reconnecting",
 };
 
 export function ActiveConnectionBar({ conn, onDisconnect }: Props) {
+  const { t } = useTranslation();
   const [uptime, setUptime] = useState("");
   const isActive = conn.status === "connected";
   const isBusy = conn.status === "connecting" || conn.status === "reconnecting";
@@ -69,13 +72,13 @@ export function ActiveConnectionBar({ conn, onDisconnect }: Props) {
       </Typography>
       {isBusy ? (
         <Typography sx={{ fontSize: 12, color: "warning.light", fontWeight: 500 }}>
-          {STATUS_TEXT[conn.status] ?? "…"}
+          {t(STATUS_KEYS[conn.status] ?? "status.connecting")}
         </Typography>
       ) : (
         <Typography sx={{ fontSize: 12, color: "text.secondary" }}>{uptime}</Typography>
       )}
       <Box sx={{ flex: 1 }} />
-      <Tooltip title="Отключить (⌘D)">
+      <Tooltip title={t("activeBar.disconnectTooltip")}>
         <IconButton
           size="small"
           onClick={onDisconnect}

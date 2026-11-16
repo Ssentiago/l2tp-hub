@@ -1,3 +1,4 @@
+import i18n from "./i18n";
 import type { Connection_Serialize as Connection } from "../typing/bindings";
 
 export function getTitle(conn: Connection): string {
@@ -35,22 +36,22 @@ export function relativeTime(ts: number | null): string {
   const now = Date.now();
   const diff = now - ts * 1000;
   const min = Math.floor(diff / 60_000);
-  if (min < 1) return "только что";
-  if (min < 60) return `${min} мин назад`;
+  if (min < 1) return i18n.t("time.justNow");
+  if (min < 60) return i18n.t("time.minutesAgo", { n: min });
   const h = Math.floor(min / 60);
-  if (h < 24) return `${h} ч назад`;
+  if (h < 24) return i18n.t("time.hoursAgo", { n: h });
   const d = Math.floor(h / 24);
-  if (d < 7) return `${d} дн назад`;
+  if (d < 7) return i18n.t("time.daysAgo", { n: d });
   const w = Math.floor(d / 7);
-  if (w < 5) return `${w} нед назад`;
+  if (w < 5) return i18n.t("time.weeksAgo", { n: w });
   const mo = Math.floor(d / 30);
-  if (mo < 12) return `${mo} мес назад`;
-  return `${Math.floor(d / 365)} г назад`;
+  if (mo < 12) return i18n.t("time.monthsAgo", { n: mo });
+  return i18n.t("time.yearsAgo", { n: Math.floor(d / 365) });
 }
 
 export function absoluteTime(ts: number | null): string {
   if (!ts) return "—";
-  return new Date(ts * 1000).toLocaleString("ru-RU", {
+  return new Date(ts * 1000).toLocaleString(i18n.resolvedLanguage, {
     day: "numeric",
     month: "short",
     year: "numeric",
