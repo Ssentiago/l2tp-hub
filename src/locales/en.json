@@ -51,6 +51,7 @@
     "sectionAll": "All",
     "sortName": "A–Z",
     "sortRecent": "Recent",
+    "historyTooltip": "Session history",
     "emptySearch": "Nothing found"
   },
   "actions": {
@@ -248,7 +249,11 @@
     "daysAgo": "{{n}} d ago",
     "weeksAgo": "{{n}} w ago",
     "monthsAgo": "{{n}} mo ago",
-    "yearsAgo": "{{n}} y ago"
+    "yearsAgo": "{{n}} y ago",
+    "durationDays": "{{n}}d {{time}}"
+  },
+  "stats": {
+    "total": "Total"
   },
   "settings": {
     "title": "Settings",

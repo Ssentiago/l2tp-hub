@@ -122,4 +122,24 @@ impl L2tpManager {
         }
         map
     }
+
+    /// Живая статистика активных туннелей.
+    /// Счётчики интерфейса на Windows недоступны: системный L2TP не даёт
+    /// своего интерфейса с счётчиками, как pppN на macOS.
+    pub async fn all_stats(&self) -> HashMap<String, crate::l2tp::stats::TunnelStats> {
+        let store = self.store.load().await;
+        let mut map = HashMap::new();
+        for id in self.active_lock().iter() {
+            map.insert(
+                id.clone(),
+                crate::l2tp::stats::TunnelStats {
+                    connection_id: id.clone(),
+                    interface: None,
+                    connected_since: store.find_connection(id).and_then(|c| c.connected_since),
+                    counters: None,
+                },
+            );
+        }
+        map
+    }
 }

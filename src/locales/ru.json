@@ -51,6 +51,7 @@
     "sectionAll": "Все",
     "sortName": "А–Я",
     "sortRecent": "Недавние",
+    "historyTooltip": "История сессий",
     "emptySearch": "Ничего не найдено"
   },
   "actions": {
@@ -249,7 +250,11 @@
     "daysAgo": "{{n}} дн назад",
     "weeksAgo": "{{n}} нед назад",
     "monthsAgo": "{{n}} мес назад",
-    "yearsAgo": "{{n}} г назад"
+    "yearsAgo": "{{n}} г назад",
+    "durationDays": "{{n}}д {{time}}"
+  },
+  "stats": {
+    "total": "Всего"
   },
   "settings": {
     "title": "Настройки",

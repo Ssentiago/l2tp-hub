@@ -4,7 +4,8 @@ import { StopCircle } from "@mui/icons-material";
 import { useTranslation } from "react-i18next";
 import type { ParseKeys } from "i18next";
 import type { ConnectionWithStatus } from "../store";
-import { getTitle } from "../core/display";
+import { useStore } from "../store";
+import { getTitle, formatBytes, formatDuration } from "../core/display";
 
 interface Props {
   conn: ConnectionWithStatus;
@@ -18,6 +19,7 @@ const STATUS_KEYS: Record<string, ParseKeys> = {
 
 export function ActiveConnectionBar({ conn, onDisconnect }: Props) {
   const { t } = useTranslation();
+  const stats = useStore((s) => s.tunnelStats[conn.id]);
   const [uptime, setUptime] = useState("");
   const isActive = conn.status === "connected";
   const isBusy = conn.status === "connecting" || conn.status === "reconnecting";
@@ -76,6 +78,17 @@ export function ActiveConnectionBar({ conn, onDisconnect }: Props) {
         </Typography>
       ) : (
         <Typography sx={{ fontSize: 12, color: "text.secondary" }}>{uptime}</Typography>
+      )}
+      {isActive && stats?.counters && (
+        <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
+          ↓{formatBytes(stats.counters.bytes_in)} ↑{formatBytes(stats.counters.bytes_out)}
+        </Typography>
+      )}
+      {(conn.total_uptime_secs > 0 || conn.total_bytes_in > 0 || conn.total_bytes_out > 0) && (
+        <Typography sx={{ fontSize: 12, color: "text.disabled" }}>
+          {t("stats.total")} {formatDuration(conn.total_uptime_secs)}
+          {" · "}↓{formatBytes(conn.total_bytes_in)} ↑{formatBytes(conn.total_bytes_out)}
+        </Typography>
       )}
       <Box sx={{ flex: 1 }} />
       <Tooltip title={t("activeBar.disconnectTooltip")}>

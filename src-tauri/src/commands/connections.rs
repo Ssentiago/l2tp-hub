@@ -69,6 +69,9 @@ pub async fn save_connection(
                     last_disconnected_at: existing.last_disconnected_at,
                     tunnel_mode: input.tunnel_mode,
                     split_routes: input.split_routes,
+                    total_uptime_secs: existing.total_uptime_secs,
+                    total_bytes_in: existing.total_bytes_in,
+                    total_bytes_out: existing.total_bytes_out,
                 }
             } else {
                 Connection {

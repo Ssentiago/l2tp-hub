@@ -17,6 +17,12 @@ pub struct SessionMeta {
     pub status: String,
     pub error: Option<String>,
     pub server: String,
+    /// Входящий трафик сессии по счётчикам интерфейса; None, если счётчики недоступны
+    #[serde(default)]
+    pub bytes_in: Option<u64>,
+    /// Исходящий трафик сессии по счётчикам интерфейса; None, если счётчики недоступны
+    #[serde(default)]
+    pub bytes_out: Option<u64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, specta::Type)]
@@ -30,12 +36,14 @@ pub struct SessionLogs {
 
 /// Сохраняет логи текущей сессии перед cleanup.
 /// Копирует /tmp/l2tp/{name}-* в history dir.
+/// traffic — счётчики интерфейса сессии на момент завершения.
 pub fn save_session_logs(
     connection_id: &str,
     service_name: &str,
     server: &str,
     started_at: Option<i64>,
     error: Option<&str>,
+    traffic: Option<super::stats::IfaceCounters>,
 ) {
     let ts = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -95,6 +103,8 @@ pub fn save_session_logs(
         status: if error.is_some() { "error".to_string() } else { "disconnected".to_string() },
         error: error.map(|s| s.to_string()),
         server: server.to_string(),
+        bytes_in: traffic.map(|t| t.bytes_in),
+        bytes_out: traffic.map(|t| t.bytes_out),
     };
     let _ = fs::write(
         session_dir.join("meta.json"),

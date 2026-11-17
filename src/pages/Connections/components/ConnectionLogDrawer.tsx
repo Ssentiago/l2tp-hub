@@ -6,6 +6,7 @@ import {
 import { Close, ContentCopy, Refresh } from "@mui/icons-material";
 import { useTranslation } from "react-i18next";
 import { api } from "../../../core/api";
+import { formatBytes, formatDuration } from "../../../core/display";
 import toast from "react-hot-toast";
 import i18n from "../../../core/i18n";
 import type {
@@ -149,6 +150,12 @@ export function ConnectionLogDrawer({ open, onClose, connectionId, connectionNam
                       color={s.status === "error" ? "error" : "default"}
                       sx={{ height: 18, fontSize: 10 }}
                     />
+                    <Typography variant="caption" color="text.secondary">
+                      {s.started_at && s.ended_at ? formatDuration(s.ended_at - s.started_at) : ""}
+                      {s.bytes_in !== null
+                        ? ` · ↓${formatBytes(s.bytes_in)} ↑${formatBytes(s.bytes_out ?? 0)}`
+                        : ""}
+                    </Typography>
                     <Typography variant="caption" color="text.secondary" sx={{ flex: 1, textAlign: "right" }}>
                       {s.server}
                     </Typography>

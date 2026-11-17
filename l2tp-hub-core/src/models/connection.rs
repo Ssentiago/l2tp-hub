@@ -29,4 +29,13 @@ pub struct Connection {
     /// Список подсетей для split-туннелинга (CIDR notation)
     #[serde(default)]
     pub split_routes: Vec<String>,
+    /// Суммарное время всех завершённых сессий, сек
+    #[serde(default)]
+    pub total_uptime_secs: u64,
+    /// Суммарный входящий трафик всех завершённых сессий, байты
+    #[serde(default)]
+    pub total_bytes_in: u64,
+    /// Суммарный исходящий трафик всех завершённых сессий, байты
+    #[serde(default)]
+    pub total_bytes_out: u64,
 }

@@ -143,7 +143,7 @@ export function PaletteView() {
 
   const activeConn = connections.find((c) => c.status === "connected" || c.status === "connecting" || c.status === "reconnecting") ?? null;
   const failedConn = connections.find((c) => c.error) ?? null;
-  const [showFailedLogs, setShowFailedLogs] = useState(false);
+  const [logTarget, setLogTarget] = useState<{ id: string; name: string } | null>(null);
 
   const toggleCollapsed = (key: string) => {
     setCollapsed((prev) => {
@@ -166,6 +166,7 @@ export function PaletteView() {
         onModeToggle={() => handleModeToggle(c.id)}
         onConnect={() => handleConnect(c.id)}
         onDisconnect={() => handleDisconnect(c.id)}
+        onHistory={() => setLogTarget({ id: c.id, name: title ?? getTitle(c) })}
       />
     );
   };
@@ -328,7 +329,7 @@ export function PaletteView() {
             setViewMode("manage");
             setSelectedKey(`manage:${failedConn.id}`);
           }}
-          onLogs={() => setShowFailedLogs(true)}
+          onLogs={() => failedConn && setLogTarget({ id: failedConn.id, name: getTitle(failedConn) })}
         />
       )}
 
@@ -343,10 +344,10 @@ export function PaletteView() {
       </Box>
 
       <ConnectionLogDrawer
-        open={showFailedLogs}
-        onClose={() => setShowFailedLogs(false)}
-        connectionId={failedConn?.id ?? ""}
-        connectionName={failedConn ? getTitle(failedConn) : ""}
+        open={logTarget !== null}
+        onClose={() => setLogTarget(null)}
+        connectionId={logTarget?.id ?? ""}
+        connectionName={logTarget?.name ?? ""}
       />
 
       <KeyHints />

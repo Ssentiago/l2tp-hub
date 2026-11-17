@@ -12,6 +12,11 @@ export const commands = {
 	disconnectVpn: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("disconnect_vpn", { id }, options),
 	getVpnStatus: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<VpnStatus>("get_vpn_status", { id }, options),
 	getAllVpnStatuses: (options?: InvokeOptions) => __TAURI_INVOKE<{ [key in string]: VpnStatus }>("get_all_vpn_statuses", undefined, options),
+	/**
+	 *  Живая статистика активных туннелей: время текущей сессии и счётчики
+	 *  интерфейса pppN.
+	 */
+	getTunnelStats: (options?: InvokeOptions) => __TAURI_INVOKE<{ [key in string]: TunnelStats_Serialize }>("get_tunnel_stats", undefined, options),
 	checkConnection: (id: string, options?: InvokeOptions) => __TAURI_INVOKE<HealthResult>("check_connection", { id }, options),
 	authenticateSudo: (options?: InvokeOptions) => __TAURI_INVOKE<null>("authenticate_sudo", undefined, options),
 	checkSudoSession: (options?: InvokeOptions) => __TAURI_INVOKE<boolean>("check_sudo_session", undefined, options),
@@ -143,6 +148,12 @@ export type Connection_Deserialize = {
 	tunnel_mode?: TunnelMode,
 	/**  Список подсетей для split-туннелинга (CIDR notation) */
 	split_routes?: string[],
+	/**  Суммарное время всех завершённых сессий, сек */
+	total_uptime_secs?: number,
+	/**  Суммарный входящий трафик всех завершённых сессий, байты */
+	total_bytes_in?: number,
+	/**  Суммарный исходящий трафик всех завершённых сессий, байты */
+	total_bytes_out?: number,
 } & ({
 	service_name: string,
 	name?: never,
@@ -169,6 +180,12 @@ export type Connection_Serialize = {
 	tunnel_mode: TunnelMode,
 	/**  Список подсетей для split-туннелинга (CIDR notation) */
 	split_routes: string[],
+	/**  Суммарное время всех завершённых сессий, сек */
+	total_uptime_secs: number,
+	/**  Суммарный входящий трафик всех завершённых сессий, байты */
+	total_bytes_in: number,
+	/**  Суммарный исходящий трафик всех завершённых сессий, байты */
+	total_bytes_out: number,
 };
 
 export type HealthResult = {
@@ -181,6 +198,14 @@ export type HealthResult = {
  *  во фронтенде, английская форма из `Display` идёт в логи.
  */
 export type HelperStatus = { kind: "idle" } | { kind: "updating_service_dev" } | { kind: "starting_service" } | { kind: "install_required" } | { kind: "running_as_admin" } | { kind: "updating_service" } | { kind: "updating_service_old" } | { kind: "waiting_service"; attempt: number; retries: number } | { kind: "service_connected" } | { kind: "service_not_responding" } | { kind: "reinstalling_service" };
+
+/**  Счётчики трафика интерфейса туннеля. */
+export type IfaceCounters = {
+	bytes_in: number,
+	bytes_out: number,
+	packets_in: number,
+	packets_out: number,
+};
 
 export type Label = {
 	id: string,
@@ -215,6 +240,10 @@ export type SessionMeta_Deserialize = {
 	status: string,
 	error?: string | null,
 	server: string,
+	/**  Входящий трафик сессии по счётчикам интерфейса; None, если счётчики недоступны */
+	bytes_in?: number | null,
+	/**  Исходящий трафик сессии по счётчикам интерфейса; None, если счётчики недоступны */
+	bytes_out?: number | null,
 };
 
 export type SessionMeta_Serialize = {
@@ -224,10 +253,43 @@ export type SessionMeta_Serialize = {
 	status: string,
 	error: string | null,
 	server: string,
+	/**  Входящий трафик сессии по счётчикам интерфейса; None, если счётчики недоступны */
+	bytes_in: number | null,
+	/**  Исходящий трафик сессии по счётчикам интерфейса; None, если счётчики недоступны */
+	bytes_out: number | null,
 };
 
 /**  Режим маршрутизации туннеля. */
 export type TunnelMode = "split" | "full";
+
+/**  Живая статистика активного туннеля. */
+export type TunnelStats = TunnelStats_Serialize | TunnelStats_Deserialize;
+
+/**  Живая статистика активного туннеля. */
+export type TunnelStats_Deserialize = {
+	connection_id: string,
+	/**  Интерфейс туннеля (pppN на macOS), если счётчики доступны */
+	interface?: string | null,
+	connected_since?: number | null,
+	/**
+	 *  Счётчики текущей сессии: накоплено до пересоздания интерфейса
+	 *  плюс текущие значения
+	 */
+	counters?: IfaceCounters | null,
+};
+
+/**  Живая статистика активного туннеля. */
+export type TunnelStats_Serialize = {
+	connection_id: string,
+	/**  Интерфейс туннеля (pppN на macOS), если счётчики доступны */
+	interface: string | null,
+	connected_since: number | null,
+	/**
+	 *  Счётчики текущей сессии: накоплено до пересоздания интерфейса
+	 *  плюс текущие значения
+	 */
+	counters: IfaceCounters | null,
+};
 
 export type UpdateInfo = {
 	latest_version: string,

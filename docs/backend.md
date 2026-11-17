@@ -76,6 +76,7 @@ TypeScript-биндингов, так что точки расхождения �
 | `disconnect_vpn` | `id` | пусто | Отключить, эмитит статус |
 | `get_vpn_status` | `id` | `VpnStatus` | Статус одного подключения |
 | `get_all_vpn_statuses` | нет | карта id на статус | Статусы всех подключений |
+| `get_tunnel_stats` | нет | карта id на `TunnelStats` | Время сессии и счётчики трафика pppN активных туннелей |
 | `switch_tunnel_mode` | `id`, `new_mode` | пусто | Переключить режим на лету |
 | `check_connection` | `id` | `HealthResult` | Ping и IKE-проба сервера |
 

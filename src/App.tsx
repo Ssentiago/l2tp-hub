@@ -51,6 +51,7 @@ function AppContent() {
     loadLabels,
     loadWorkspaces,
     initVpnEventListener,
+    initStatsPolling,
     checkHelper,
   } = useStore();
 
@@ -58,6 +59,7 @@ function AppContent() {
 
   useEffect(() => {
     initVpnEventListener();
+    initStatsPolling();
     loadLabels();
     loadWorkspaces();
     loadConnections();

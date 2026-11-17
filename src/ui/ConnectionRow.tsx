@@ -1,8 +1,18 @@
-import { Box, Typography, Tooltip, CircularProgress } from "@mui/material";
+import { Box, Typography, Tooltip, CircularProgress, IconButton } from "@mui/material";
+import { History } from "@mui/icons-material";
+import { useTranslation } from "react-i18next";
 import type { ConnectionWithStatus } from "../store";
+import { useStore } from "../store";
 import { StatusDot } from "./StatusDot";
 import { ModeSegment } from "./ModeSegment";
-import { getDisplayParts, highlightMatch, relativeTime, absoluteTime } from "../core/display";
+import {
+  getDisplayParts,
+  highlightMatch,
+  relativeTime,
+  absoluteTime,
+  formatBytes,
+  formatDuration,
+} from "../core/display";
 
 interface Props {
   conn: ConnectionWithStatus;
@@ -14,6 +24,7 @@ interface Props {
   onModeToggle: () => void;
   onConnect: () => void;
   onDisconnect: () => void;
+  onHistory: () => void;
 }
 
 export function ConnectionRow({
@@ -26,15 +37,36 @@ export function ConnectionRow({
   onModeToggle,
   onConnect,
   onDisconnect,
+  onHistory,
 }: Props) {
+  const { t } = useTranslation();
+  const stats = useStore((s) => s.tunnelStats[conn.id]);
   const parts = title ? highlightMatch(title, query) : getDisplayParts(conn, query);
   const isActive = conn.status === "connected";
   const isBusy = conn.status === "connecting" || conn.status === "reconnecting";
-  const meta = conn.last_connected_at
+
+  // Активный туннель: время текущей сессии и трафик по счётчикам интерфейса
+  const sessionSecs = conn.connected_since
+    ? Math.max(0, Math.floor(Date.now() / 1000) - conn.connected_since)
+    : 0;
+  const traffic = stats?.counters
+    ? ` ↓${formatBytes(stats.counters.bytes_in)} ↑${formatBytes(stats.counters.bytes_out)}`
+    : "";
+  const liveMeta = isActive && conn.connected_since
+    ? `${formatDuration(sessionSecs)}${traffic}`
+    : null;
+  const defaultMeta = conn.last_connected_at
     ? `${relativeTime(conn.last_connected_at)}${conn.connect_count > 0 ? ` · ${conn.connect_count}×` : ""}`
     : conn.connect_count > 0
       ? `${conn.connect_count}×`
       : "—";
+  const meta = liveMeta ?? defaultMeta;
+
+  // Суммарная статистика туннеля за всю историю сессий
+  const totals = conn.total_uptime_secs > 0 || conn.total_bytes_in > 0 || conn.total_bytes_out > 0
+    ? `${t("stats.total")}: ${formatDuration(conn.total_uptime_secs)} · ↓${formatBytes(conn.total_bytes_in)} ↑${formatBytes(conn.total_bytes_out)}`
+    : "";
+  const tooltip = [absoluteTime(conn.last_connected_at), totals].filter(Boolean).join(" · ");
 
   return (
     <Box
@@ -91,7 +123,19 @@ export function ConnectionRow({
         disabled={isActive}
         disabledModes={conn.split_routes.length === 0 ? ["split"] : []}
       />
-      <Tooltip title={absoluteTime(conn.last_connected_at)} placement="left">
+      <Tooltip title={t("palette.historyTooltip")}>
+        <IconButton
+          size="small"
+          onClick={(e) => {
+            e.stopPropagation();
+            onHistory();
+          }}
+          sx={{ color: "text.disabled", "&:hover": { color: "text.primary" }, flexShrink: 0 }}
+        >
+          <History fontSize="small" />
+        </IconButton>
+      </Tooltip>
+      <Tooltip title={tooltip} placement="left">
         <Typography
           sx={{
             fontSize: 12,

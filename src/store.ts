@@ -8,6 +8,7 @@ import type {
   ConnectionPayload_Deserialize as ConnectionPayload,
   HelperStatus,
   Label,
+  TunnelStats_Serialize as TunnelStats,
   VpnStatus,
   WorkspaceInfo,
 } from "./typing/bindings";
@@ -68,12 +69,20 @@ interface Store {
   connectVpn: (id: string) => Promise<void>;
   disconnectVpn: (id: string) => Promise<void>;
 
+  /** Живая статистика активных туннелей по счётчикам интерфейса pppN. */
+  tunnelStats: Record<string, TunnelStats>;
+  loadTunnelStats: () => Promise<void>;
+  /** Запускает периодический опрос статистики. Вызвать один раз при старте. */
+  initStatsPolling: () => void;
+
   /** Инициализирует event listener для vpn-status-changed. Вызвать один раз при старте. */
   initVpnEventListener: () => void;
 }
 
 // Глобальный ref для unlisten, чтобы не дублировать listener
 let vpnEventUnlisten: (() => void) | null = null;
+// Глобальный ref для interval статистики, чтобы не дублировать polling
+let statsPollInterval: ReturnType<typeof setInterval> | null = null;
 
 export const useStore = create<Store>((set, get) => ({
   viewMode: "palette",
@@ -271,6 +280,23 @@ export const useStore = create<Store>((set, get) => ({
     // НЕ вызываем loadConnections() — event listener обновит статус
   },
 
+  tunnelStats: {},
+  loadTunnelStats: async () => {
+    try {
+      const stats = await api.stats.getTunnelStats();
+      set({ tunnelStats: stats });
+    } catch {
+      // Счётчики недоступны — оставляем последнее известное состояние
+    }
+  },
+  initStatsPolling: () => {
+    if (statsPollInterval) return;
+    statsPollInterval = setInterval(() => {
+      const hasActive = get().connections.some((c) => c.status === "connected");
+      if (hasActive) get().loadTunnelStats();
+    }, 2000);
+  },
+
   initVpnEventListener: () => {
     if (vpnEventUnlisten) return; // уже инициализирован
     listen<{ id: string; status: VpnStatus; connected_since?: number; error?: ConnectError }>("vpn-status-changed", (event) => {
@@ -296,9 +322,11 @@ export const useStore = create<Store>((set, get) => ({
       }));
       if (status === "connected") {
         set({ connectingId: null });
+        get().loadTunnelStats();
       }
       if (status === "disconnected") {
         set({ disconnectingId: null });
+        get().loadTunnelStats();
       }
     }).then((unlisten) => {
       vpnEventUnlisten = unlisten;

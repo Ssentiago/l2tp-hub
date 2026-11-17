@@ -28,6 +28,9 @@
 | `last_disconnected_at` | number | Последнее отключение |
 | `tunnel_mode` | `TunnelMode` | Режим маршрутизации: enum `split` или `full` |
 | `split_routes` | array | Подсети для split-туннеля в нотации CIDR |
+| `total_uptime_secs` | number | Суммарное время всех завершённых сессий (секунды) |
+| `total_bytes_in` | number | Суммарный входящий трафик завершённых сессий (байты) |
+| `total_bytes_out` | number | Суммарный исходящий трафик завершённых сессий (байты) |
 
 Поле `service_name` ранее называлось `name`. Для совместимости оставлен алиас
 `#[serde(alias = "name")]`, поэтому старые данные десериализуются корректно.
@@ -75,7 +78,8 @@ enum со значениями `split` и `full`, serde-имена в нижне
 workspaces с каскадным удалением), `name`, `display_name`, `server`, `username`,
 `keychain_key`, `shared_secret_key`, `service_hash`, `labels` (JSON), `connect_count`,
 `connected_since`, `last_connected_at`, `last_disconnected_at`, `tunnel_mode`,
-`split_routes` (JSON). Колонка `tunnel_mode` хранит текстовое имя режима; при чтении
+`split_routes` (JSON), `total_uptime_secs`, `total_bytes_in`, `total_bytes_out`.
+Колонка `tunnel_mode` хранит текстовое имя режима; при чтении
 значение строго парсится в `TunnelMode`, незнакомое значение приводит к ошибке
 загрузки.
 
@@ -84,7 +88,8 @@ workspaces с каскадным удалением), `name`, `display_name`, `s
 
 ### Миграции
 
-При создании таблиц колонки `tunnel_mode` и `split_routes` добавляются повторно через
+При создании таблиц колонки `tunnel_mode`, `split_routes`, `total_uptime_secs`,
+`total_bytes_in` и `total_bytes_out` добавляются повторно через
 `ALTER TABLE`, ошибка "колонка уже существует" игнорируется. Это простая эволюция
 схемы без отдельного инструмента миграций.
 

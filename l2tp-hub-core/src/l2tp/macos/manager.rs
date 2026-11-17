@@ -171,6 +171,18 @@ impl L2tpManager {
         let _daemon_guard = DAEMON_STARTUP.lock().await;
         let is_first = !crate::l2tp::is_process_running_global("xl2tpd");
 
+        if !is_first {
+            // Рестарт xl2tpd пересоздаёт ppp-интерфейсы активных подключений,
+            // счётчики интерфейса обнуляются — фиксируем их в накопителе сессии
+            for active_id in self.active_lock().iter() {
+                if let Some(c) = store.find_connection(active_id) {
+                    if let Some(counters) = l2tp::stats::ppp_counters(&c.service_name) {
+                        l2tp::stats::accumulate_counters(active_id, counters);
+                    }
+                }
+            }
+        }
+
         let connect_result = tokio::time::timeout(
                 std::time::Duration::from_secs(60),
                 l2tp::connect_vpn(
@@ -281,12 +293,17 @@ impl L2tpManager {
             .ok_or("Connection not found")?
             .clone();
 
+        // Снимаем счётчики до остановки туннеля: после disconnect интерфейс
+        // pppN уничтожается вместе со своими значениями
+        let session_counters = l2tp::stats::take_session_counters(id, &conn.service_name);
+
         l2tp::logs::save_session_logs(
             id,
             &conn.service_name,
             &conn.server,
             conn.connected_since,
             None,
+            session_counters,
         );
 
         let is_last = self.active_lock().len() <= 1;
@@ -298,6 +315,18 @@ impl L2tpManager {
             let original_gw = l2tp::get_default_gateway().unwrap_or_default();
             // Собираем ConnData для оставшихся активных (без текущего)
             let remaining = self.collect_remaining_conn_data(&store, id)?;
+            // Рестарт xl2tpd пересоздаёт ppp-интерфейсы оставшихся подключений,
+            // их счётчики обнуляются — фиксируем их в накопителе сессии
+            for remaining_id in self.active_lock().iter() {
+                if remaining_id == id {
+                    continue;
+                }
+                if let Some(c) = store.find_connection(remaining_id) {
+                    if let Some(counters) = l2tp::stats::ppp_counters(&c.service_name) {
+                        l2tp::stats::accumulate_counters(remaining_id, counters);
+                    }
+                }
+            }
             // Не последнее — restart xl2tpd с оставшимися LAC
             crate::l2tp::macos::disconnect_single(
                 self.executor.as_ref(),
@@ -314,7 +343,7 @@ impl L2tpManager {
         let conn_id = id.to_string();
         self.store
             .mutate(move |s| {
-                update_disconnect_stats(s, &conn_id);
+                update_disconnect_stats(s, &conn_id, session_counters);
                 Ok(())
             })
             .await
@@ -372,6 +401,25 @@ impl L2tpManager {
                 HashSet::new()
             }
         }
+    }
+
+    /// Живая статистика активных туннелей: время сессии и счётчики интерфейса.
+    pub async fn all_stats(&self) -> HashMap<String, l2tp::stats::TunnelStats> {
+        let store = self.store.load().await;
+        let mut map = HashMap::new();
+        for id in self.active_lock().iter() {
+            let Some(conn) = store.find_connection(id) else { continue };
+            map.insert(
+                id.clone(),
+                l2tp::stats::TunnelStats {
+                    connection_id: id.clone(),
+                    interface: l2tp::stats::interface_name(&conn.service_name),
+                    connected_since: conn.connected_since,
+                    counters: l2tp::stats::session_counters(id, &conn.service_name),
+                },
+            );
+        }
+        map
     }
 }
 
@@ -455,11 +503,22 @@ fn update_connect_stats(store: &mut store::Store, id: &str) {
     }
 }
 
-fn update_disconnect_stats(store: &mut store::Store, id: &str) {
+fn update_disconnect_stats(
+    store: &mut store::Store,
+    id: &str,
+    session: Option<crate::l2tp::stats::IfaceCounters>,
+) {
     let now = now_secs();
     for ws in &mut store.workspaces {
         if let Some(c) = ws.connections.iter_mut().find(|c| c.id == id) {
             log::debug!("[stats] disconnect: clearing connected_since, was={:?}", c.connected_since);
+            if let Some(since) = c.connected_since {
+                c.total_uptime_secs = c.total_uptime_secs.saturating_add((now - since).max(0) as u64);
+            }
+            if let Some(counters) = session {
+                c.total_bytes_in = c.total_bytes_in.saturating_add(counters.bytes_in);
+                c.total_bytes_out = c.total_bytes_out.saturating_add(counters.bytes_out);
+            }
             c.connected_since = None;
             c.last_disconnected_at = Some(now);
             return;

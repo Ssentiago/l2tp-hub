@@ -60,6 +60,33 @@ export function absoluteTime(ts: number | null): string {
   });
 }
 
+/** Форматирование объёма трафика: 512 B, 1.2 KB, 34.5 MB, 1.1 GB */
+export function formatBytes(bytes: number): string {
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let value = Math.max(0, bytes);
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  const rounded = unit === 0 || value >= 100 ? Math.round(value) : Math.round(value * 10) / 10;
+  return `${rounded} ${units[unit]}`;
+}
+
+/** Форматирование длительности: 5:03, 1:05:03, 2д 1:05:03 */
+export function formatDuration(secs: number): string {
+  const total = Math.max(0, Math.floor(secs));
+  const d = Math.floor(total / 86400);
+  const h = Math.floor((total % 86400) / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const time =
+    d > 0 || h > 0
+      ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+      : `${m}:${String(s).padStart(2, "0")}`;
+  return d > 0 ? i18n.t("time.durationDays", { n: d, time }) : time;
+}
+
 /** Проверяет совпадение поиска по company + branch + ip + service_name */
 export function matchesQuery(conn: Connection, query: string): boolean {
   if (!query.trim()) return true;

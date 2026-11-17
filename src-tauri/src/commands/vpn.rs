@@ -76,6 +76,7 @@ pub async fn connect_vpn(
                     &conn.server,
                     conn.connected_since,
                     Some(&err_text),
+                    crate::l2tp::stats::take_session_counters(&id, &conn.service_name),
                 );
             }
             let _ = app.emit("vpn-status-changed", serde_json::json!({
@@ -204,6 +205,17 @@ pub async fn get_all_vpn_statuses(
 ) -> Result<std::collections::HashMap<String, VpnStatus>, AppError> {
     let manager = manager.inner().clone();
     Ok(manager.all_statuses().await)
+}
+
+/// Живая статистика активных туннелей: время текущей сессии и счётчики
+/// интерфейса pppN.
+#[tauri::command]
+#[specta::specta]
+pub async fn get_tunnel_stats(
+    manager: State<'_, L2tpManager>,
+) -> Result<std::collections::HashMap<String, crate::l2tp::stats::TunnelStats>, AppError> {
+    let manager = manager.inner().clone();
+    Ok(manager.all_stats().await)
 }
 
 // ---------------------------------------------------------------------------

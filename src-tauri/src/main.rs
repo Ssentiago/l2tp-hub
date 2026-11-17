@@ -47,6 +47,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::disconnect_vpn,
         commands::get_vpn_status,
         commands::get_all_vpn_statuses,
+        commands::get_tunnel_stats,
         commands::check_connection,
         commands::authenticate_sudo,
         commands::check_sudo_session,

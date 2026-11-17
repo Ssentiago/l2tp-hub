@@ -16,6 +16,9 @@ export const api = {
     switchTunnelMode: (id: string, newMode: Parameters<typeof commands.switchTunnelMode>[1]) =>
       commands.switchTunnelMode(id, newMode),
   },
+  stats: {
+    getTunnelStats: () => commands.getTunnelStats(),
+  },
   logs: {
     getHistory: (id: string) => commands.getConnectionHistory(id),
     getSession: (id: string, timestamp: number) =>

@@ -67,6 +67,9 @@ pub(crate) async fn create_tables(pool: &SqlitePool) -> Result<(), String> {
             last_disconnected_at INTEGER,
             tunnel_mode TEXT NOT NULL DEFAULT 'full',
             split_routes TEXT NOT NULL DEFAULT '[]',
+            total_uptime_secs INTEGER NOT NULL DEFAULT 0,
+            total_bytes_in INTEGER NOT NULL DEFAULT 0,
+            total_bytes_out INTEGER NOT NULL DEFAULT 0,
             FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
         )",
     )
@@ -90,6 +93,15 @@ pub(crate) async fn create_tables(pool: &SqlitePool) -> Result<(), String> {
         .execute(pool)
         .await;
     let _ = sqlx::query("ALTER TABLE connections ADD COLUMN split_routes TEXT NOT NULL DEFAULT '[]'")
+        .execute(pool)
+        .await;
+    let _ = sqlx::query("ALTER TABLE connections ADD COLUMN total_uptime_secs INTEGER NOT NULL DEFAULT 0")
+        .execute(pool)
+        .await;
+    let _ = sqlx::query("ALTER TABLE connections ADD COLUMN total_bytes_in INTEGER NOT NULL DEFAULT 0")
+        .execute(pool)
+        .await;
+    let _ = sqlx::query("ALTER TABLE connections ADD COLUMN total_bytes_out INTEGER NOT NULL DEFAULT 0")
         .execute(pool)
         .await;
 
@@ -125,7 +137,7 @@ pub(crate) async fn load_store_conn(db_conn: &mut SqliteConnection) -> Result<St
     let mut result_workspaces = Vec::new();
     for ws_row in &workspaces {
         let conns = sqlx::query_as::<_, ConnectionRow>(
-            "SELECT id, workspace_id, name, display_name, server, username, keychain_key, shared_secret_key, service_hash, labels, connect_count, connected_since, last_connected_at, last_disconnected_at, tunnel_mode, split_routes FROM connections WHERE workspace_id = ?",
+            "SELECT id, workspace_id, name, display_name, server, username, keychain_key, shared_secret_key, service_hash, labels, connect_count, connected_since, last_connected_at, last_disconnected_at, tunnel_mode, split_routes, total_uptime_secs, total_bytes_in, total_bytes_out FROM connections WHERE workspace_id = ?",
         )
         .bind(&ws_row.id)
         .fetch_all(&mut *db_conn)
@@ -160,6 +172,9 @@ pub(crate) async fn load_store_conn(db_conn: &mut SqliteConnection) -> Result<St
                         last_disconnected_at: c.last_disconnected_at,
                         tunnel_mode: c.tunnel_mode.parse()?,
                         split_routes: serde_json::from_str(&c.split_routes).unwrap_or_default(),
+                        total_uptime_secs: c.total_uptime_secs as u64,
+                        total_bytes_in: c.total_bytes_in as u64,
+                        total_bytes_out: c.total_bytes_out as u64,
                     })
                 })
                 .collect::<Result<Vec<_>, String>>()?,
@@ -283,7 +298,7 @@ pub(crate) async fn save_store_tx(db_conn: &mut SqliteConnection, store: &Store)
 
     // Connections: upsert changed and moved rows, delete vanished rows
     let existing_connections = sqlx::query_as::<_, ConnectionRow>(
-        "SELECT id, workspace_id, name, display_name, server, username, keychain_key, shared_secret_key, service_hash, labels, connect_count, connected_since, last_connected_at, last_disconnected_at, tunnel_mode, split_routes FROM connections",
+        "SELECT id, workspace_id, name, display_name, server, username, keychain_key, shared_secret_key, service_hash, labels, connect_count, connected_since, last_connected_at, last_disconnected_at, tunnel_mode, split_routes, total_uptime_secs, total_bytes_in, total_bytes_out FROM connections",
     )
     .fetch_all(&mut *db_conn)
     .await
@@ -302,7 +317,7 @@ pub(crate) async fn save_store_tx(db_conn: &mut SqliteConnection, store: &Store)
             let labels_json = serde_json::to_string(&conn.labels).unwrap_or_default();
             let split_routes_json = serde_json::to_string(&conn.split_routes).unwrap_or_default();
             sqlx::query(
-                "INSERT OR REPLACE INTO connections (id, workspace_id, name, display_name, server, username, keychain_key, shared_secret_key, service_hash, labels, connect_count, connected_since, last_connected_at, last_disconnected_at, tunnel_mode, split_routes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT OR REPLACE INTO connections (id, workspace_id, name, display_name, server, username, keychain_key, shared_secret_key, service_hash, labels, connect_count, connected_since, last_connected_at, last_disconnected_at, tunnel_mode, split_routes, total_uptime_secs, total_bytes_in, total_bytes_out) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             )
             .bind(&conn.id)
             .bind(&ws.id)
@@ -320,6 +335,9 @@ pub(crate) async fn save_store_tx(db_conn: &mut SqliteConnection, store: &Store)
             .bind(conn.last_disconnected_at)
             .bind(conn.tunnel_mode.as_str())
             .bind(&split_routes_json)
+            .bind(conn.total_uptime_secs as i64)
+            .bind(conn.total_bytes_in as i64)
+            .bind(conn.total_bytes_out as i64)
             .execute(&mut *db_conn)
             .await
             .map_err(|e| format!("upsert connection: {}", e))?;
@@ -380,6 +398,9 @@ fn connection_matches(row: &ConnectionRow, ws_id: &str, conn: &Connection) -> bo
         && row.last_disconnected_at == conn.last_disconnected_at
         && row.tunnel_mode == conn.tunnel_mode.as_str()
         && split_routes_match
+        && row.total_uptime_secs == conn.total_uptime_secs as i64
+        && row.total_bytes_in == conn.total_bytes_in as i64
+        && row.total_bytes_out == conn.total_bytes_out as i64
 }
 
 pub async fn active_workspace_id(pool: &SqlitePool) -> Option<String> {
@@ -397,7 +418,7 @@ pub async fn connections_for_workspace(
     let rows = sqlx::query_as::<_, ConnectionRow>(
         "SELECT id, workspace_id, name, display_name, server, username, keychain_key, shared_secret_key, \
          service_hash, labels, connect_count, connected_since, last_connected_at, last_disconnected_at, \
-         tunnel_mode, split_routes \
+         tunnel_mode, split_routes, total_uptime_secs, total_bytes_in, total_bytes_out \
          FROM connections WHERE workspace_id = ?",
     )
     .bind(ws_id)
@@ -426,6 +447,9 @@ pub async fn connections_for_workspace(
                 last_disconnected_at: c.last_disconnected_at,
                 tunnel_mode: c.tunnel_mode.parse()?,
                 split_routes: serde_json::from_str(&c.split_routes).unwrap_or_default(),
+                total_uptime_secs: c.total_uptime_secs as u64,
+                total_bytes_in: c.total_bytes_in as u64,
+                total_bytes_out: c.total_bytes_out as u64,
             })
         })
         .collect::<Result<Vec<_>, String>>()
@@ -523,6 +547,9 @@ struct ConnectionRow {
     last_disconnected_at: Option<i64>,
     tunnel_mode: String,
     split_routes: String,
+    total_uptime_secs: i64,
+    total_bytes_in: i64,
+    total_bytes_out: i64,
 }
 
 #[derive(sqlx::FromRow)]
@@ -567,6 +594,9 @@ mod tests {
             last_disconnected_at: Some(300),
             tunnel_mode: TunnelMode::Split,
             split_routes: vec!["10.0.0.0/8".into()],
+            total_uptime_secs: 3600,
+            total_bytes_in: 1024,
+            total_bytes_out: 2048,
         }
     }
 
@@ -627,6 +657,9 @@ mod tests {
         assert_eq!(c1.display_name, "Display c-1");
         assert_eq!(c1.tunnel_mode, TunnelMode::Split);
         assert_eq!(c1.split_routes, vec!["10.0.0.0/8".to_string()]);
+        assert_eq!(c1.total_uptime_secs, 3600);
+        assert_eq!(c1.total_bytes_in, 1024);
+        assert_eq!(c1.total_bytes_out, 2048);
         assert_eq!(c1.labels.get("company").map(String::as_str), Some("ACME"));
         assert_eq!(c1.connect_count, 3);
         assert_eq!(c1.service_hash.as_deref(), Some("hash-c-1"));
