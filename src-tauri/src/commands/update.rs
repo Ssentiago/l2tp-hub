@@ -1,3 +1,4 @@
+use l2tp_hub_core::error::{AppError, AppErrorCode};
 use crate::log;
 use serde::Serialize;
 use std::io::Write;
@@ -17,7 +18,7 @@ fn cache_dir() -> std::path::PathBuf {
 
 #[tauri::command]
 #[specta::specta]
-pub async fn check_update(current_version: String) -> Result<Option<UpdateInfo>, String> {
+pub async fn check_update(current_version: String) -> Result<Option<UpdateInfo>, AppError> {
     log!("[check_update] current={}", current_version);
 
     let url = format!("https://api.github.com/repos/{}/releases/latest", REPO);
@@ -26,20 +27,20 @@ pub async fn check_update(current_version: String) -> Result<Option<UpdateInfo>,
         .header("User-Agent", "l2tp-hub")
         .send()
         .await
-        .map_err(|e| format!("Failed to check updates: {}", e))?;
+        .map_err(|e| AppError::detail(AppErrorCode::UpdateCheckFailed, e.to_string()))?;
 
     if !resp.status().is_success() {
-        return Err(format!("GitHub API returned {}", resp.status()));
+        return Err(AppError::detail(AppErrorCode::UpdateHttpError, resp.status().to_string()));
     }
 
     let release: serde_json::Value = resp
         .json()
         .await
-        .map_err(|e| format!("Failed to parse response: {}", e))?;
+        .map_err(|e| AppError::detail(AppErrorCode::UpdateParseFailed, e.to_string()))?;
 
     let tag = release["tag_name"]
         .as_str()
-        .ok_or("Missing tag_name")?;
+        .ok_or(AppError::new(AppErrorCode::UpdateMissingTag))?;
     let latest_version = tag.trim_start_matches('v').to_string();
 
     if latest_version == current_version {
@@ -51,7 +52,7 @@ pub async fn check_update(current_version: String) -> Result<Option<UpdateInfo>,
 
     let assets = release["assets"]
         .as_array()
-        .ok_or("Missing assets")?;
+        .ok_or(AppError::new(AppErrorCode::UpdateMissingAssets))?;
 
     #[cfg(target_os = "macos")]
     let pattern = ".dmg";
@@ -61,24 +62,24 @@ pub async fn check_update(current_version: String) -> Result<Option<UpdateInfo>,
     let asset = assets
         .iter()
         .find(|a| a["name"].as_str().map_or(false, |n: &str| n.contains(pattern)))
-        .ok_or("No matching asset found")?;
+        .ok_or(AppError::new(AppErrorCode::UpdateNoMatchingAsset))?;
 
     Ok(Some(UpdateInfo {
         latest_version,
         download_url: asset["browser_download_url"]
             .as_str()
-            .ok_or("Missing download_url")?
+            .ok_or(AppError::new(AppErrorCode::UpdateMissingDownloadUrl))?
             .to_string(),
         asset_name: asset["name"]
             .as_str()
-            .ok_or("Missing asset name")?
+            .ok_or(AppError::new(AppErrorCode::UpdateMissingAssetName))?
             .to_string(),
     }))
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn apply_update(download_url: String, asset_name: String) -> Result<(), String> {
+pub async fn apply_update(download_url: String, asset_name: String) -> Result<(), AppError> {
     let file_path = cache_dir().join(&asset_name);
 
     if !file_path.exists() {
@@ -89,22 +90,22 @@ pub async fn apply_update(download_url: String, asset_name: String) -> Result<()
             .header("User-Agent", "l2tp-hub")
             .send()
             .await
-            .map_err(|e| format!("Download failed: {}", e))?;
+            .map_err(|e| AppError::detail(AppErrorCode::DownloadFailed, e.to_string()))?;
 
         if !resp.status().is_success() {
-            return Err(format!("Download failed: {}", resp.status()));
+            return Err(AppError::detail(AppErrorCode::DownloadFailed, resp.status().to_string()));
         }
 
         let _ = std::fs::create_dir_all(cache_dir());
         let mut file = std::fs::File::create(&file_path)
-            .map_err(|e| format!("Failed to create file: {}", e))?;
+            .map_err(|e| AppError::detail(AppErrorCode::FileCreateFailed, e.to_string()))?;
 
         let mut stream = resp.bytes_stream();
         use futures_util::StreamExt;
         while let Some(chunk) = stream.next().await {
-            let chunk = chunk.map_err(|e| format!("Download error: {}", e))?;
+            let chunk = chunk.map_err(|e| AppError::detail(AppErrorCode::DownloadError, e.to_string()))?;
             file.write_all(&chunk)
-                .map_err(|e| format!("Write error: {}", e))?;
+                .map_err(|e| AppError::detail(AppErrorCode::WriteError, e.to_string()))?;
         }
 
         log!("[apply_update] saved to {:?}", file_path);
@@ -117,7 +118,7 @@ pub async fn apply_update(download_url: String, asset_name: String) -> Result<()
         let _ = std::process::Command::new("open")
             .arg(&file_path)
             .spawn()
-            .map_err(|e| format!("Failed to open DMG: {}", e))?;
+            .map_err(|e| AppError::detail(AppErrorCode::DmgOpenFailed, e.to_string()))?;
         log!("[apply_update] opened DMG for user to install");
     }
 
@@ -125,7 +126,7 @@ pub async fn apply_update(download_url: String, asset_name: String) -> Result<()
     {
         std::process::Command::new(&file_path)
             .spawn()
-            .map_err(|e| format!("Failed to launch installer: {}", e))?;
+            .map_err(|e| AppError::detail(AppErrorCode::InstallerLaunchFailed, e.to_string()))?;
         log!("[apply_update] launched installer");
     }
 

@@ -1,4 +1,45 @@
 use std::sync::{Arc, Mutex};
+use l2tp_hub_core::error::{AppError, AppErrorCode};
+use std::fmt;
+use serde::Serialize;
+
+/// Статус сервиса helper для UI. Текст для отображения выбирается по варианту
+/// во фронтенде, английская форма из `Display` идёт в логи.
+#[derive(Clone, Debug, Serialize, specta::Type)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum HelperStatus {
+    Idle,
+    UpdatingServiceDev,
+    StartingService,
+    InstallRequired,
+    RunningAsAdmin,
+    UpdatingService,
+    UpdatingServiceOld,
+    WaitingService { attempt: u32, retries: u32 },
+    ServiceConnected,
+    ServiceNotResponding,
+    ReinstallingService,
+}
+
+impl fmt::Display for HelperStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            HelperStatus::Idle => write!(f, "idle"),
+            HelperStatus::UpdatingServiceDev => write!(f, "Updating service (dev build)..."),
+            HelperStatus::StartingService => write!(f, "Starting service..."),
+            HelperStatus::InstallRequired => write!(f, "Service installation required..."),
+            HelperStatus::RunningAsAdmin => write!(f, "Running as administrator"),
+            HelperStatus::UpdatingService => write!(f, "Updating service..."),
+            HelperStatus::UpdatingServiceOld => write!(f, "Updating service (old version)..."),
+            HelperStatus::WaitingService { attempt, retries } => {
+                write!(f, "Waiting for service ({}/{})...", attempt, retries)
+            }
+            HelperStatus::ServiceConnected => write!(f, "Service connected"),
+            HelperStatus::ServiceNotResponding => write!(f, "Service not responding"),
+            HelperStatus::ReinstallingService => write!(f, "Reinstalling service..."),
+        }
+    }
+}
 
 // ---------------------------------------------------------------------------
 // SudoSession — управление привилегированными командами
@@ -45,15 +86,15 @@ const TRUST_FILE: &str = "/Library/PrivilegedHelperTools/l2tp-hub-helper.trust";
 #[derive(Clone)]
 pub struct SudoSession {
     authenticated: Arc<Mutex<bool>>,
-    /// Текст статуса для UI (попытки подключения к хелперу и т.д.)
-    status_text: Arc<Mutex<String>>,
+    /// Статус для UI (попытки подключения к хелперу и т.д.)
+    status: Arc<Mutex<HelperStatus>>,
 }
 
 impl SudoSession {
     pub fn new() -> Self {
         Self {
             authenticated: Arc::new(Mutex::new(false)),
-            status_text: Arc::new(Mutex::new(String::new())),
+            status: Arc::new(Mutex::new(HelperStatus::Idle)),
         }
     }
 
@@ -61,19 +102,19 @@ impl SudoSession {
         *self.authenticated.lock().unwrap()
     }
 
-    /// Текст статуса для отображения в UI (попытки, ожидание и т.д.)
-    pub fn status_text(&self) -> String {
-        self.status_text.lock().unwrap().clone()
+    /// Статус для отображения в UI (попытки, ожидание и т.д.)
+    pub fn status(&self) -> HelperStatus {
+        self.status.lock().unwrap().clone()
     }
 
-    fn set_status(&self, text: &str) {
-        crate::log!("[helper] {}", text);
-        *self.status_text.lock().unwrap() = text.to_string();
+    fn set_status(&self, status: HelperStatus) {
+        crate::log!("[helper] {}", status);
+        *self.status.lock().unwrap() = status;
     }
 
     /// Проверяет связь с хелпером и версию. Устанавливает/обновляет если нужно.
     #[cfg(target_os = "macos")]
-    pub fn authenticate(&self) -> Result<(), String> {
+    pub fn authenticate(&self) -> Result<(), AppError> {
         use crate::helper;
 
         const EXPECTED_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -84,7 +125,7 @@ impl SudoSession {
         #[cfg(debug_assertions)]
         if helper_installed() && helper_binary_changed() {
             crate::log!("[helper] dev-helper binary differs from build output, reinstalling");
-            self.set_status("Updating service (dev build)...");
+            self.set_status(HelperStatus::UpdatingServiceDev);
             reinstall_helper()?;
             return self.wait_for_helper_after_install(EXPECTED_VERSION);
         }
@@ -96,7 +137,7 @@ impl SudoSession {
 
         // Шаг 2: хелпер установлен но не запущен? Попробуем запустить
         if helper_installed() {
-            self.set_status("Starting service...");
+            self.set_status(HelperStatus::StartingService);
             start_helper()?;
             if self.wait_for_helper(EXPECTED_VERSION)? {
                 return Ok(());
@@ -104,7 +145,7 @@ impl SudoSession {
         }
 
         // Шаг 3: первая установка через osascript
-        self.set_status("Service installation required...");
+        self.set_status(HelperStatus::InstallRequired);
         install_helper()?;
 
         // Ждём запуска с retry
@@ -113,15 +154,15 @@ impl SudoSession {
 
     /// Windows: процесс уже elevated (requireAdministrator manifest).
     #[cfg(target_os = "windows")]
-    pub fn authenticate(&self) -> Result<(), String> {
+    pub fn authenticate(&self) -> Result<(), AppError> {
         *self.authenticated.lock().unwrap() = true;
-        self.set_status("Running as administrator");
+        self.set_status(HelperStatus::RunningAsAdmin);
         Ok(())
     }
 
     /// Проверяет версию уже запущенного хелпера
     #[cfg(target_os = "macos")]
-    fn check_version_and_auth(&self, expected: &str) -> Result<(), String> {
+    fn check_version_and_auth(&self, expected: &str) -> Result<(), AppError> {
         use crate::helper;
 
         match helper::query_helper_version() {
@@ -131,14 +172,14 @@ impl SudoSession {
             }
             Ok(v) => {
                 crate::log!("[helper] version mismatch: installed={}, expected={}", v, expected);
-                self.set_status("Updating service...");
+                self.set_status(HelperStatus::UpdatingService);
                 reinstall_helper()?;
                 self.wait_for_helper_after_install(expected)
             }
             Err(_) => {
                 // Старый хелпер без команды `version` — переустанавливаем
                 crate::log!("[helper] version query failed (old helper without version command), reinstalling");
-                self.set_status("Updating service (old version)...");
+                self.set_status(HelperStatus::UpdatingServiceOld);
                 reinstall_helper()?;
                 self.wait_for_helper_after_install(expected)
             }
@@ -147,15 +188,15 @@ impl SudoSession {
 
     /// Ждёт запуска хелпера после установки: 3 попытки по 5 секунд
     #[cfg(target_os = "macos")]
-    fn wait_for_helper_after_install(&self, expected_version: &str) -> Result<(), String> {
+    fn wait_for_helper_after_install(&self, expected_version: &str) -> Result<(), AppError> {
         use crate::helper;
 
         for attempt in 1..=HELPER_CONNECT_RETRIES {
-            self.set_status(&format!("Waiting for service ({}/{})...", attempt, HELPER_CONNECT_RETRIES));
+            self.set_status(HelperStatus::WaitingService { attempt, retries: HELPER_CONNECT_RETRIES });
             std::thread::sleep(HELPER_CONNECT_DELAY);
 
             if helper::is_helper_running() {
-                self.set_status("Service connected");
+                self.set_status(HelperStatus::ServiceConnected);
                 // Проверяем версию (новый хелпер должен ответить)
                 match helper::query_helper_version() {
                     Ok(v) if v == expected_version => {
@@ -178,31 +219,31 @@ impl SudoSession {
             }
         }
 
-        self.set_status("Service not responding");
-        Err("The service is installed but not responding after 3 attempts. Restart the application.".to_string())
+        self.set_status(HelperStatus::ServiceNotResponding);
+        Err(AppError::new(AppErrorCode::ServiceNotResponding))
     }
 
     /// Ждёт запуска уже установленного хелпера (после start_helper)
     #[cfg(target_os = "macos")]
-    fn wait_for_helper(&self, expected_version: &str) -> Result<bool, String> {
+    fn wait_for_helper(&self, expected_version: &str) -> Result<bool, AppError> {
         use crate::helper;
 
         for attempt in 1..=HELPER_CONNECT_RETRIES {
-            self.set_status(&format!("Waiting for service ({}/{})...", attempt, HELPER_CONNECT_RETRIES));
+            self.set_status(HelperStatus::WaitingService { attempt, retries: HELPER_CONNECT_RETRIES });
             std::thread::sleep(HELPER_CONNECT_DELAY);
 
             if helper::is_helper_running() {
                 // Проверяем версию
                 match helper::query_helper_version() {
                     Ok(v) if v == expected_version => {
-                        self.set_status("Service connected");
+                        self.set_status(HelperStatus::ServiceConnected);
                         *self.authenticated.lock().unwrap() = true;
                         return Ok(true);
                     }
                     _ => {
                         // Старая версия — переустанавливаем
                         crate::log!("[helper] outdated after start, reinstalling");
-                        self.set_status("Updating service...");
+                        self.set_status(HelperStatus::UpdatingService);
                         reinstall_helper()?;
                         return self.wait_for_helper_after_install(expected_version).map(|_| true);
                     }
@@ -212,7 +253,7 @@ impl SudoSession {
 
         // Не запустился — пробуем переустановить
         crate::log!("[helper] failed to start after {} attempts, reinstalling", HELPER_CONNECT_RETRIES);
-        self.set_status("Reinstalling service...");
+        self.set_status(HelperStatus::ReinstallingService);
         reinstall_helper()?;
         self.wait_for_helper_after_install(expected_version).map(|_| true)
     }
@@ -283,7 +324,7 @@ fn helper_binary_changed() -> bool {
 
 /// Запустить уже установленный хелпер через launchctl
 #[cfg(target_os = "macos")]
-fn start_helper() -> Result<(), String> {
+fn start_helper() -> Result<(), AppError> {
     let plist = hp::plist();
     let label_ref = format!("system/{}", hp::LABEL);
 
@@ -328,7 +369,7 @@ fn start_helper() -> Result<(), String> {
 
 /// Переустановить хелпер: остановить старый, установить новый через osascript
 #[cfg(target_os = "macos")]
-fn reinstall_helper() -> Result<(), String> {
+fn reinstall_helper() -> Result<(), AppError> {
     crate::log!("[helper] reinstalling: stopping old daemon...");
     let _ = std::process::Command::new("launchctl")
         .args(["bootout", &format!("system/{}", hp::LABEL)])
@@ -340,14 +381,20 @@ fn reinstall_helper() -> Result<(), String> {
 /// Установить хелпер: скопировать бинарник + plist, записать файл доверия,
 /// bootstrap через osascript.
 #[cfg(target_os = "macos")]
-fn install_helper() -> Result<(), String> {
+fn install_helper() -> Result<(), AppError> {
     let (helper_bin, helper_plist) = helper_source_files()?;
 
     if !helper_bin.exists() {
-        return Err(format!("Helper binary not found: {:?}", helper_bin));
+        return Err(AppError::detail(
+            AppErrorCode::HelperInstallFailed,
+            format!("Helper binary not found: {:?}", helper_bin),
+        ));
     }
     if !helper_plist.exists() {
-        return Err(format!("Helper plist not found: {:?}", helper_plist));
+        return Err(AppError::detail(
+            AppErrorCode::HelperInstallFailed,
+            format!("Helper plist not found: {:?}", helper_plist),
+        ));
     }
 
     let bin_str = helper_bin.to_string_lossy();
@@ -376,9 +423,9 @@ fn install_helper() -> Result<(), String> {
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
         if stderr.contains("(-128)") {
-            Err("Installation canceled by the user".to_string())
+            Err(AppError::new(AppErrorCode::InstallCanceled))
         } else {
-            Err(format!("Helper installation failed: {}", stderr))
+            Err(AppError::detail(AppErrorCode::HelperInstallFailed, stderr.to_string()))
         }
     }
 }

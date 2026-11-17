@@ -1,3 +1,4 @@
+use l2tp_hub_core::error::{AppError, AppErrorCode};
 use crate::models::label;
 use crate::store;
 
@@ -13,7 +14,7 @@ pub async fn save_label(
     _app_handle: tauri::AppHandle,
     id: String,
     name: String,
-) -> Result<label::Label, String> {
+) -> Result<label::Label, AppError> {
     let label_id = id.clone();
     let state = crate::STORE
         .get()
@@ -35,12 +36,12 @@ pub async fn save_label(
         .labels
         .into_iter()
         .find(|l| l.id == id)
-        .ok_or_else(|| "Label not found".to_string())
+        .ok_or_else(|| AppError::new(AppErrorCode::LabelNotFound))
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn delete_label(_app_handle: tauri::AppHandle, id: String) -> Result<(), String> {
+pub async fn delete_label(_app_handle: tauri::AppHandle, id: String) -> Result<(), AppError> {
     crate::STORE
         .get()
         .expect("store actor")
@@ -49,9 +50,9 @@ pub async fn delete_label(_app_handle: tauri::AppHandle, id: String) -> Result<(
                 .labels
                 .iter()
                 .find(|l| l.id == id)
-                .ok_or("Label not found")?;
+                .ok_or(AppError::new(AppErrorCode::LabelNotFound))?;
             if label.built_in {
-                return Err("Cannot delete a built-in label".into());
+                return Err(AppError::new(AppErrorCode::CannotDeleteBuiltInLabel));
             }
             s.labels.retain(|l| l.id != id);
             for ws in &mut s.workspaces {

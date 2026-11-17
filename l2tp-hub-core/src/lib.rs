@@ -1,5 +1,6 @@
 pub mod db;
 pub mod env;
+pub mod error;
 pub mod executor;
 pub mod guardian;
 pub mod keychain;

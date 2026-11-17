@@ -4,6 +4,8 @@ use crate::helper;
 use crate::log;
 #[cfg(target_os = "macos")]
 use crate::sudo::SudoSession;
+use l2tp_hub_core::error::AppError;
+use crate::sudo::HelperStatus;
 #[cfg(target_os = "macos")]
 use tauri::State;
 
@@ -12,7 +14,7 @@ use tauri::State;
 #[cfg(target_os = "macos")]
 pub async fn authenticate_sudo(
     sudo: State<'_, SudoSession>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     log!("[authenticate_sudo] called");
     let sudo = sudo.inner().clone();
     tokio::task::spawn_blocking(move || sudo.authenticate())
@@ -30,8 +32,8 @@ pub fn check_sudo_session(sudo: State<'_, SudoSession>) -> bool {
 #[tauri::command]
 #[specta::specta]
 #[cfg(target_os = "macos")]
-pub async fn get_helper_status_text(sudo: State<'_, SudoSession>) -> Result<String, ()> {
-    Ok(sudo.status_text())
+pub async fn get_helper_status(sudo: State<'_, SudoSession>) -> Result<HelperStatus, ()> {
+    Ok(sudo.status())
 }
 
 #[tauri::command]
@@ -46,7 +48,7 @@ pub async fn check_helper_status() -> bool {
 #[tauri::command]
 #[specta::specta]
 #[cfg(target_os = "windows")]
-pub async fn authenticate_sudo() -> Result<(), String> {
+pub async fn authenticate_sudo() -> Result<(), AppError> {
     Ok(())
 }
 
@@ -60,8 +62,8 @@ pub fn check_sudo_session() -> bool {
 #[tauri::command]
 #[specta::specta]
 #[cfg(target_os = "windows")]
-pub async fn get_helper_status_text() -> Result<String, ()> {
-    Ok(String::new())
+pub async fn get_helper_status() -> Result<HelperStatus, ()> {
+    Ok(HelperStatus::Idle)
 }
 
 #[tauri::command]

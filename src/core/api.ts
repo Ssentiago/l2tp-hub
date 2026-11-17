@@ -25,7 +25,7 @@ export const api = {
     authenticate: () => commands.authenticateSudo(),
     checkSession: () => commands.checkSudoSession(),
     checkHelper: () => commands.checkHelperStatus(),
-    getHelperStatusText: () => commands.getHelperStatusText(),
+    getHelperStatus: () => commands.getHelperStatus(),
   },
   labels: {
     getAll: () => commands.getLabels(),

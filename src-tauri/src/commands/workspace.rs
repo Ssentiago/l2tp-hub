@@ -1,3 +1,4 @@
+use l2tp_hub_core::error::{AppError, AppErrorCode};
 use crate::models::workspace::Workspace;
 use crate::store;
 use serde::Serialize;
@@ -33,7 +34,7 @@ pub async fn get_active_workspace_id(_app_handle: tauri::AppHandle) -> String {
 
 #[tauri::command]
 #[specta::specta]
-pub async fn create_workspace(_app_handle: tauri::AppHandle, name: String) -> Result<WorkspaceInfo, String> {
+pub async fn create_workspace(_app_handle: tauri::AppHandle, name: String) -> Result<WorkspaceInfo, AppError> {
     let ws = Workspace::new(&name);
     let info = WorkspaceInfo {
         id: ws.id.clone(),
@@ -53,7 +54,7 @@ pub async fn create_workspace(_app_handle: tauri::AppHandle, name: String) -> Re
 
 #[tauri::command]
 #[specta::specta]
-pub async fn rename_workspace(_app_handle: tauri::AppHandle, id: String, name: String) -> Result<(), String> {
+pub async fn rename_workspace(_app_handle: tauri::AppHandle, id: String, name: String) -> Result<(), AppError> {
     crate::STORE
         .get()
         .expect("store actor")
@@ -62,7 +63,7 @@ pub async fn rename_workspace(_app_handle: tauri::AppHandle, id: String, name: S
                 .workspaces
                 .iter_mut()
                 .find(|w| w.id == id)
-                .ok_or("Workspace not found")?;
+                .ok_or(AppError::new(AppErrorCode::WorkspaceNotFound))?;
             ws.name = name;
             Ok(())
         })
@@ -72,19 +73,19 @@ pub async fn rename_workspace(_app_handle: tauri::AppHandle, id: String, name: S
 
 #[tauri::command]
 #[specta::specta]
-pub async fn delete_workspace(_app_handle: tauri::AppHandle, id: String) -> Result<(), String> {
+pub async fn delete_workspace(_app_handle: tauri::AppHandle, id: String) -> Result<(), AppError> {
     crate::STORE
         .get()
         .expect("store actor")
         .mutate(move |s| {
             if s.workspaces.len() <= 1 {
-                return Err("Cannot delete the last workspace".into());
+                return Err(AppError::new(AppErrorCode::CannotDeleteLastWorkspace));
             }
             let idx = s
                 .workspaces
                 .iter()
                 .position(|w| w.id == id)
-                .ok_or("Workspace not found")?;
+                .ok_or(AppError::new(AppErrorCode::WorkspaceNotFound))?;
             s.workspaces.remove(idx);
             if s.active_workspace_id == id {
                 s.active_workspace_id = s.workspaces[0].id.clone();
@@ -97,13 +98,13 @@ pub async fn delete_workspace(_app_handle: tauri::AppHandle, id: String) -> Resu
 
 #[tauri::command]
 #[specta::specta]
-pub async fn switch_workspace(_app_handle: tauri::AppHandle, id: String) -> Result<(), String> {
+pub async fn switch_workspace(_app_handle: tauri::AppHandle, id: String) -> Result<(), AppError> {
     crate::STORE
         .get()
         .expect("store actor")
         .mutate(move |s| {
             if !s.workspaces.iter().any(|w| w.id == id) {
-                return Err("Workspace not found".into());
+                return Err(AppError::new(AppErrorCode::WorkspaceNotFound));
             }
             s.active_workspace_id = id;
             Ok(())

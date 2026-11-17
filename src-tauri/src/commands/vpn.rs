@@ -1,3 +1,4 @@
+use l2tp_hub_core::error::{AppError, AppErrorCode};
 use crate::l2tp::VpnStatus;
 use crate::l2tp::manager::L2tpManager;
 use crate::log;
@@ -94,12 +95,12 @@ pub async fn disconnect_vpn(
     app_handle: tauri::AppHandle,
     id: String,
     manager: State<'_, L2tpManager>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     log!("[disconnect_vpn] (macos) id={}", id);
     let manager = manager.inner().clone();
     let id_clone = id.clone();
     let app = app_handle.clone();
-    let result = manager.disconnect(&id_clone).await;
+    let result = manager.disconnect(&id_clone).await.map_err(AppError::from);
 
     log!("[disconnect_vpn] emitting disconnected event");
     let _ = app.emit("vpn-status-changed", serde_json::json!({ "id": id, "status": "disconnected" }));
@@ -135,7 +136,7 @@ pub async fn connect_vpn(
     app_handle: tauri::AppHandle,
     id: String,
     manager: State<'_, L2tpManager>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     log!("[connect_vpn] (windows) id={}", id);
     let manager = manager.inner().clone();
     let result = manager.connect(&id).await;
@@ -166,7 +167,7 @@ pub async fn disconnect_vpn(
     app_handle: tauri::AppHandle,
     id: String,
     manager: State<'_, L2tpManager>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     log!("[disconnect_vpn] (windows) id={}", id);
     let manager = manager.inner().clone();
     let result = manager.disconnect(&id).await;
@@ -183,7 +184,7 @@ pub async fn disconnect_vpn(
 pub async fn get_vpn_status(
     id: String,
     manager: State<'_, L2tpManager>,
-) -> Result<VpnStatus, String> {
+) -> Result<VpnStatus, AppError> {
     let manager = manager.inner().clone();
     let store = store::load(&crate::DB_POOL.get().expect("pool")).await;
     let has_conn = store.workspaces.iter()
@@ -200,7 +201,7 @@ pub async fn get_vpn_status(
 #[specta::specta]
 pub async fn get_all_vpn_statuses(
     manager: State<'_, L2tpManager>,
-) -> Result<std::collections::HashMap<String, VpnStatus>, String> {
+) -> Result<std::collections::HashMap<String, VpnStatus>, AppError> {
     let manager = manager.inner().clone();
     Ok(manager.all_statuses().await)
 }
@@ -216,7 +217,7 @@ pub async fn switch_tunnel_mode(
     id: String,
     new_mode: TunnelMode,
     manager: State<'_, L2tpManager>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     log!("[switch_tunnel_mode] id={}, new_mode={}", id, new_mode);
     let manager = manager.inner().clone();
 
@@ -224,12 +225,12 @@ pub async fn switch_tunnel_mode(
     let conn = store.workspaces.iter()
         .flat_map(|ws| ws.connections.iter())
         .find(|c| c.id == id)
-        .ok_or("Connection not found")?
+        .ok_or(AppError::new(AppErrorCode::ConnectionNotFound))?
         .clone();
 
     // Проверяем что подключение активно
     if manager.status(&id).await != VpnStatus::Connected {
-        return Err("Connection is not active".to_string());
+        return Err(AppError::new(AppErrorCode::ConnectionNotActive));
     }
 
     let sudo = manager.executor();
@@ -267,8 +268,8 @@ pub async fn switch_tunnel_mode(
 #[tauri::command]
 #[specta::specta]
 #[cfg(target_os = "windows")]
-pub async fn switch_tunnel_mode(_id: String, _new_mode: TunnelMode) -> Result<(), String> {
-    Err("Split tunneling is not supported on Windows".to_string())
+pub async fn switch_tunnel_mode(_id: String, _new_mode: TunnelMode) -> Result<(), AppError> {
+    Err(AppError::new(AppErrorCode::SplitTunnelingUnsupported))
 }
 
 // ---------------------------------------------------------------------------
@@ -279,7 +280,7 @@ pub async fn switch_tunnel_mode(_id: String, _new_mode: TunnelMode) -> Result<()
 #[specta::specta]
 pub async fn get_connection_history(
     id: String,
-) -> Result<Vec<crate::l2tp::logs::SessionMeta>, String> {
+) -> Result<Vec<crate::l2tp::logs::SessionMeta>, AppError> {
     Ok(crate::l2tp::logs::get_connection_history(&id))
 }
 
@@ -288,7 +289,7 @@ pub async fn get_connection_history(
 pub async fn get_session_logs(
     id: String,
     timestamp: i64,
-) -> Result<crate::l2tp::logs::SessionLogs, String> {
+) -> Result<crate::l2tp::logs::SessionLogs, AppError> {
     crate::l2tp::logs::get_session_logs(&id, timestamp)
-        .ok_or_else(|| "Session not found".to_string())
+        .ok_or_else(|| AppError::new(AppErrorCode::SessionNotFound))
 }

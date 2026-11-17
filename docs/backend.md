@@ -26,7 +26,7 @@
 В Tauri регистрируются два объекта состояния:
 
 `SudoSession`. Отвечает за привилегированный запуск через helper. Хранит флаг
-авторизации и текст статуса для UI.
+авторизации и текущий статус `HelperStatus` для UI.
 
 `L2tpManager`. Централизованный менеджер VPN-подключений из ядра. Создаётся с
 `Arc<dyn PrivilegedExecutor>` (на базе `SudoSession`), `AppEnv` и хэндлом актора
@@ -53,6 +53,12 @@ TypeScript-биндингов, так что точки расхождения �
 (tauri-specta, `npm run gen:types`). Модели помечены `#[derive(specta::Type)]`.
 Аргументы на проводе идут в camelCase: Rust-параметр `new_mode` принимается как
 `newMode`, сгенерённые обёртки это соблюдают.
+
+Ошибки команд типизированы: `Result<_, AppError>` из `l2tp-hub-core::error`. Это
+структура с кодом `AppErrorCode` и необязательной технической деталью на английском.
+Фронт выбирает локализованный текст по коду (секция `commandErrors` в локалях),
+поэтому английские формулировки `Display` служат для логов и истории сессий.
+Исключение: `connect_vpn` отдаёт `ConnectError` со своими кодами подключения.
 
 ### Подключения
 
@@ -87,7 +93,7 @@ TypeScript-биндингов, так что точки расхождения �
 | `authenticate_sudo` | нет | пусто | Установить или запустить helper |
 | `check_sudo_session` | нет | bool | Авторизован ли helper |
 | `check_helper_status` | нет | bool | Работает ли helper |
-| `get_helper_status_text` | нет | string | Текст статуса для UI |
+| `get_helper_status` | нет | `HelperStatus` | Статус helper для UI |
 | `check_keychain_access` | нет | bool | Доступ к связке ключей |
 | `quit_app` | нет | пусто | Завершить приложение |
 | `open_url` | `url` | пусто | Открыть ссылку в браузере |

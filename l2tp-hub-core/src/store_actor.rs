@@ -1,13 +1,14 @@
 use tokio::sync::{mpsc, oneshot};
 
 use crate::db;
+use crate::error::AppError;
 use crate::store;
 use crate::store::Store;
 
 enum StoreRequest {
     Mutate {
-        apply: Box<dyn FnOnce(&mut Store) -> Result<(), String> + Send>,
-        respond_to: oneshot::Sender<Result<Store, String>>,
+        apply: Box<dyn FnOnce(&mut Store) -> Result<(), AppError> + Send>,
+        respond_to: oneshot::Sender<Result<Store, AppError>>,
     },
 }
 
@@ -51,8 +52,8 @@ impl StoreActor {
 
     async fn mutate(
         &self,
-        apply: Box<dyn FnOnce(&mut Store) -> Result<(), String> + Send>,
-    ) -> Result<Store, String> {
+        apply: Box<dyn FnOnce(&mut Store) -> Result<(), AppError> + Send>,
+    ) -> Result<Store, AppError> {
         let mut tx = self.pool.begin().await.map_err(|e| format!("begin tx: {}", e))?;
         let mut store = db::load_store_conn(&mut *tx).await?;
         apply(&mut store)?;
@@ -76,9 +77,9 @@ impl StoreHandle {
     /// The closure receives the freshly loaded state. The actor persists the
     /// diff and commits in a single transaction before this future resolves,
     /// then returns the post-mutation state to the caller.
-    pub async fn mutate<F>(&self, apply: F) -> Result<Store, String>
+    pub async fn mutate<F>(&self, apply: F) -> Result<Store, AppError>
     where
-        F: FnOnce(&mut Store) -> Result<(), String> + Send + 'static,
+        F: FnOnce(&mut Store) -> Result<(), AppError> + Send + 'static,
     {
         let (respond_to, rx) = oneshot::channel();
         self.tx
@@ -173,7 +174,7 @@ mod tests {
                 if let Some(c) = s.find_connection_mut("c-1") {
                     c.service_name = "changed".into();
                 }
-                Err("boom".to_string())
+                Err(AppError::from("boom"))
             })
             .await;
         assert!(result.is_err());

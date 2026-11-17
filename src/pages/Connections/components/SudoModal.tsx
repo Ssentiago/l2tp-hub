@@ -14,21 +14,42 @@ import {
 } from "@mui/material";
 import { Lock, VpnKey, CheckCircle, RadioButtonUnchecked } from "@mui/icons-material";
 import { useTranslation } from "react-i18next";
+import type { HelperStatus } from "../../../typing/bindings";
+import { appErrorMessage } from "../../../core/appErrors";
 
 export function SudoModal({
   sudoReady,
   keychainReady,
-  helperStatusText,
+  helperStatus,
   onAuthSudo,
   onAuthKeychain,
 }: {
   sudoReady: boolean;
   keychainReady: boolean;
-  helperStatusText: string;
+  helperStatus: HelperStatus;
   onAuthSudo: () => Promise<void>;
   onAuthKeychain: () => Promise<void>;
 }) {
   const { t } = useTranslation();
+
+  const statusText = (): string => {
+    switch (helperStatus.kind) {
+      case "idle": return t("sudoModal.waiting");
+      case "updating_service_dev": return t("sudoModal.status.updatingServiceDev");
+      case "starting_service": return t("sudoModal.status.startingService");
+      case "install_required": return t("sudoModal.status.installRequired");
+      case "running_as_admin": return t("sudoModal.status.runningAsAdmin");
+      case "updating_service": return t("sudoModal.status.updatingService");
+      case "updating_service_old": return t("sudoModal.status.updatingServiceOld");
+      case "waiting_service": return t("sudoModal.status.waitingService", {
+        attempt: helperStatus.attempt,
+        retries: helperStatus.retries,
+      });
+      case "service_connected": return t("sudoModal.status.serviceConnected");
+      case "service_not_responding": return t("sudoModal.status.serviceNotResponding");
+      case "reinstalling_service": return t("sudoModal.status.reinstallingService");
+    }
+  };
   const [sudoLoading, setSudoLoading] = useState(false);
   const [sudoError, setSudoError] = useState<string | null>(null);
   const [keychainLoading, setKeychainLoading] = useState(false);
@@ -40,7 +61,7 @@ export function SudoModal({
     try {
       await onAuthSudo();
     } catch (e) {
-      setSudoError(String(e));
+      setSudoError(appErrorMessage(e));
     } finally {
       setSudoLoading(false);
     }
@@ -52,7 +73,7 @@ export function SudoModal({
     try {
       await onAuthKeychain();
     } catch (e) {
-      setKeychainError(String(e));
+      setKeychainError(appErrorMessage(e));
     } finally {
       setKeychainLoading(false);
     }
@@ -114,7 +135,7 @@ export function SudoModal({
               }
             >
               {sudoLoading
-                ? (helperStatusText || t("sudoModal.waiting"))
+                ? statusText()
                 : t("sudoModal.authSudo")}
             </Button>
             {sudoError && (

@@ -1,3 +1,4 @@
+use l2tp_hub_core::error::AppError;
 use crate::keychain;
 
 #[tauri::command]
@@ -8,8 +9,8 @@ pub fn quit_app(_app: tauri::AppHandle) {
 
 #[tauri::command]
 #[specta::specta]
-pub async fn open_url(url: String) -> Result<(), String> {
-    tokio::task::spawn_blocking(move || open::that(url).map_err(|e| e.to_string()))
+pub async fn open_url(url: String) -> Result<(), AppError> {
+    tokio::task::spawn_blocking(move || open::that(url).map_err(|e| AppError::from(e.to_string())))
         .await
         .map_err(|e| e.to_string())?
 }
@@ -18,7 +19,7 @@ pub async fn open_url(url: String) -> Result<(), String> {
 /// macOS покажет системный диалог "разрешить доступ" при первом обращении.
 #[tauri::command]
 #[specta::specta]
-pub async fn check_keychain_access() -> Result<bool, String> {
+pub async fn check_keychain_access() -> Result<bool, AppError> {
     tokio::task::spawn_blocking(|| {
         let test_key = "_l2tp_hub_access_test";
         // set_password создаст запись если нет — macOS запросит разрешение

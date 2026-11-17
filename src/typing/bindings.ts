@@ -16,7 +16,7 @@ export const commands = {
 	authenticateSudo: (options?: InvokeOptions) => __TAURI_INVOKE<null>("authenticate_sudo", undefined, options),
 	checkSudoSession: (options?: InvokeOptions) => __TAURI_INVOKE<boolean>("check_sudo_session", undefined, options),
 	checkHelperStatus: (options?: InvokeOptions) => __TAURI_INVOKE<boolean>("check_helper_status", undefined, options),
-	getHelperStatusText: (options?: InvokeOptions) => __TAURI_INVOKE<string>("get_helper_status_text", undefined, options),
+	getHelperStatus: (options?: InvokeOptions) => __TAURI_INVOKE<HelperStatus>("get_helper_status", undefined, options),
 	getLabels: (options?: InvokeOptions) => __TAURI_INVOKE<Label[]>("get_labels", undefined, options),
 	openUrl: (url: string, options?: InvokeOptions) => __TAURI_INVOKE<null>("open_url", { url }, options),
 	saveLabel: (id: string, name: string, options?: InvokeOptions) => __TAURI_INVOKE<Label>("save_label", { id, name }, options),
@@ -45,6 +45,36 @@ export const commands = {
 };
 
 /* Types */
+/**
+ *  Ошибка команды, уходящая в UI. Несёт код и опциональную техническую деталь,
+ *  которая подставляется в локализованный шаблон на фронте.
+ */
+export type AppError = AppError_Serialize | AppError_Deserialize;
+
+/**
+ *  Стабильный код ошибки команды. Локализованный текст выбирается по нему во
+ *  фронтенде и не зависит от английских формулировок в логах.
+ */
+export type AppErrorCode = "workspace_not_found" | "cannot_delete_last_workspace" | "connection_not_found" | "connection_not_active" | "split_tunneling_unsupported" | "session_not_found" | "label_not_found" | "cannot_delete_built_in_label" | "path_unresolved" | "check_unavailable_during_vpn" | "service_not_responding" | "install_canceled" | "helper_install_failed" | "invalid_file_format" | "corrupt_config" | "wrong_password" | "unsupported_format_version" | "unsupported_kdf" | "file_read" | "file_write" | "socket_error" | "connection_error" | "send_error" | "receive_error" | "update_check_failed" | "update_parse_failed" | "update_http_error" | "update_missing_tag" | "update_missing_assets" | "update_no_matching_asset" | "update_missing_download_url" | "update_missing_asset_name" | "download_failed" | "file_create_failed" | "download_error" | "write_error" | "dmg_open_failed" | "installer_launch_failed" | "internal";
+
+/**
+ *  Ошибка команды, уходящая в UI. Несёт код и опциональную техническую деталь,
+ *  которая подставляется в локализованный шаблон на фронте.
+ */
+export type AppError_Deserialize = {
+	code: AppErrorCode,
+	detail?: string | null,
+};
+
+/**
+ *  Ошибка команды, уходящая в UI. Несёт код и опциональную техническую деталь,
+ *  которая подставляется в локализованный шаблон на фронте.
+ */
+export type AppError_Serialize = {
+	code: AppErrorCode,
+	detail: string | null,
+};
+
 /**
  *  Результат классификации. Код и этап уходят в UI, признаки остаются для
  *  логов и истории сессий.
@@ -145,6 +175,12 @@ export type HealthResult = {
 	ping: boolean,
 	ipsec: boolean,
 };
+
+/**
+ *  Статус сервиса helper для UI. Текст для отображения выбирается по варианту
+ *  во фронтенде, английская форма из `Display` идёт в логи.
+ */
+export type HelperStatus = { kind: "idle" } | { kind: "updating_service_dev" } | { kind: "starting_service" } | { kind: "install_required" } | { kind: "running_as_admin" } | { kind: "updating_service" } | { kind: "updating_service_old" } | { kind: "waiting_service"; attempt: number; retries: number } | { kind: "service_connected" } | { kind: "service_not_responding" } | { kind: "reinstalling_service" };
 
 export type Label = {
 	id: string,

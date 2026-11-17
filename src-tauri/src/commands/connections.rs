@@ -1,3 +1,4 @@
+use l2tp_hub_core::error::{AppError, AppErrorCode};
 use crate::l2tp;
 use crate::models::connection::Connection;
 use crate::models::connection_payload::ConnectionPayload;
@@ -27,7 +28,7 @@ pub async fn get_connections(__app_handle: tauri::AppHandle) -> Vec<Connection> 
 pub async fn save_connection(
     _app_handle: tauri::AppHandle,
     input: ConnectionPayload,
-) -> Result<Connection, String> {
+) -> Result<Connection, AppError> {
     log!("[save_connection] called, id={:?}", input.id);
     let id = input
         .id
@@ -97,7 +98,7 @@ pub async fn save_connection(
     let conn = state
         .find_connection(&id)
         .cloned()
-        .ok_or("Connection not found")?;
+        .ok_or(AppError::new(AppErrorCode::ConnectionNotFound))?;
     log!("[save_connection] success");
     Ok(conn)
 }
@@ -109,7 +110,7 @@ pub async fn delete_connection(
     _app_handle: tauri::AppHandle,
     id: String,
     sudo: State<'_, SudoSession>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     log!("[delete_connection] (macos) called for id={}", id);
     let sudo = sudo.inner().clone();
 
@@ -136,7 +137,7 @@ pub async fn delete_connection(
 #[tauri::command]
 #[specta::specta]
 #[cfg(target_os = "windows")]
-pub async fn delete_connection(_app_handle: tauri::AppHandle, id: String) -> Result<(), String> {
+pub async fn delete_connection(_app_handle: tauri::AppHandle, id: String) -> Result<(), AppError> {
     log!("[delete_connection] (windows) called for id={}", id);
 
     // Keychain entries and the VPN service are removed outside the store

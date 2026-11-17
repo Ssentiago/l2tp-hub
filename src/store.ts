@@ -6,6 +6,7 @@ import type {
   ConnectError,
   Connection_Serialize as Connection,
   ConnectionPayload_Deserialize as ConnectionPayload,
+  HelperStatus,
   Label,
   VpnStatus,
   WorkspaceInfo,
@@ -45,7 +46,7 @@ interface Store {
 
   sudoReady: boolean;
   helperReady: boolean;
-  helperStatusText: string;
+  helperStatus: HelperStatus;
   checkSudo: () => Promise<void>;
   authenticateSudo: () => Promise<void>;
   checkHelper: () => Promise<void>;
@@ -135,7 +136,7 @@ export const useStore = create<Store>((set, get) => ({
 
   sudoReady: false,
   helperReady: false,
-  helperStatusText: "",
+  helperStatus: { kind: "idle" },
   checkSudo: async () => {
     const ready = await api.sudo.checkSession();
     set({ sudoReady: ready });
@@ -155,10 +156,10 @@ export const useStore = create<Store>((set, get) => ({
   },
   pollHelperStatus: async () => {
     try {
-      const text = await api.sudo.getHelperStatusText();
-      set({ helperStatusText: text });
+      const status = await api.sudo.getHelperStatus();
+      set({ helperStatus: status });
     } catch {
-      set({ helperStatusText: "" });
+      set({ helperStatus: { kind: "idle" } });
     }
   },
 

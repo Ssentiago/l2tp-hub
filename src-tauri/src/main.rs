@@ -51,7 +51,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands::authenticate_sudo,
         commands::check_sudo_session,
         commands::check_helper_status,
-        commands::get_helper_status_text,
+        commands::get_helper_status,
         commands::get_labels,
         commands::open_url,
         commands::save_label,

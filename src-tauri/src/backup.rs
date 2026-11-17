@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::keychain;
+use l2tp_hub_core::error::{AppError, AppErrorCode};
 use crate::models::connection::Connection;
 use crate::models::label::Label;
 use crate::store::Store;
@@ -49,7 +50,7 @@ struct ExportPayload {
     labels: Vec<Label>,
 }
 
-fn derive_key(password: &str, salt: &[u8], m_cost: u32, t_cost: u32, p_cost: u32) -> Result<[u8; KEY_LEN], String> {
+fn derive_key(password: &str, salt: &[u8], m_cost: u32, t_cost: u32, p_cost: u32) -> Result<[u8; KEY_LEN], AppError> {
     let params = Params::new(m_cost, t_cost, p_cost, Some(KEY_LEN))
         .map_err(|e| format!("KDF params error: {}", e))?;
     let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
@@ -68,7 +69,7 @@ fn derive_key_legacy(password: &str) -> [u8; KEY_LEN] {
     hasher.finalize().into()
 }
 
-fn encrypt_payload(plaintext: &[u8], password: &str) -> Result<Vec<u8>, String> {
+fn encrypt_payload(plaintext: &[u8], password: &str) -> Result<Vec<u8>, AppError> {
     let mut salt = [0u8; SALT_LEN];
     OsRng.fill_bytes(&mut salt);
 
@@ -99,14 +100,14 @@ fn encrypt_payload(plaintext: &[u8], password: &str) -> Result<Vec<u8>, String> 
     Ok(result)
 }
 
-fn decrypt_payload(data: &[u8], password: &str) -> Result<Vec<u8>, String> {
+fn decrypt_payload(data: &[u8], password: &str) -> Result<Vec<u8>, AppError> {
     if data.starts_with(MAGIC_V2) {
         return decrypt_v2(data, password);
     }
     if data.starts_with(MAGIC_V1) {
         return decrypt_v1(data, password);
     }
-    Err("Invalid file format".to_string())
+    Err(AppError::new(AppErrorCode::InvalidFileFormat))
 }
 
 fn read_u32_be(data: &[u8], offset: &mut usize) -> u32 {
@@ -115,19 +116,19 @@ fn read_u32_be(data: &[u8], offset: &mut usize) -> u32 {
     value
 }
 
-fn decrypt_v2(data: &[u8], password: &str) -> Result<Vec<u8>, String> {
+fn decrypt_v2(data: &[u8], password: &str) -> Result<Vec<u8>, AppError> {
     let header_len = MAGIC_V2.len() + 2 + 12 + SALT_LEN + NONCE_LEN;
     if data.len() < header_len + GCM_TAG_LEN {
-        return Err("The file is corrupted or is not an l2tphub configuration".to_string());
+        return Err(AppError::new(AppErrorCode::CorruptConfig));
     }
 
     let version = data[MAGIC_V2.len()];
     if version != FORMAT_VERSION {
-        return Err(format!("Unsupported file format version: {}", version));
+        return Err(AppError::detail(AppErrorCode::UnsupportedFormatVersion, version.to_string()));
     }
     let kdf_id = data[MAGIC_V2.len() + 1];
     if kdf_id != KDF_ARGON2ID {
-        return Err(format!("Unsupported key derivation algorithm: {}", kdf_id));
+        return Err(AppError::detail(AppErrorCode::UnsupportedKdf, kdf_id.to_string()));
     }
 
     let mut offset = MAGIC_V2.len() + 2;
@@ -147,12 +148,12 @@ fn decrypt_v2(data: &[u8], password: &str) -> Result<Vec<u8>, String> {
 
     cipher
         .decrypt(nonce, ciphertext)
-        .map_err(|_| "Wrong password or corrupted file".to_string())
+        .map_err(|_| AppError::new(AppErrorCode::WrongPassword))
 }
 
-fn decrypt_v1(data: &[u8], password: &str) -> Result<Vec<u8>, String> {
+fn decrypt_v1(data: &[u8], password: &str) -> Result<Vec<u8>, AppError> {
     if data.len() < MAGIC_V1.len() + NONCE_LEN + GCM_TAG_LEN {
-        return Err("The file is corrupted or is not an l2tphub configuration".to_string());
+        return Err(AppError::new(AppErrorCode::CorruptConfig));
     }
 
     let nonce_bytes = &data[MAGIC_V1.len()..MAGIC_V1.len() + NONCE_LEN];
@@ -165,10 +166,10 @@ fn decrypt_v1(data: &[u8], password: &str) -> Result<Vec<u8>, String> {
 
     cipher
         .decrypt(nonce, ciphertext)
-        .map_err(|_| "Wrong password or corrupted file".to_string())
+        .map_err(|_| AppError::new(AppErrorCode::WrongPassword))
 }
 
-pub fn make_backup(store: &Store, password: &str) -> Result<Vec<u8>, String> {
+pub fn make_backup(store: &Store, password: &str) -> Result<Vec<u8>, AppError> {
     log!("[make_backup] Starting export");
 
     let mut connections_export = Vec::new();
@@ -212,7 +213,7 @@ pub fn make_backup(store: &Store, password: &str) -> Result<Vec<u8>, String> {
 pub fn restore_backup(
     data: &[u8],
     password: &str,
-) -> Result<(Vec<Connection>, Vec<Label>), String> {
+) -> Result<(Vec<Connection>, Vec<Label>), AppError> {
     log!("[restore_backup] Starting import");
 
     if data.starts_with(MAGIC_V1) {

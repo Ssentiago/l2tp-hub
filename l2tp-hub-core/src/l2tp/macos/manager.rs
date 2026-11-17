@@ -159,7 +159,8 @@ impl L2tpManager {
                     }
                     Ok(())
                 })
-                .await?;
+                .await
+                .map_err(|e| e.to_string())?;
         }
 
         // Собираем ConnData для ВСЕХ активных подключений (включая новое)
@@ -196,7 +197,8 @@ impl L2tpManager {
                 update_connect_stats(s, &conn_id);
                 Ok(())
             })
-            .await?;
+            .await
+            .map_err(|e| e.to_string())?;
 
         log::debug!("[manager] connect done: {}", conn.service_name);
         Ok(())
@@ -315,7 +317,8 @@ impl L2tpManager {
                 update_disconnect_stats(s, &conn_id);
                 Ok(())
             })
-            .await?;
+            .await
+            .map_err(|e| e.to_string())?;
 
         log::debug!("[manager] disconnect done: {}", conn.service_name);
         Ok(())

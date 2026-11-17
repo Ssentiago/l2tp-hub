@@ -1,3 +1,4 @@
+use l2tp_hub_core::error::{AppError, AppErrorCode};
 use crate::state::get_state;
 use crate::sudo::SudoSession;
 use crate::{backup, keychain, l2tp, log, store};
@@ -6,7 +7,7 @@ use tauri_plugin_dialog::DialogExt;
 
 #[tauri::command]
 #[specta::specta]
-pub async fn import(password: String) -> Result<bool, String> {
+pub async fn import(password: String) -> Result<bool, AppError> {
     log!("[import_config_dialog] called");
 
     let app = get_state().app.clone();
@@ -26,10 +27,10 @@ pub async fn import(password: String) -> Result<bool, String> {
 
     match path {
         Some(p) => {
-            let path_buf = p.as_path().ok_or("Could not resolve the path")?.to_path_buf();
+            let path_buf = p.as_path().ok_or(AppError::new(AppErrorCode::PathUnresolved))?.to_path_buf();
             let data = tokio::fs::read(&path_buf)
                 .await
-                .map_err(|e| format!("File read error: {}", e))?;
+                .map_err(|e| AppError::detail(AppErrorCode::FileRead, e.to_string()))?;
 
             // CPU-heavy crypto in spawn_blocking
             let (connections, labels) = tokio::task::spawn_blocking(move || {
@@ -71,14 +72,14 @@ pub async fn import(password: String) -> Result<bool, String> {
 
 #[tauri::command]
 #[specta::specta]
-pub async fn import_file(file_path: String, password: String) -> Result<bool, String> {
+pub async fn import_file(file_path: String, password: String) -> Result<bool, AppError> {
     log!("[import_file] called with path={}", file_path);
 
     let _app = crate::state::get_state().app.clone();
     let path_buf = std::path::PathBuf::from(&file_path);
     let data = tokio::fs::read(&path_buf)
         .await
-        .map_err(|e| format!("File read error: {}", e))?;
+        .map_err(|e| AppError::detail(AppErrorCode::FileRead, e.to_string()))?;
 
     let (connections, labels) = tokio::task::spawn_blocking(move || {
         backup::restore_backup(&data, &password)
@@ -115,7 +116,7 @@ pub async fn import_file(file_path: String, password: String) -> Result<bool, St
 
 #[tauri::command]
 #[specta::specta]
-pub async fn export(password: String) -> Result<bool, String> {
+pub async fn export(password: String) -> Result<bool, AppError> {
     log!("[export_config_dialog] called");
 
     let app = get_state().app.clone();
@@ -144,10 +145,10 @@ pub async fn export(password: String) -> Result<bool, String> {
 
     match path {
         Some(p) => {
-            let path_buf = p.as_path().ok_or("Could not resolve the path")?.to_path_buf();
+            let path_buf = p.as_path().ok_or(AppError::new(AppErrorCode::PathUnresolved))?.to_path_buf();
             tokio::fs::write(&path_buf, &bytes)
                 .await
-                .map_err(|e| format!("File write error: {}", e))?;
+                .map_err(|e| AppError::detail(AppErrorCode::FileWrite, e.to_string()))?;
             log!("[export_config_dialog] Saved to {:?}", path_buf);
             Ok(true)
         }
@@ -160,7 +161,7 @@ pub async fn export(password: String) -> Result<bool, String> {
 pub async fn reset(
     _app_handle: tauri::AppHandle,
     sudo: State<'_, SudoSession>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     log!("[reset] called");
     #[cfg(target_os = "macos")]
     let sudo = sudo.inner().clone();

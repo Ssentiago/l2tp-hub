@@ -31,6 +31,7 @@ import {
   SystemUpdate,
 } from "@mui/icons-material";
 import { api } from "../../core/api";
+import { appErrorMessage } from "../../core/appErrors";
 import type { UpdateInfo } from "../../typing/bindings";
 import { getVersion } from "@tauri-apps/api/app";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -164,8 +165,8 @@ export function Settings() {
           }
         }
       }
-    } catch (e: any) {
-      setError(e?.message ?? String(e));
+    } catch (e) {
+      setError(appErrorMessage(e));
     }
   };
 
@@ -177,8 +178,8 @@ export function Settings() {
       setSuccess(t("settings.resetDone"));
       setResetOpen(false);
       setResetConfirmText("");
-    } catch (e: any) {
-      setError(e?.message ?? String(e));
+    } catch (e) {
+      setError(appErrorMessage(e));
     } finally {
       setResetting(false);
     }
@@ -196,8 +197,8 @@ export function Settings() {
       } else {
         setUpdateSuccess(t("settings.latestInstalled"));
       }
-    } catch (e: any) {
-      setUpdateError(e?.message ?? String(e));
+    } catch (e) {
+      setUpdateError(appErrorMessage(e));
     } finally {
       setUpdateChecking(false);
     }
@@ -208,8 +209,8 @@ export function Settings() {
     setUpdateDownloading(true);
     try {
       await api.update.apply(updateInfo.download_url, updateInfo.asset_name);
-    } catch (e: any) {
-      setUpdateError(e?.message ?? String(e));
+    } catch (e) {
+      setUpdateError(appErrorMessage(e));
       setUpdateDownloading(false);
     }
   };

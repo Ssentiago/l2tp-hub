@@ -216,7 +216,7 @@ export default function App() {
     authenticateSudo,
     keychainReady,
     requestKeychainAccess,
-    helperStatusText,
+    helperStatus,
     pollHelperStatus,
   } = useStore();
 
@@ -237,7 +237,7 @@ export default function App() {
         <SudoModal
           sudoReady={sudoReady}
           keychainReady={keychainReady}
-          helperStatusText={helperStatusText}
+          helperStatus={helperStatus}
           onAuthSudo={authenticateSudo}
           onAuthKeychain={requestKeychainAccess}
         />

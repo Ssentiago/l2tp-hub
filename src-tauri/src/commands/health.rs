@@ -1,3 +1,4 @@
+use l2tp_hub_core::error::{AppError, AppErrorCode};
 use crate::l2tp::VpnStatus;
 use crate::{log, store};
 use rand::Rng;
@@ -30,16 +31,16 @@ fn icmp_ping(host: &str) -> bool {
     }
 }
 
-fn ike_probe(server: &str) -> Result<bool, String> {
+fn ike_probe(server: &str) -> Result<bool, AppError> {
     let addr = format!("{}:500", server);
 
-    let socket = UdpSocket::bind("0.0.0.0:0").map_err(|e| format!("Socket error: {}", e))?;
+    let socket = UdpSocket::bind("0.0.0.0:0").map_err(|e| AppError::detail(AppErrorCode::SocketError, e.to_string()))?;
     socket
         .set_read_timeout(Some(Duration::from_secs(4)))
-        .map_err(|e| format!("Socket error: {}", e))?;
+        .map_err(|e| AppError::detail(AppErrorCode::SocketError, e.to_string()))?;
     socket
         .connect(&addr)
-        .map_err(|e| format!("Connection error: {}", e))?;
+        .map_err(|e| AppError::detail(AppErrorCode::ConnectionError, e.to_string()))?;
 
     let mut packet = IKE_SA_INIT_PAYLOAD.to_vec();
     let mut rng = rand::thread_rng();
@@ -49,7 +50,7 @@ fn ike_probe(server: &str) -> Result<bool, String> {
 
     socket
         .send(&packet)
-        .map_err(|e| format!("Send error: {}", e))?;
+        .map_err(|e| AppError::detail(AppErrorCode::SendError, e.to_string()))?;
 
     let mut buf = [0u8; 1500];
     match socket.recv(&mut buf) {
@@ -63,13 +64,13 @@ fn ike_probe(server: &str) -> Result<bool, String> {
             log!("[health] IKE timeout from {}", addr);
             Ok(false)
         }
-        Err(e) => Err(format!("Receive error: {}", e)),
+        Err(e) => Err(AppError::detail(AppErrorCode::ReceiveError, e.to_string())),
     }
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn check_connection(app_handle: tauri::AppHandle, id: String) -> Result<HealthResult, String> {
+pub async fn check_connection(app_handle: tauri::AppHandle, id: String) -> Result<HealthResult, AppError> {
     log!("[health] check_connection called for id={}", id);
 
     let _app_clone = app_handle.clone();
@@ -79,7 +80,7 @@ pub async fn check_connection(app_handle: tauri::AppHandle, id: String) -> Resul
         .iter()
         .flat_map(|ws| ws.connections.iter())
         .find(|c| c.id == id)
-        .ok_or("Connection not found")?
+        .ok_or(AppError::new(AppErrorCode::ConnectionNotFound))?
         .clone();
 
     // Check if any VPN is active
@@ -89,7 +90,7 @@ pub async fn check_connection(app_handle: tauri::AppHandle, id: String) -> Resul
             let status = manager.status(&c.id).await;
             if status == VpnStatus::Connected || status == VpnStatus::Connecting {
                 return Err(
-                    "The check is unavailable during an active VPN connection".into(),
+                    AppError::new(AppErrorCode::CheckUnavailableDuringVpn),
                 );
             }
         }
