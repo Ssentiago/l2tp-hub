@@ -107,9 +107,10 @@ kickstart`, `launchctl kill`, `launchctl bootout`.
 macOS. Основная платформа. Полная функциональность: helper, guardian, LaunchDaemon'ы,
 split tunneling, переподключение после сна.
 
-Windows. Упрощённая поддержка. Привилегированный запуск идёт напрямую через манифест
-`requireAdministrator`, helper и guardian не используются, split tunneling не
-поддерживается. VPN-логика для Windows находится в `l2tp-hub-core/src/l2tp/windows`.
+Windows. Поддержка прекращена: сборка под Windows не ведётся, код остаётся в
+`l2tp-hub-core/src/l2tp/windows` без изменений. Привилегированный запуск там идёт
+напрямую через манифест `requireAdministrator`, helper и guardian не используются,
+split tunneling не поддерживается.
 
 Условная компиляция. В ядре модули разделены через `#[cfg(target_os = ...)]`.
 Публичные функции `l2tp` реэкспортируют платформенную реализацию, поэтому вызывающий

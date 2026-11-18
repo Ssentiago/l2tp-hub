@@ -5,15 +5,7 @@ on:
 
 jobs:
   build:
-    strategy:
-      matrix:
-        include:
-          - os: macos-latest
-            target: universal-apple-darwin
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-latest
 
     steps:
       - uses: actions/checkout@v6
@@ -23,11 +15,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
-
-      - name: Disable Windows Defender
-        if: runner.os == 'Windows'
-        shell: powershell
-        run: Set-MpPreference -DisableRealtimeMonitoring $true
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -39,22 +26,18 @@ jobs:
       - run: bun install
 
       - name: Build helper (universal)
-        if: runner.os == 'macOS'
         run: bun run build:helper
 
       - name: Build guardian (universal)
-        if: runner.os == 'macOS'
         run: bun run build:guardian
 
       - name: Cache native dependencies
-        if: runner.os == 'macOS'
         uses: actions/cache@v4
         with:
           path: build-strongswan
           key: native-deps-${{ runner.os }}-${{ hashFiles('build.sh', 'build-strongswan/*.patch') }}
 
       - name: Build native dependencies (universal)
-        if: runner.os == 'macOS'
         run: bun run build:deps
 
       - uses: tauri-apps/tauri-action@v0
@@ -66,21 +49,19 @@ jobs:
           releaseName: "L2TP Hub ${{ github.ref_name }}"
           releaseDraft: false
           prerelease: false
-          args: --target ${{ matrix.target }}
+          args: --target universal-apple-darwin
 
       - uses: tauri-apps/tauri-action@v0
         if: github.event_name == 'workflow_dispatch'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          args: --target ${{ matrix.target }}
+          args: --target universal-apple-darwin
 
       - uses: actions/upload-artifact@v4
         if: github.event_name == 'workflow_dispatch'
         with:
-          name: ${{ matrix.os }}-bundle
+          name: macos-bundle
           path: |
-            src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe
-            src-tauri/target/${{ matrix.target }}/release/bundle/msi/*.msi
-            src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
-            src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app
+            src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+            src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app

@@ -1,6 +1,6 @@
 # L2TP Hub
 
-A desktop manager for L2TP/IPSec VPN connections on macOS and Windows, built for IT professionals who work across many client networks.
+A desktop manager for L2TP/IPSec VPN connections on macOS, built for IT professionals who work across many client networks.
 
 The built-in macOS L2TP manager is clunky and inconvenient. L2TP Hub replaces it with a fast, keyboard-driven manager that keeps many connections in one place and credentials in the system keychain.
 
@@ -11,7 +11,7 @@ The built-in macOS L2TP manager is clunky and inconvenient. L2TP Hub replaces it
 - Split tunnel, where only selected subnets go through the VPN, and full tunnel, where all traffic does
 - Workspaces and labels to organize connections by company and branch
 - Search, grouping, and sorting
-- Passwords stored in the system keychain (macOS Keychain and Windows Credential Manager)
+- Passwords stored in the system keychain (macOS Keychain)
 - Encrypted config export and import (AES-256-GCM)
 - Session logs and connection history
 - Automatic reconnect after sleep and wake
@@ -25,7 +25,6 @@ The tunnel is built in userspace from a bundled strongSwan (charon) and xl2tpd o
 ## Requirements
 
 - macOS 13 or later
-- Windows 10 or 11
 
 ## Development
 
