@@ -60,13 +60,6 @@ for arg in "$@"; do
     esac
 done
 
-# Output redirection: --verbose shows everything, default swallows to log
-if [ "$VERBOSE" = true ]; then
-    REDIRECT=""
-else
-    REDIRECT=">> \"$LOG_FILE\" 2>&1"
-fi
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -86,6 +79,22 @@ warn() {
 fail() {
     echo "  ✗ $1"
     exit 1
+}
+
+# run <cmd> [args...] — запускает команду без eval, каждый аргумент остаётся
+# отдельным словом. --verbose: вывод в консоль. Иначе: в лог, а при ошибке
+# хвост лога печатается в консоль.
+run() {
+    if [ "$VERBOSE" = true ]; then
+        "$@"
+        return
+    fi
+    if ! "$@" >> "$LOG_FILE" 2>&1; then
+        echo "  ✗ Command failed: $*"
+        echo "  ── tail of $LOG_FILE ──"
+        tail -n 60 "$LOG_FILE"
+        exit 1
+    fi
 }
 
 download() {
@@ -231,23 +240,27 @@ if [ "$SKIP_SSL" = false ]; then
         fi
 
         step "Building OpenSSL ${arch}..."
+        rm -rf "$BUILD_SSL"
         mkdir -p "$BUILD_SSL"
         cd "$BUILD_SSL"
 
+        # Явный таргет: автодетект по uname на arm64-раннере выберет arm64
+        # и для x86_64-сборки. Таргеты darwin64-*-cc сами добавляют -arch.
         if [ "$arch" = "arm64" ]; then
-            CARCH="-arch arm64"
+            SSL_TARGET="darwin64-arm64-cc"
         else
-            CARCH="-arch x86_64"
+            SSL_TARGET="darwin64-x86_64-cc"
         fi
 
-        eval "\"$OPENSSL_SRC/Configure\" \
-            --prefix=\"$OPENSSL_PREFIX\" \
-            --openssldir=\"$OPENSSL_PREFIX\" \
-            \"CFLAGS=${CARCH} -mmacosx-version-min=${MIN_MACOS}\" \
-            \"LDFLAGS=${CARCH} -mmacosx-version-min=${MIN_MACOS}\" \
-            \"${OPENSSL_CONFIGURE_OPTS[*]}\"" $REDIRECT
+        run "$OPENSSL_SRC/Configure" \
+            "$SSL_TARGET" \
+            --prefix="$OPENSSL_PREFIX" \
+            --openssldir="$OPENSSL_PREFIX" \
+            "CFLAGS=-mmacosx-version-min=${MIN_MACOS}" \
+            "LDFLAGS=-mmacosx-version-min=${MIN_MACOS}" \
+            "${OPENSSL_CONFIGURE_OPTS[@]}"
 
-        eval "make -j\"$(sysctl -n hw.ncpu)\"" $REDIRECT
+        run make -j"$(sysctl -n hw.ncpu)"
         ok "OpenSSL ${arch} built"
     done
 
@@ -257,7 +270,7 @@ if [ "$SKIP_SSL" = false ]; then
     else
         step "Installing OpenSSL..."
         cd "$BUILD_DIR/build-ssl-arm64"
-        eval "make install_sw" $REDIRECT
+        run make install_sw
         ok "OpenSSL installed"
     fi
 
@@ -328,14 +341,14 @@ for arch in arm64 x86_64; do
         CARCH="-arch x86_64"
     fi
 
-    eval "\"$STRONGSWAN_SRC/configure\" \
-        --host=\"$HOST\" \
-        \"CFLAGS=${CARCH} -mmacosx-version-min=${MIN_MACOS}\" \
-        \"LDFLAGS=${CARCH} -mmacosx-version-min=${MIN_MACOS} -L${OPENSSL_PREFIX}/lib\" \
-        \"CPPFLAGS=-I${OPENSSL_PREFIX}/include\" \
-        \"${STRONGSWAN_CONFIGURE_OPTS[*]}\"" $REDIRECT
+    run "$STRONGSWAN_SRC/configure" \
+        --host="$HOST" \
+        "CFLAGS=${CARCH} -mmacosx-version-min=${MIN_MACOS}" \
+        "LDFLAGS=${CARCH} -mmacosx-version-min=${MIN_MACOS} -L${OPENSSL_PREFIX}/lib" \
+        "CPPFLAGS=-I${OPENSSL_PREFIX}/include" \
+        "${STRONGSWAN_CONFIGURE_OPTS[@]}"
 
-    eval "make -j\"$(sysctl -n hw.ncpu)\"" $REDIRECT
+    run make -j"$(sysctl -n hw.ncpu)"
     ok "strongSwan ${arch} built"
 done
 
@@ -399,11 +412,13 @@ fi
 for arch in arm64 x86_64; do
     step "Building xl2tpd ${arch}..."
     make clean >> "$LOG_FILE" 2>&1 || true
-    eval "make CC=\"cc -arch ${arch}\" \
-        LDFLAGS=\"-arch ${arch} -mmacosx-version-min=${MIN_MACOS}\" \
-        OSFLAGS=\"-DDARWIN\" IPFLAGS=\"\" \
-        DFLAGS=\"-DDEBUG_PPPD -DTRUST_PPPD_TO_DIE\" \
-        xl2tpd" $REDIRECT
+    run make \
+        "CC=cc -arch ${arch}" \
+        "LDFLAGS=-arch ${arch} -mmacosx-version-min=${MIN_MACOS}" \
+        "OSFLAGS=-DDARWIN" \
+        "IPFLAGS=" \
+        "DFLAGS=-DDEBUG_PPPD -DTRUST_PPPD_TO_DIE" \
+        xl2tpd
     cp xl2tpd "/tmp/xl2tpd-${arch}"
     ok "xl2tpd ${arch} built"
 done
