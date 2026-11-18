@@ -132,9 +132,11 @@ make_universal() {
     local x86_64="$3"
     local name
     name=$(basename "$output")
+    [ -f "$arm64" ]  || fail "arm64 slice not found: $arm64"
+    [ -f "$x86_64" ] || fail "x86_64 slice not found: $x86_64"
     mkdir -p "$(dirname "$output")"
-    lipo -create -output "$output" "$arm64" "$x86_64" 2>/dev/null
-    codesign --force --sign - "$output" 2>/dev/null
+    run lipo -create -output "$output" "$arm64" "$x86_64"
+    run codesign --force --sign - "$output"
     ok "$name (universal arm64+x86_64)"
 }
 
@@ -364,16 +366,18 @@ make_universal \
     "$BUILD_DIR/build-arm64/src/swanctl/.libs/swanctl" \
     "$BUILD_DIR/build-x86_64/src/swanctl/.libs/swanctl"
 
-for lib in libcharon.0.dylib libstrongswan.0.dylib libvici.0.dylib; do
+# libvici собирается внутри дерева плагина vici, остальные библиотеки
+# лежат в src/<имя библиотеки без версии>/.libs
+for entry in \
+    "libstrongswan.0.dylib:src/libstrongswan/.libs" \
+    "libcharon.0.dylib:src/libcharon/.libs" \
+    "libvici.0.dylib:src/libcharon/plugins/vici/.libs"; do
+    lib="${entry%%:*}"
+    dir="${entry##*:}"
     make_universal \
         "$BUILD_DIR/universal/lib/ipsec/$lib" \
-        "$BUILD_DIR/build-arm64/src/libstrongswan/.libs/$lib" \
-        "$BUILD_DIR/build-x86_64/src/libstrongswan/.libs/$lib" 2>/dev/null || \
-    make_universal \
-        "$BUILD_DIR/universal/lib/ipsec/$lib" \
-        "$BUILD_DIR/build-arm64/src/${lib%.0.dylib}/.libs/$lib" \
-        "$BUILD_DIR/build-x86_64/src/${lib%.0.dylib}/.libs/$lib" 2>/dev/null || \
-    warn "$lib — проверь путь вручную"
+        "$BUILD_DIR/build-arm64/$dir/$lib" \
+        "$BUILD_DIR/build-x86_64/$dir/$lib"
 done
 
 # OpenSSL universal libs
