@@ -1,3 +1,32 @@
+## [2.0.0] - 2026-11-19
+
+### Features
+- show per-tunnel uptime and traffic from pppN counters ([`334eeca`](https://github.com/Ssentiago/l2tp-hub/commit/334eecaa0c0eda40aebae64296df8fa572274608))
+- return typed error codes from commands ([`7b54bf2`](https://github.com/Ssentiago/l2tp-hub/commit/7b54bf2ca8961d0af5d2ff247d613af77ccf89ec))
+- localize UI text and make backend messages English ([`e65857b`](https://github.com/Ssentiago/l2tp-hub/commit/e65857b10645f6794ca413254d999511c50fc79d))
+- classify connect failures by structural signals ([`729be88`](https://github.com/Ssentiago/l2tp-hub/commit/729be8865db46578748b6c7ce360600f522cc86c))
+- generate frontend types from Rust via specta ([`e52e6ae`](https://github.com/Ssentiago/l2tp-hub/commit/e52e6ae8a25699a294cd4e51d2473fe332fed258))
+- enforce single app instance on launch ([`536bba3`](https://github.com/Ssentiago/l2tp-hub/commit/536bba3c6e6fd32bcc6bbf8ddecc82aa6a972f08))
+- verify peer code signature on socket connect ([`36f19f4`](https://github.com/Ssentiago/l2tp-hub/commit/36f19f4b6cf5cea62e31d16cbe12d58c916a728b))
+
+### Bug Fixes
+- rewrite bundled dylib paths by library name ([`96adddf`](https://github.com/Ssentiago/l2tp-hub/commit/96adddf79236ebf4c8980a8914e622c3be2244fc))
+- correct strongSwan dylib paths in universal step ([`cbcb12c`](https://github.com/Ssentiago/l2tp-hub/commit/cbcb12c19d37ca63af9a362b79d92e53a1f52b36))
+- reinstall dev-helper when binary differs from build output ([`4e9b5b4`](https://github.com/Ssentiago/l2tp-hub/commit/4e9b5b4481a84292d39f4539757115deed689120))
+- resolve per-connection vpn status ([`3c8e158`](https://github.com/Ssentiago/l2tp-hub/commit/3c8e15853e74dd1c48abae24a841ce15e0f30899))
+- rebuild guardian and native deps as universal binaries ([`d15bf0b`](https://github.com/Ssentiago/l2tp-hub/commit/d15bf0bea1b280fd505cd2c4325a0cc696bcf3da))
+- make service hash deterministic across builds ([`6f61e93`](https://github.com/Ssentiago/l2tp-hub/commit/6f61e93b7b83aeec53e21e2626abaa469c8504e3))
+- serialize store mutations through a mailbox actor ([`e71ed72`](https://github.com/Ssentiago/l2tp-hub/commit/e71ed72439d59b01afe367b6e9344555f78c8a55))
+- actually delete VPN services and clean VPN state ([`71b0795`](https://github.com/Ssentiago/l2tp-hub/commit/71b0795148111a27a32870eeb5dd035c9c2ce883))
+- stop reinstalling the helper on every launch ([`6f934e7`](https://github.com/Ssentiago/l2tp-hub/commit/6f934e7f2686a7e1a091efe801d02038f4bb4327))
+- derive backup encryption key with argon2id and versioned format ([`3db66c1`](https://github.com/Ssentiago/l2tp-hub/commit/3db66c1f826734bc4add4d0d514519c55fc93d3f))
+- restrict helper socket with peer check and allowlist ([`cd0aeea`](https://github.com/Ssentiago/l2tp-hub/commit/cd0aeea5ab29d604fd0f3289bf34fe2800c7d349))
+
+### Refactoring
+- run build commands without eval ([`77e994f`](https://github.com/Ssentiago/l2tp-hub/commit/77e994fc88a93384ce0e69cca028eb83ef9fd882))
+- drop app:log emission and unused AppEnv::autodetect ([`e884899`](https://github.com/Ssentiago/l2tp-hub/commit/e884899126216933c24dbc12c4dc62ee83dc37ee))
+- remove dead code and unused dependencies ([`035016c`](https://github.com/Ssentiago/l2tp-hub/commit/035016cd9346abeb928d78408296f55b558854de))
+
 ## [1.0.0] - 2026-10-25
 
 ### Features
