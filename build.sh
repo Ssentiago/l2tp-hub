@@ -452,34 +452,63 @@ cp "$BUILD_DIR/universal-xl2tpd/xl2tpd"                    "$RESOURCES_DIR/xl2tp
 cp "$BUILD_DIR/../src-tauri/resources/etc/strongswan.conf" "$RESOURCES_DIR/etc/" 2>/dev/null || true
 
 # ---------------------------------------------------------------------------
-# Step 5b: Fix dylib paths — @loader_path вместо абсолютных путей
-# Без этого бинарники не найдут библиотеки при запуске из app bundle
+# Step 5b: Fix dylib paths: @loader_path вместо путей линковки
+# Без этого бинарники не найдут библиотеки при запуске из app bundle:
+# install names указывают на каталог сборки (Homebrew или openssl-universal
+# на CI), которого нет на машине пользователя.
 # ---------------------------------------------------------------------------
 step "Fixing dylib install names..."
 
 IPSEC="$RESOURCES_DIR/ipsec"
 
-# Симлинки для @rpath-ссылок (swanctl → @rpath/libcrypto.dylib)
+# Симлинки на случай ссылок по несверсионированному имени
 ln -sf libcrypto.3.dylib "$IPSEC/libcrypto.dylib"
 ln -sf libssl.3.dylib "$IPSEC/libssl.dylib"
 
-# swanctl: абсолютные пути → @loader_path/
-install_name_tool -change "/usr/local/lib/ipsec/libvici.0.dylib" "@loader_path/libvici.0.dylib" "$IPSEC/swanctl"
-install_name_tool -change "/usr/local/lib/ipsec/libstrongswan.0.dylib" "@loader_path/libstrongswan.0.dylib" "$IPSEC/swanctl"
-install_name_tool -add_rpath "@executable_path" "$IPSEC/swanctl" 2>/dev/null || true
+# Каноническое имя библиотеки бандла по имени из ссылки. Системные библиотеки
+# и фреймворки сюда не попадают и не переписываются.
+canonical_lib() {
+    case "$1" in
+        libcharon.0.dylib|libstrongswan.0.dylib|libvici.0.dylib|libcrypto.3.dylib|libssl.3.dylib) echo "$1" ;;
+        libcrypto.dylib) echo "libcrypto.3.dylib" ;;
+        libssl.dylib)    echo "libssl.3.dylib" ;;
+        *) return 1 ;;
+    esac
+}
 
-# charon: абсолютные пути → @loader_path/
-install_name_tool -change "/usr/local/lib/ipsec/libstrongswan.0.dylib" "@loader_path/libstrongswan.0.dylib" "$IPSEC/charon"
-install_name_tool -change "/usr/local/lib/ipsec/libcharon.0.dylib" "@loader_path/libcharon.0.dylib" "$IPSEC/charon"
-install_name_tool -change "/usr/local/opt/openssl@3/lib/libcrypto.3.dylib" "@loader_path/libcrypto.3.dylib" "$IPSEC/charon"
+# Переписывает id и load-команды одного Mach-O файла. Старый путь зависит от
+# окружения линковки (Homebrew, каталог сборки OpenSSL на CI) и заранее
+# неизвестен, поэтому переписывание идёт по имени файла библиотеки.
+fix_load_paths() {
+    local f="$1"
+    local base dep dep_base canon
+    base=$(basename "$f")
 
-# Библиотеки: id + зависимости → @loader_path/
-install_name_tool -id "@loader_path/libcharon.0.dylib" "$IPSEC/libcharon.0.dylib"
-install_name_tool -id "@loader_path/libstrongswan.0.dylib" "$IPSEC/libstrongswan.0.dylib"
-install_name_tool -id "@loader_path/libvici.0.dylib" "$IPSEC/libvici.0.dylib"
-install_name_tool -id "@loader_path/libcrypto.3.dylib" "$IPSEC/libcrypto.3.dylib"
-install_name_tool -id "@loader_path/libssl.3.dylib" "$IPSEC/libssl.3.dylib"
-install_name_tool -change "/usr/local/opt/openssl@3/lib/libcrypto.3.dylib" "@loader_path/libcrypto.3.dylib" "$IPSEC/libstrongswan.0.dylib"
+    case "$base" in
+        *.dylib) run install_name_tool -id "@loader_path/$base" "$f" ;;
+    esac
+
+    while IFS= read -r dep; do
+        if [ -z "$dep" ]; then
+            continue
+        fi
+        dep_base=$(basename "$dep")
+        canon=$(canonical_lib "$dep_base") || continue
+        if [ "$dep" != "@loader_path/$canon" ]; then
+            run install_name_tool -change "$dep" "@loader_path/$canon" "$f"
+        fi
+    done < <(otool -L "$f" | sed -e '1d' -e 's/^[[:space:]]*//' -e 's/ (compatibility.*//')
+}
+
+for f in "$IPSEC"/*; do
+    # file(1) на macOS разыменовывает симлинки: без этой проверки один и тот же
+    # файл правится второй раз через ссылку и получает чужой id.
+    if [ -L "$f" ]; then
+        continue
+    fi
+    file "$f" | grep -q "Mach-O" || continue
+    fix_load_paths "$f"
+done
 
 # Re-sign (install_name_tool ломает подпись)
 for f in "$IPSEC"/*; do
